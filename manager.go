@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sync"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/rs/zerolog"
 )
 
@@ -16,8 +16,8 @@ const (
 
 // ManagerConfig represents the manager configuration.
 type ManagerConfig struct {
-	// Discord represents the discord session.
-	Discord *discordgo.Session
+	// Notify sends the provided message.
+	Notify func(message string) error
 	// Logger represents the application logger.
 	Logger zerolog.Logger
 }
@@ -91,7 +91,9 @@ func (m *Manager) handleEntrySignal(signal EntrySignal) {
 	m.positions = append(m.positions, position)
 	m.positionsMtx.Unlock()
 
-	// Notify discord session about the newly created position.
+	msg := fmt.Sprintf("Created new %s position (%s) for %s @ %f with stoploss %f",
+		position.Direction.String(), position.ID, position.Market, position.EntryPrice, position.StopLoss)
+	m.cfg.Notify(msg)
 }
 
 // handleExitSignal processes the provided exit signal.
@@ -104,6 +106,9 @@ func (m *Manager) handleExitSignal(signal ExitSignal) {
 				pos.ClosePosition(signal.ExitPrice, signal.ExitCriteria)
 
 				// Notify discord session about the closed position.
+				msg := fmt.Sprintf("Closed %s position (%s) for %s @ %f with stoploss %f",
+					pos.Direction.String(), pos.ID, pos.Market, pos.ExitPrice, pos.StopLoss)
+				m.cfg.Notify(msg)
 
 				m.positionsMtx.Lock()
 				m.positions = slices.Delete(m.positions, idx, idx+1)
