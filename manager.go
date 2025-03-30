@@ -91,6 +91,7 @@ func (m *Manager) handleEntrySignal(signal EntrySignal) {
 	m.positions = append(m.positions, position)
 	m.positionsMtx.Unlock()
 
+	// Notify discord of the newly created position.
 	msg := fmt.Sprintf("Created new %s position (%s) for %s @ %f with stoploss %f",
 		position.Direction.String(), position.ID, position.Market, position.EntryPrice, position.StopLoss)
 	m.cfg.Notify(msg)
