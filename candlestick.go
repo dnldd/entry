@@ -13,5 +13,6 @@ type Candlestick struct {
 	Volume float64
 	Date   time.Time
 
-	VWAP float64
+	Timeframe Timeframe
+	VWAP      float64
 }

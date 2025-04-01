@@ -75,7 +75,7 @@ func (c *FMPClient) formURL(path string, params string) string {
 }
 
 // ParseCandlesticks parses candlesticks from the provided json data.
-func (c *FMPClient) ParseCandlesticks(data []gjson.Result) ([]Candlestick, error) {
+func (c *FMPClient) ParseCandlesticks(data []gjson.Result, timeframe Timeframe) ([]Candlestick, error) {
 	candles := make([]Candlestick, 0, len(data))
 
 	for idx := range data {
@@ -86,6 +86,8 @@ func (c *FMPClient) ParseCandlesticks(data []gjson.Result) ([]Candlestick, error
 		candle.High = data[idx].Get("high").Float()
 		candle.Close = data[idx].Get("close").Float()
 		candle.Volume = data[idx].Get("volume").Float()
+
+		candle.Timeframe = timeframe
 
 		dt, err := time.Parse(dateFormat, data[idx].Get("date").String())
 		if err != nil {
