@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -9,7 +10,7 @@ const (
 	// Session names.
 	asia    = "asia"
 	london  = "london"
-	newyork = "newyork"
+	newYork = "newyork"
 
 	// Market session times in UTC without daylight savings.
 	asiaOpen     = "22:00"
@@ -20,17 +21,23 @@ const (
 	newYorkClose = "20:00"
 
 	sessionTimeLayout = "15:04"
+
+	// maxSessions is the maximum number of sessions tracked by a market.
+	maxSessions = 30
 )
 
-// SessionBounds represents the time bounds of a session.
-type SessionBounds struct {
-	Name  string
-	Open  time.Time
-	Close time.Time
+// Session represents a market session.
+type Session struct {
+	Name    string
+	High    float64
+	Low     float64
+	Open    time.Time
+	Close   time.Time
+	Matured bool
 }
 
-// NewSessionBounds initializes new session bounds.
-func NewSessionBounds(name string, open string, close string) (*SessionBounds, error) {
+// NewSession initializes new market session.
+func NewSession(name string, open string, close string) (*Session, error) {
 	sessionOpen, err := time.Parse(sessionTimeLayout, open)
 	if err != nil {
 		return nil, fmt.Errorf("parsing session open: %w", err)
@@ -50,44 +57,112 @@ func NewSessionBounds(name string, open string, close string) (*SessionBounds, e
 		sClose = sClose.Add(time.Hour * 24)
 	}
 
-	bounds := &SessionBounds{
+	session := &Session{
 		Name:  name,
 		Open:  sOpen,
 		Close: sClose,
 	}
 
-	return bounds, nil
+	return session, nil
+}
+
+// Update updates the provided session's high and low, and whether they are ready to be used as levels.
+func (s *Session) Update(currentCandle Candlestick) {
+	switch {
+	case currentCandle.Low < s.Low:
+		s.Low = currentCandle.Low
+	case currentCandle.High > s.High:
+		s.High = currentCandle.High
+	}
+
+	if !s.Matured {
+		now := time.Now().UTC()
+
+		// A sessions price range (high, low) is considered matured after an hour.
+		if now.Sub(s.Open) > time.Hour {
+			s.Matured = true
+		}
+	}
 }
 
 // IsCurrentSession checks whether the provided session is the current session.
-func (s *SessionBounds) IsCurrentSession(now time.Time) bool {
-	if now.After(s.Open) && now.Before(s.Close) {
+func (s *Session) IsCurrentSession(now time.Time) bool {
+	if (now.Equal(s.Open) || now.After(s.Open)) && now.Before(s.Close) {
 		return true
 	}
 
 	return false
 }
 
-// SessionRange represents the price ranges of a session.
-type SessionRange struct {
-	Name string
-	High float64
-	Low  float64
+// Market tracks the metadata of a market.
+type Market struct {
+	Market   string
+	Sessions []*Session
 }
 
-// NewSessionRange instantiates a new session price range.
-func NewSessionRange(name string) *SessionRange {
-	return &SessionRange{
-		Name: name,
+// NewMarket instantiates a new market.
+func NewMarket(market string) *Market {
+	return &Market{
+		Market:   market,
+		Sessions: make([]*Session, 0, maxSessions),
 	}
 }
 
-// UpdateRange updates the provided session's price range.
-func (s *SessionRange) UpdateRange(currentPrice float64) {
-	switch {
-	case currentPrice < s.Low:
-		s.Low = currentPrice
-	case currentPrice > s.High:
-		s.High = currentPrice
+// AddSessions adds the next set of sessions (asia, london & new york) to the market.
+func (m *Market) AddSessions() error {
+	// If at capacity with tracked sessions, remove the oldest three.
+	if len(m.Sessions) == int(maxSessions) {
+		m.Sessions = slices.Delete(m.Sessions, 0, 3)
 	}
+
+	asianSession, err := NewSession(asia, asiaOpen, asiaClose)
+	if err != nil {
+		return fmt.Errorf("creating asian session: %w", err)
+	}
+
+	m.Sessions = append(m.Sessions, asianSession)
+
+	londonSession, err := NewSession(london, londonOpen, londonClose)
+	if err != nil {
+		return fmt.Errorf("creating london session: %w", err)
+	}
+
+	m.Sessions = append(m.Sessions, londonSession)
+
+	newYorkSession, err := NewSession(newYork, newYorkOpen, newYorkClose)
+	if err != nil {
+		return fmt.Errorf("creating new york session: %w", err)
+	}
+
+	m.Sessions = append(m.Sessions, newYorkSession)
+
+	return nil
 }
+
+// Update processes incoming market data for the provided market.
+func (m *Market) Update(candle Candlestick) {
+	now := time.Now().UTC()
+	var currentSession *Session
+	for idx := len(m.Sessions) - 1; idx > -1; idx-- {
+		if m.Sessions[idx].IsCurrentSession(now) {
+			currentSession = m.Sessions[idx]
+			break
+		}
+	}
+
+	currentSession.Update(candle)
+}
+
+// FetchSessionLevels fetches eligible session highs and lows as levels.
+func (m *Market) FetchSessionLevels() []float64 {
+	levels := make([]float64, 0, len(m.Sessions)*2)
+	for idx := range m.Sessions {
+		if m.Sessions[idx].Matured {
+			levels = append(levels, m.Sessions[idx].High, m.Sessions[idx].Low)
+		}
+	}
+
+	return levels
+}
+
+// NB: filtering levels to identify highly probable ones will be left to the entry finder.
