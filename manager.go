@@ -54,7 +54,7 @@ type Manager struct {
 func NewManager(cfg *ManagerConfig) *Manager {
 	return &Manager{
 		cfg:       cfg,
-		positions: make([]*Position, 0),
+		positions: make([]*Position, 0, bufferSize),
 		entryCh:   make(chan EntrySignal, bufferSize),
 		exitCh:    make(chan ExitSignal, bufferSize),
 	}
