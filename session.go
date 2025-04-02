@@ -27,12 +27,11 @@ const (
 
 // Session represents a market session.
 type Session struct {
-	Name    string
-	High    float64
-	Low     float64
-	Open    time.Time
-	Close   time.Time
-	Matured bool
+	Name  string
+	High  float64
+	Low   float64
+	Open  time.Time
+	Close time.Time
 }
 
 // NewSession initializes new market session.
@@ -66,29 +65,16 @@ func NewSession(name string, open string, close string) (*Session, error) {
 }
 
 // Update updates the provided session's high and low, and whether they are ready to be used as levels.
-func (s *Session) Update(currentCandle *Candlestick) {
+func (s *Session) Update(candle *Candlestick) {
 	switch {
-	case currentCandle.Low < s.Low:
-		s.Low = currentCandle.Low
-	case currentCandle.High > s.High:
-		s.High = currentCandle.High
-	}
-
-	if !s.Matured {
-		now := time.Now().UTC()
-
-		// A sessions price range (high, low) is considered matured after an hour.
-		if now.Sub(s.Open) > time.Hour {
-			s.Matured = true
-		}
+	case candle.Low < s.Low:
+		s.Low = candle.Low
+	case candle.High > s.High:
+		s.High = candle.High
 	}
 }
 
 // IsCurrentSession checks whether the provided session is the current session.
-func (s *Session) IsCurrentSession(now time.Time) bool {
-	if (now.Equal(s.Open) || now.After(s.Open)) && now.Before(s.Close) {
-		return true
-	}
-
-	return false
+func (s *Session) IsCurrentSession(current time.Time) bool {
+	return (current.Equal(s.Open) || current.After(s.Open)) && current.Before(s.Close)
 }
