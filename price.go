@@ -4,16 +4,13 @@ package main
 type PriceMovement int
 
 const (
-	Close PriceMovement = iota
-	Above
+	Above PriceMovement = iota
 	Below
 )
 
 // String stringifies the provided price movement.
 func (m *PriceMovement) String() string {
 	switch *m {
-	case Close:
-		return "close"
 	case Above:
 		return "above"
 	case Below:

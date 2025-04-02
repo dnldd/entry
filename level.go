@@ -1,7 +1,5 @@
 package main
 
-import "fmt"
-
 // LevelKind represents the type of level.
 type LevelKind int
 
@@ -18,12 +16,13 @@ func (l *LevelKind) String() string {
 	case Resistance:
 		return "resistance"
 	default:
-		return ""
+		return "unknown"
 	}
 }
 
 // Level represents a support or resistance level.
 type Level struct {
+	Market    string
 	Price     float64
 	Kind      LevelKind
 	Reversals uint32
@@ -31,32 +30,29 @@ type Level struct {
 }
 
 // NewLevel initializes a new level.
-func NewLevel(price float64, kind LevelKind) *Level {
+func NewLevel(market string, price float64) *Level {
 	return &Level{
-		Price: price,
-		Kind:  kind,
+		Market: market,
+		Price:  price,
 	}
 }
 
-// Update updates the provided level on whether there has been a price reversal or a level break.
-func (l *Level) Update(priceReversal bool, levelBreak bool) error {
-	if priceReversal {
+// Update updates the provided level based on the provided price reaction.
+func (l *Level) Update(reaction PriceReaction) {
+	switch reaction {
+	case Chop:
+		// do nothing.
+	case Reversal:
 		l.Reversals++
-	}
-
-	if levelBreak {
+	case Break:
 		l.Breaks++
 		l.Reversals = 0
 
 		switch l.Kind {
 		case Support:
 			l.Kind = Resistance
-		case Resistance:
-			l.Kind = Support
 		default:
-			return fmt.Errorf("unexpected level kind provided: %s", l.Kind.String())
+			l.Kind = Support
 		}
 	}
-
-	return nil
 }

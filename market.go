@@ -3,38 +3,36 @@ package main
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 )
 
 // Market tracks the metadata of a market.
 type Market struct {
-	Market   string
-	Sessions []*Session
-	VWAP     *VWAP
+	Market         string
+	Sessions       []*Session
+	CurrentSession *Session
+	VWAP           *VWAP
+
+	SendLevel func(level Level)
 }
 
-// NewMarket instantiates a new market.
-func NewMarket(market string) *Market {
+// NewMarket initializes a new market.
+func NewMarket(market string, f func(level Level)) *Market {
 	return &Market{
-		Market:   market,
-		Sessions: make([]*Session, 0, maxSessions),
-		VWAP:     NewVWAP(market, FiveMinute),
+		Market:    market,
+		Sessions:  make([]*Session, 0, maxSessions),
+		VWAP:      NewVWAP(market, FiveMinute),
+		SendLevel: f,
 	}
 }
 
-// AddSessions adds the next set of sessions (asia, london & new york) to the market.
+// AddSessions adds the next set of sessions (london, new york and asia) to the market.
 func (m *Market) AddSessions() error {
 	// If at capacity with tracked sessions, remove the oldest three.
 	if len(m.Sessions) == int(maxSessions) {
 		m.Sessions = slices.Delete(m.Sessions, 0, 3)
 	}
-
-	asianSession, err := NewSession(asia, asiaOpen, asiaClose)
-	if err != nil {
-		return fmt.Errorf("creating asian session: %w", err)
-	}
-
-	m.Sessions = append(m.Sessions, asianSession)
 
 	londonSession, err := NewSession(london, londonOpen, londonClose)
 	if err != nil {
@@ -50,7 +48,31 @@ func (m *Market) AddSessions() error {
 
 	m.Sessions = append(m.Sessions, newYorkSession)
 
+	asianSession, err := NewSession(asia, asiaOpen, asiaClose)
+	if err != nil {
+		return fmt.Errorf("creating asian session: %w", err)
+	}
+
+	m.Sessions = append(m.Sessions, asianSession)
+
 	return nil
+}
+
+// FetchNewLevels fetches newly generated levels from the previously completed session.
+func (m *Market) FetchNewLevels() []*Level {
+	now := time.Now().UTC()
+	var completedSession *Session
+	for idx := len(m.Sessions); idx > -1; idx-- {
+		if m.Sessions[idx].IsCurrentSession(now) {
+			// The completed session should be the next one after the current session
+			// in the iteration.
+			prevIdx := idx - 1
+			completedSession = m.Sessions[prevIdx]
+			break
+		}
+	}
+
+	return []*Level{NewLevel(m.Market, completedSession.High), NewLevel(m.Market, completedSession.Low)}
 }
 
 // Update processes incoming market data for the provided market.
@@ -63,34 +85,37 @@ func (m *Market) Update(candle *Candlestick) error {
 	}
 
 	now := time.Now().UTC()
-	var currentSession *Session
+	var newSession bool
 	for idx := len(m.Sessions) - 1; idx > -1; idx-- {
 		if m.Sessions[idx].IsCurrentSession(now) {
-			currentSession = m.Sessions[idx]
-			break
+			switch {
+			case m.CurrentSession == nil:
+				m.CurrentSession = m.Sessions[idx]
+				break
+			case strings.Compare(m.CurrentSession.Name, m.Sessions[idx].Name) != 0:
+				// Flag a new session when there is a transition.
+				newSession = true
+				m.CurrentSession = m.Sessions[idx]
+				break
+			default:
+				break
+			}
 		}
 	}
 
-	currentSession.Update(candle)
-
+	m.CurrentSession.Update(candle)
 	_, err := m.VWAP.Update(candle)
 	if err != nil {
 		return err
 	}
 
-	return nil
-}
-
-// FetchSessionLevels fetches eligible session highs and lows as levels.
-func (m *Market) FetchSessionLevels() []float64 {
-	levels := make([]float64, 0, len(m.Sessions)*2)
-	for idx := range m.Sessions {
-		if m.Sessions[idx].Matured {
-			levels = append(levels, m.Sessions[idx].High, m.Sessions[idx].Low)
+	if newSession {
+		// Fetch and send new levels from completed sessions for tracking.
+		levels := m.FetchNewLevels()
+		for idx := range levels {
+			m.SendLevel(*levels[idx])
 		}
 	}
 
-	return levels
+	return nil
 }
-
-// NB: filtering levels to identify highly probable ones will be left to the entry finder.
