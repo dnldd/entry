@@ -17,6 +17,20 @@ const (
 	base       = "https://financialmodelingprep.com/stable"
 )
 
+// Candlestick represents a unit candlestick for a market.
+type Candlestick struct {
+	Open   float64
+	Low    float64
+	High   float64
+	Close  float64
+	Volume float64
+	Date   time.Time
+
+	Market    string
+	Timeframe Timeframe
+	VWAP      float64
+}
+
 // Timeframe represents the market data time period.
 type Timeframe int
 
@@ -75,7 +89,7 @@ func (c *FMPClient) formURL(path string, params string) string {
 }
 
 // ParseCandlesticks parses candlesticks from the provided json data.
-func (c *FMPClient) ParseCandlesticks(data []gjson.Result, timeframe Timeframe) ([]Candlestick, error) {
+func (c *FMPClient) ParseCandlesticks(data []gjson.Result, market string, timeframe Timeframe) ([]Candlestick, error) {
 	candles := make([]Candlestick, 0, len(data))
 
 	for idx := range data {
@@ -87,6 +101,7 @@ func (c *FMPClient) ParseCandlesticks(data []gjson.Result, timeframe Timeframe) 
 		candle.Close = data[idx].Get("close").Float()
 		candle.Volume = data[idx].Get("volume").Float()
 
+		candle.Market = market
 		candle.Timeframe = timeframe
 
 		dt, err := time.Parse(dateFormat, data[idx].Get("date").String())
