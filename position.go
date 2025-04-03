@@ -7,6 +7,86 @@ import (
 	"github.com/google/uuid"
 )
 
+// EntryReason represents an entry reason.
+type EntryReason int
+
+const (
+	BullishEngulfingEntry EntryReason = iota
+	BearishEngulfingEntry
+	ReversalAtSupportEntry
+	ReversalAtResistanceEntry
+	StrongVolumeEntry
+)
+
+// String stringifies the provided entry reason.
+func (r *EntryReason) String() string {
+	switch *r {
+	case BullishEngulfingEntry:
+		return "bullish engulfing"
+	case BearishEngulfingEntry:
+		return "bearish engulfing"
+	case ReversalAtSupportEntry:
+		return "price reversal at support"
+	case ReversalAtResistanceEntry:
+		return "price reversal at resistance"
+	case StrongVolumeEntry:
+		return "strong volume"
+	default:
+		return "unknown"
+	}
+}
+
+// ExitReason represents an exit reason.
+type ExitReason int
+
+const (
+	TargetHitExit ExitReason = iota
+	BullishEngulfingExit
+	BearishEngulfingExit
+	ReversalAtSupportExit
+	ReversalAtResistanceExit
+	StrongVolumeExit
+)
+
+// String stringifies the provided exit reason.
+func (r *ExitReason) String() string {
+	switch *r {
+	case TargetHitExit:
+		return "target hit"
+	case BullishEngulfingExit:
+		return "bullish engulfing"
+	case BearishEngulfingExit:
+		return "bearish engulfing"
+	case ReversalAtSupportExit:
+		return "price reversal at support"
+	case ReversalAtResistanceExit:
+		return "price reversal at resistance"
+	case StrongVolumeExit:
+		return "strong volume"
+	default:
+		return "unknown"
+	}
+}
+
+// EntrySignal represents an entry signal for a position.
+type EntrySignal struct {
+	Market    string
+	Timeframe Timeframe
+	Direction Direction
+	Price     float64
+	Reasons   []EntryReason
+	StopLoss  float64
+}
+
+// ExitSignal represents an exit signal for a position.
+type ExitSignal struct {
+	Market    string
+	Timeframe Timeframe
+	Direction Direction
+	Price     float64
+	Reasons   []ExitReason
+}
+
 // PositionStatus represents the status of a position.
 type PositionStatus int
 
@@ -52,41 +132,41 @@ func (d *Direction) String() string {
 
 // Position represents valid market position started by the given entry criteria.
 type Position struct {
-	ID            string
-	Market        string
-	Timeframe     string
-	Direction     Direction
-	StopLoss      float64
-	PNLPercent    float64
-	EntryPrice    float64
-	EntryCriteria string
-	ExitPrice     float64
-	ExitCriteria  string
-	Status        PositionStatus
-	CreatedOn     uint64
-	ClosedOn      uint64
+	ID           string
+	Market       string
+	Timeframe    Timeframe
+	Direction    Direction
+	StopLoss     float64
+	PNLPercent   float64
+	EntryPrice   float64
+	EntryReasons []EntryReason
+	ExitPrice    float64
+	ExitReasons  []ExitReason
+	Status       PositionStatus
+	CreatedOn    uint64
+	ClosedOn     uint64
 }
 
 // NewPosition initializes a new position.
-func NewPosition(market string, timeframe string, direction Direction, entryPrice float64, entryCriteria string, stopLoss float64) *Position {
+func NewPosition(entry *EntrySignal) *Position {
 	return &Position{
-		ID:            uuid.New().String(),
-		Market:        market,
-		Timeframe:     timeframe,
-		Direction:     direction,
-		CreatedOn:     uint64(time.Now().Unix()),
-		EntryPrice:    entryPrice,
-		EntryCriteria: entryCriteria,
-		StopLoss:      stopLoss,
-		Status:        Active,
+		ID:           uuid.New().String(),
+		Market:       entry.Market,
+		Timeframe:    entry.Timeframe,
+		Direction:    entry.Direction,
+		CreatedOn:    uint64(time.Now().Unix()),
+		EntryPrice:   entry.Price,
+		EntryReasons: entry.Reasons,
+		StopLoss:     entry.StopLoss,
+		Status:       Active,
 	}
 }
 
 // ClosePosition closes the position using the provided exit details.
-func (p *Position) ClosePosition(exitPrice float64, exitCriteria string) PositionStatus {
+func (p *Position) ClosePosition(exit *ExitSignal) PositionStatus {
 	p.ClosedOn = uint64(time.Now().Unix())
-	p.ExitPrice = exitPrice
-	p.ExitCriteria = exitCriteria
+	p.ExitPrice = exit.Price
+	p.ExitReasons = exit.Reasons
 
 	switch {
 	case p.ExitPrice > p.StopLoss && p.Direction == Short:
