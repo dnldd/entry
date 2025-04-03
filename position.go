@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
@@ -139,12 +140,38 @@ type Position struct {
 	StopLoss     float64
 	PNLPercent   float64
 	EntryPrice   float64
-	EntryReasons []EntryReason
+	EntryReasons string
 	ExitPrice    float64
-	ExitReasons  []ExitReason
+	ExitReasons  string
 	Status       PositionStatus
 	CreatedOn    uint64
 	ClosedOn     uint64
+}
+
+// stringifyEntryReasons stringifies the collection of entry reasons provided.
+func stringifyEntryReasons(reasons []EntryReason) string {
+	buf := bytes.NewBuffer([]byte{})
+	for idx := range reasons {
+		buf.WriteString(reasons[idx].String())
+		if idx < len(reasons)-1 {
+			buf.WriteString(",")
+		}
+	}
+
+	return buf.String()
+}
+
+// stringifyExitReasons stringifies the collection of exit reasons provided.
+func stringifyExitReasons(reasons []ExitReason) string {
+	buf := bytes.NewBuffer([]byte{})
+	for idx := range reasons {
+		buf.WriteString(reasons[idx].String())
+		if idx < len(reasons)-1 {
+			buf.WriteString(",")
+		}
+	}
+
+	return buf.String()
 }
 
 // NewPosition initializes a new position.
@@ -156,7 +183,7 @@ func NewPosition(entry *EntrySignal) *Position {
 		Direction:    entry.Direction,
 		CreatedOn:    uint64(time.Now().Unix()),
 		EntryPrice:   entry.Price,
-		EntryReasons: entry.Reasons,
+		EntryReasons: stringifyEntryReasons(entry.Reasons),
 		StopLoss:     entry.StopLoss,
 		Status:       Active,
 	}
@@ -166,7 +193,7 @@ func NewPosition(entry *EntrySignal) *Position {
 func (p *Position) ClosePosition(exit *ExitSignal) PositionStatus {
 	p.ClosedOn = uint64(time.Now().Unix())
 	p.ExitPrice = exit.Price
-	p.ExitReasons = exit.Reasons
+	p.ExitReasons = stringifyExitReasons(exit.Reasons)
 
 	switch {
 	case p.ExitPrice > p.StopLoss && p.Direction == Short:

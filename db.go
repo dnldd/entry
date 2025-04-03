@@ -13,9 +13,9 @@ import (
 
 const (
 	// SQL statements.
-	createPositionTableSQL   = "CREATE TABLE position IF NOT EXISTS (id TEXT PRIMARY KEY, market TEXT, timeframe TEXT, direction INTEGER, stoploss INTERGER, pnlpercent INTEGER, entryprice INTEGER, entrycriteria TEXT, exitprice INTEGER, exitcriteria TEXT, status INTEGER, createdon INTEGER, closedon INTEGER)"
+	createPositionTableSQL   = "CREATE TABLE position IF NOT EXISTS (id TEXT PRIMARY KEY, market TEXT, timeframe TEXT, direction INTEGER, stoploss INTERGER, pnlpercent INTEGER, entryprice INTEGER, entryreasons TEXT, exitprice INTEGER, exitreasons TEXT, status INTEGER, createdon INTEGER, closedon INTEGER)"
 	createMetadataSQL        = "CREATE TABLE metadata IF NOT EXISTS (id TEXT PRIMARY KEY, total INTEGER, wins INTEGER, winpercent INTEGER, losses INTEGER, losspercent INTEGER, createdon INTEGER)"
-	persistClosedPositionSQL = "INSERT INTO position(id, market, timeframce, direction, stoploss, pnlpercent, entryprice, entrycriteria, exitprice, exitcriteria, status, createdon, closedon) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
+	persistClosedPositionSQL = "INSERT INTO position(id, market, timeframce, direction, stoploss, pnlpercent, entryprice, entryreasons, exitprice, exitreasons, status, createdon, closedon) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
 	findMetadataSQL          = "SELECT * FROM metadata where id = ?"
 	updateMetadataSQL        = "UPDATE metadata SET total = total + 1, SET wins = wins + ?, SET winpercent = winpercent + ?, SET losses = losses + ?, losspercent = losspercent + ? WHERE id = ?"
 	persistMetadataSQL       = "INSERT INTO metadata(id, total, wins, winpercent, losses, losspercent, createdon) VALUES(?,?,?,?,?,?,?)"
@@ -98,7 +98,7 @@ func (db *Database) PersistClosedPosition(ctx context.Context, position *Positio
 			SQL: persistClosedPositionSQL,
 			PositionalParams: []any{position.ID, position.Market, position.Timeframe,
 				position.Direction, position.StopLoss, position.PNLPercent, position.EntryPrice,
-				position.EntryCriteria, position.ExitPrice, position.ExitCriteria, position.Status,
+				position.EntryReasons, position.ExitPrice, position.ExitReasons, position.Status,
 				position.CreatedOn, position.ClosedOn},
 		},
 	}, &rqlitehttp.ExecuteOptions{Transaction: true, Timings: true})
