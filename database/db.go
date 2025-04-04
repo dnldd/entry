@@ -1,4 +1,4 @@
-package main
+package database
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/dnldd/entry/position"
+	"github.com/dnldd/entry/shared"
 	rqlitehttp "github.com/rqlite/rqlite-go-http"
 	"github.com/rs/zerolog"
 )
@@ -20,6 +22,12 @@ const (
 	updateMetadataSQL        = "UPDATE metadata SET total = total + 1, SET wins = wins + ?, SET winpercent = winpercent + ?, SET losses = losses + ?, losspercent = losspercent + ? WHERE id = ?"
 	persistMetadataSQL       = "INSERT INTO metadata(id, total, wins, winpercent, losses, losspercent, createdon) VALUES(?,?,?,?,?,?,?)"
 )
+
+// PositionStorer defines the requirements for storing positions.
+type PositionStorer interface {
+	// PersistClosedPosition stores the provided closed position to the database.
+	PersistClosedPosition(ctx context.Context, position *position.Position) error
+}
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
@@ -92,14 +100,13 @@ func generateMetadataID(currentTime time.Time, market string) string {
 }
 
 // PersistClosedPosition stores the provided closed position to the database.
-func (db *Database) PersistClosedPosition(ctx context.Context, position *Position) error {
+func (db *Database) PersistClosedPosition(ctx context.Context, pos *position.Position) error {
 	_, err := db.client.Execute(ctx, rqlitehttp.SQLStatements{
 		{
 			SQL: persistClosedPositionSQL,
-			PositionalParams: []any{position.ID, position.Market, position.Timeframe,
-				position.Direction, position.StopLoss, position.PNLPercent, position.EntryPrice,
-				position.EntryReasons, position.ExitPrice, position.ExitReasons, position.Status,
-				position.CreatedOn, position.ClosedOn},
+			PositionalParams: []any{pos.ID, pos.Market, pos.Timeframe, pos.Direction, pos.StopLoss,
+				pos.PNLPercent, pos.EntryPrice, pos.EntryReasons, pos.ExitPrice, pos.ExitReasons,
+				pos.Status, pos.CreatedOn, pos.ClosedOn},
 		},
 	}, &rqlitehttp.ExecuteOptions{Transaction: true, Timings: true})
 	if err != nil {
@@ -110,22 +117,22 @@ func (db *Database) PersistClosedPosition(ctx context.Context, position *Positio
 	var winpercent, losspercent float64
 
 	switch {
-	case position.Status == StoppedOut && position.PNLPercent < 0:
+	case pos.Status == position.StoppedOut && pos.PNLPercent < 0:
 		loss++
-		losspercent = position.PNLPercent
-	case position.Status == Closed && position.PNLPercent > 0:
+		losspercent = pos.PNLPercent
+	case pos.Status == position.Closed && pos.PNLPercent > 0:
 		win++
-		winpercent = position.PNLPercent
+		winpercent = pos.PNLPercent
 	default:
-		db.cfg.Logger.Error().Msgf("unexpected closed position state for metadata calculations: %s", spew.Sdump(position))
+		db.cfg.Logger.Error().Msgf("unexpected closed position state for metadata calculations: %s", spew.Sdump(pos))
 	}
 
-	now, _, err := NewYorkTime()
+	now, _, err := shared.NewYorkTime()
 	if err != nil {
 		return err
 	}
 
-	id := generateMetadataID(now, position.Market)
+	id := generateMetadataID(now, pos.Market)
 	resp, err := db.client.QuerySingle(ctx, findMetadataSQL, id)
 	if err != nil {
 		return err
@@ -148,7 +155,7 @@ func (db *Database) PersistClosedPosition(ctx context.Context, position *Positio
 			return fmt.Errorf("updating metadata %s: %d -> %s", id, idx, errStr)
 		}
 	default:
-		now, _, err := NewYorkTime()
+		now, _, err := shared.NewYorkTime()
 		if err != nil {
 			return err
 		}

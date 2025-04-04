@@ -1,8 +1,10 @@
-package main
+package indicator
 
 import (
 	"fmt"
 	"time"
+
+	"github.com/dnldd/entry/shared"
 )
 
 // VWAP represents the Volume Weighted Average Price Indicator.
@@ -10,12 +12,12 @@ type VWAP struct {
 	TypicalPriceVolume float64
 	Volume             float64
 	Market             string
-	Timeframe          Timeframe
+	Timeframe          shared.Timeframe
 	LastUpdateTime     time.Time
 }
 
 // NewVWAP initializes a VWAP for the provided market and timeframe.
-func NewVWAP(market string, timeframe Timeframe) *VWAP {
+func NewVWAP(market string, timeframe shared.Timeframe) *VWAP {
 	return &VWAP{
 		Market:    market,
 		Timeframe: timeframe,
@@ -23,7 +25,7 @@ func NewVWAP(market string, timeframe Timeframe) *VWAP {
 }
 
 // Update cummulatively updates the VWAP indicator with the provided candlestick data.
-func (v *VWAP) Update(candle *Candlestick) (float64, error) {
+func (v *VWAP) Update(candle *shared.Candlestick) (float64, error) {
 	if candle.Timeframe != v.Timeframe {
 		return 0, fmt.Errorf("expected candles with timeframe %s, got %s",
 			v.Timeframe.String(), candle.Timeframe.String())

@@ -1,8 +1,10 @@
-package main
+package market
 
 import (
 	"fmt"
 	"time"
+
+	"github.com/dnldd/entry/shared"
 )
 
 const (
@@ -19,8 +21,6 @@ const (
 	newYorkOpen  = "08:00"
 	newYorkClose = "17:00"
 
-	sessionTimeLayout = "15:04"
-
 	// maxSessions is the maximum number of sessions tracked by a market.
 	maxSessions = 30
 )
@@ -36,17 +36,17 @@ type Session struct {
 
 // NewSession initializes new market session.
 func NewSession(name string, open string, close string) (*Session, error) {
-	sessionOpen, err := time.Parse(sessionTimeLayout, open)
+	sessionOpen, err := time.Parse(shared.SessionTimeLayout, open)
 	if err != nil {
 		return nil, fmt.Errorf("parsing session open: %w", err)
 	}
 
-	sessionClose, err := time.Parse(sessionTimeLayout, close)
+	sessionClose, err := time.Parse(shared.SessionTimeLayout, close)
 	if err != nil {
 		return nil, fmt.Errorf("parsing session close: %w", err)
 	}
 
-	now, loc, err := NewYorkTime()
+	now, loc, err := shared.NewYorkTime()
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func NewSession(name string, open string, close string) (*Session, error) {
 }
 
 // Update updates the provided session's high and low, and whether they are ready to be used as levels.
-func (s *Session) Update(candle *Candlestick) {
+func (s *Session) Update(candle *shared.Candlestick) {
 	switch {
 	case candle.Low < s.Low:
 		s.Low = candle.Low
@@ -85,7 +85,7 @@ func (s *Session) IsCurrentSession(current time.Time) bool {
 // IsMarketOpen checks whether the markets (only NQ currently) are open by checking if the current
 // time is within one of the market sessions.
 func IsMarketOpen() (bool, error) {
-	now, loc, err := NewYorkTime()
+	now, loc, err := shared.NewYorkTime()
 	if err != nil {
 		return false, err
 	}
@@ -101,11 +101,11 @@ func IsMarketOpen() (bool, error) {
 
 	var match bool
 	for idx := range sessions {
-		open, err := time.Parse(sessionTimeLayout, sessions[idx].Open)
+		open, err := time.Parse(shared.SessionTimeLayout, sessions[idx].Open)
 		if err != nil {
 			return false, fmt.Errorf("parsing open: %w", err)
 		}
-		close, err := time.Parse(sessionTimeLayout, sessions[idx].Close)
+		close, err := time.Parse(shared.SessionTimeLayout, sessions[idx].Close)
 		if err != nil {
 			return false, fmt.Errorf("parsing close: %w", err)
 		}

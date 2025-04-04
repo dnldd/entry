@@ -1,4 +1,4 @@
-package main
+package position
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/dnldd/entry/shared"
 	"github.com/rs/zerolog"
 )
 
@@ -16,8 +17,8 @@ const (
 	maxWorkers = 8
 )
 
-// PositionManagerConfig represents the position manager configuration.
-type PositionManagerConfig struct {
+// ManagerConfig represents the position manager configuration.
+type ManagerConfig struct {
 	// Notify sends the provided message.
 	Notify func(message string)
 	// PersistClosedPosition persists the provided closed position to the database.
@@ -26,29 +27,29 @@ type PositionManagerConfig struct {
 	Logger zerolog.Logger
 }
 
-// PositionManager manages positions through their lifecycles.
-type PositionManager struct {
-	cfg          *PositionManagerConfig
+// Manager manages positions through their lifecycles.
+type Manager struct {
+	cfg          *ManagerConfig
 	positions    []*Position
 	positionsMtx sync.RWMutex
-	entrySignals chan EntrySignal
-	exitSignals  chan ExitSignal
+	entrySignals chan shared.EntrySignal
+	exitSignals  chan shared.ExitSignal
 	workers      chan struct{}
 }
 
 // NewPositionManager initializes a new position manager.
-func NewPositionManager(cfg *PositionManagerConfig) *PositionManager {
-	return &PositionManager{
+func NewPositionManager(cfg *ManagerConfig) *Manager {
+	return &Manager{
 		cfg:          cfg,
 		positions:    []*Position{},
-		entrySignals: make(chan EntrySignal, bufferSize),
-		exitSignals:  make(chan ExitSignal, bufferSize),
+		entrySignals: make(chan shared.EntrySignal, bufferSize),
+		exitSignals:  make(chan shared.ExitSignal, bufferSize),
 		workers:      make(chan struct{}, maxWorkers),
 	}
 }
 
 // SendEntrySignal relays the provided entry signal for processing.
-func (m *PositionManager) SendEntrySignal(signal EntrySignal) {
+func (m *Manager) SendEntrySignal(signal shared.EntrySignal) {
 	select {
 	case m.entrySignals <- signal:
 		// do nothing.
@@ -59,7 +60,7 @@ func (m *PositionManager) SendEntrySignal(signal EntrySignal) {
 }
 
 // SendExitSignal relays the provided exit signal for processing.
-func (m *PositionManager) SendExitSignal(signal ExitSignal) {
+func (m *Manager) SendExitSignal(signal shared.ExitSignal) {
 	select {
 	case m.exitSignals <- signal:
 		// do nothing.
@@ -70,7 +71,7 @@ func (m *PositionManager) SendExitSignal(signal ExitSignal) {
 }
 
 // handleEntrySignal processes the provided entry signal.
-func (m *PositionManager) handleEntrySignal(signal EntrySignal) {
+func (m *Manager) handleEntrySignal(signal shared.EntrySignal) {
 	position, err := NewPosition(&signal)
 	if err != nil {
 		m.cfg.Logger.Error().Msgf("creating new position: %v", err)
@@ -88,7 +89,7 @@ func (m *PositionManager) handleEntrySignal(signal EntrySignal) {
 }
 
 // handleExitSignal processes the provided exit signal.
-func (m *PositionManager) handleExitSignal(signal ExitSignal) {
+func (m *Manager) handleExitSignal(signal shared.ExitSignal) {
 	for idx, pos := range m.positions {
 		switch {
 		case pos.Direction == signal.Direction:
@@ -112,18 +113,18 @@ func (m *PositionManager) handleExitSignal(signal ExitSignal) {
 }
 
 // Run manages the lifecycle processes of the position manager.
-func (m *PositionManager) Run(ctx context.Context) {
+func (m *Manager) Run(ctx context.Context) {
 	for {
 		select {
 		case signal := <-m.entrySignals:
 			m.workers <- struct{}{}
-			go func(signal *EntrySignal) {
+			go func(signal *shared.EntrySignal) {
 				m.handleEntrySignal(*signal)
 				<-m.workers
 			}(&signal)
 		case signal := <-m.exitSignals:
 			m.workers <- struct{}{}
-			go func(signal *ExitSignal) {
+			go func(signal *shared.ExitSignal) {
 				m.handleExitSignal(*signal)
 				<-m.workers
 			}(&signal)

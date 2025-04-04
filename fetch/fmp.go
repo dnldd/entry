@@ -1,4 +1,4 @@
-package main
+package fetch
 
 import (
 	"bytes"
@@ -9,47 +9,13 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/dnldd/entry/shared"
 	"github.com/tidwall/gjson"
 )
 
 const (
 	baseURL = "https://financialmodelingprep.com/stable"
 )
-
-// Candlestick represents a unit candlestick for a market.
-type Candlestick struct {
-	Open   float64
-	Low    float64
-	High   float64
-	Close  float64
-	Volume float64
-	Date   time.Time
-
-	// Metadata and derived fields.
-	Market    string
-	Timeframe Timeframe
-	VWAP      float64
-}
-
-// Timeframe represents the market data time period.
-type Timeframe int
-
-const (
-	OneHour Timeframe = iota
-	FiveMinute
-)
-
-// String stringifies the provided timeframe.
-func (t *Timeframe) String() string {
-	switch *t {
-	case OneHour:
-		return "1H"
-	case FiveMinute:
-		return "5m"
-	default:
-		return "unknown"
-	}
-}
 
 // FMPConfig represents the configuration for the FMP client.
 type FMPConfig struct {
@@ -65,7 +31,7 @@ type FMPClient struct {
 }
 
 // Ensure the FMPClient implements the MarketFetcher interface.
-var _ MarketFetcher = (*FMPClient)(nil)
+var _ shared.MarketFetcher = (*FMPClient)(nil)
 
 // NewFMPClient instantiates a new FMP client.
 func NewFMPClient(cfg *FMPConfig) *FMPClient {
@@ -89,11 +55,11 @@ func (c *FMPClient) formURL(path string, params string) string {
 }
 
 // ParseCandlesticks parses candlesticks from the provided json data.
-func (c *FMPClient) ParseCandlesticks(data []gjson.Result, market string, timeframe Timeframe) ([]Candlestick, error) {
-	candles := make([]Candlestick, 0, len(data))
+func (c *FMPClient) ParseCandlesticks(data []gjson.Result, market string, timeframe shared.Timeframe) ([]shared.Candlestick, error) {
+	candles := make([]shared.Candlestick, 0, len(data))
 
 	for idx := range data {
-		var candle Candlestick
+		var candle shared.Candlestick
 
 		candle.Open = data[idx].Get("open").Float()
 		candle.Low = data[idx].Get("low").Float()
@@ -104,7 +70,7 @@ func (c *FMPClient) ParseCandlesticks(data []gjson.Result, market string, timefr
 		candle.Market = market
 		candle.Timeframe = timeframe
 
-		dt, err := time.Parse(dateLayout, data[idx].Get("date").String())
+		dt, err := time.Parse(shared.DateLayout, data[idx].Get("date").String())
 		if err != nil {
 			return nil, fmt.Errorf("parsing candlestick date: %w", err)
 		}
@@ -117,24 +83,24 @@ func (c *FMPClient) ParseCandlesticks(data []gjson.Result, market string, timefr
 }
 
 // FetchIndexIntradayHistorical fetches intraday historical market data.
-func (c *FMPClient) FetchIndexIntradayHistorical(ctx context.Context, market string, timeframe Timeframe, start time.Time, end time.Time) ([]gjson.Result, error) {
+func (c *FMPClient) FetchIndexIntradayHistorical(ctx context.Context, market string, timeframe shared.Timeframe, start time.Time, end time.Time) ([]gjson.Result, error) {
 	const fiveMinuteHistoricalPath = "/historical-chart/5min"
 	const oneHourHistoricalPath = "/historical-chart/1hour"
 
 	params := url.Values{}
 	params.Add("symbol", market)
 	params.Add("apikey", c.cfg.APIKey)
-	params.Add("from", start.Format(dateLayout))
+	params.Add("from", start.Format(shared.DateLayout))
 	if !end.IsZero() {
-		params.Add("to", end.Format(dateLayout))
+		params.Add("to", end.Format(shared.DateLayout))
 	}
 
 	var formedURL string
 
 	switch timeframe {
-	case FiveMinute:
+	case shared.FiveMinute:
 		formedURL = c.formURL(fiveMinuteHistoricalPath, params.Encode())
-	case OneHour:
+	case shared.OneHour:
 		formedURL = c.formURL(oneHourHistoricalPath, params.Encode())
 	default:
 		return nil, fmt.Errorf("unknown timeframe provided: %s", timeframe.String())
