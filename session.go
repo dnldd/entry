@@ -81,3 +81,50 @@ func (s *Session) Update(candle *Candlestick) {
 func (s *Session) IsCurrentSession(current time.Time) bool {
 	return (current.Equal(s.Open) || current.After(s.Open)) && current.Before(s.Close)
 }
+
+// IsMarketOpen checks whether the markets (only NQ currently) are open by checking if the current
+// time is within one of the market sessions.
+func IsMarketOpen() (bool, error) {
+	now, loc, err := NewYorkTime()
+	if err != nil {
+		return false, err
+	}
+
+	sessions := []struct {
+		Open  string
+		Close string
+	}{
+		{asiaOpen, asiaClose},
+		{londonOpen, londonClose},
+		{newYorkOpen, newYorkClose},
+	}
+
+	var match bool
+	for idx := range sessions {
+		open, err := time.Parse(sessionTimeLayout, sessions[idx].Open)
+		if err != nil {
+			return false, fmt.Errorf("parsing open: %w", err)
+		}
+		close, err := time.Parse(sessionTimeLayout, sessions[idx].Close)
+		if err != nil {
+			return false, fmt.Errorf("parsing close: %w", err)
+		}
+
+		sOpen := time.Date(now.Year(), now.Month(), now.Day(), open.Hour(), open.Minute(), 0, 0, loc)
+		sClose := time.Date(now.Year(), now.Month(), now.Day(), close.Hour(), close.Minute(), 0, 0, loc)
+		if sClose.Before(sOpen) {
+			// Adjust asia closes to the next day.
+			sClose = sClose.Add(time.Hour * 24)
+		}
+
+		if (now.Equal(sOpen) || now.After(sOpen)) && now.Before(sClose) {
+			match = true
+		}
+
+		if match {
+			break
+		}
+	}
+
+	return match, nil
+}
