@@ -11,13 +11,13 @@ const (
 	london  = "london"
 	newYork = "newyork"
 
-	// Market session times in UTC without daylight savings.
-	asiaOpen     = "22:00"
-	asiaClose    = "06:00"
-	londonOpen   = "06:00"
-	londonClose  = "13:30"
-	newYorkOpen  = "13:30"
-	newYorkClose = "20:00"
+	// Market session time in new york time (ET).
+	asiaOpen     = "19:00"
+	asiaClose    = "04:00"
+	londonOpen   = "03:00"
+	londonClose  = "12:00"
+	newYorkOpen  = "08:00"
+	newYorkClose = "17:00"
 
 	sessionTimeLayout = "15:04"
 
@@ -46,10 +46,13 @@ func NewSession(name string, open string, close string) (*Session, error) {
 		return nil, fmt.Errorf("parsing session close: %w", err)
 	}
 
-	now := time.Now().UTC()
+	now, loc, err := NewYorkTime()
+	if err != nil {
+		return nil, err
+	}
 
-	sOpen := time.Date(now.Year(), now.Month(), now.Day(), sessionOpen.Hour(), sessionOpen.Minute(), 0, 0, time.UTC)
-	sClose := time.Date(now.Year(), now.Month(), now.Day(), sessionClose.Hour(), sessionClose.Minute(), 0, 0, time.UTC)
+	sOpen := time.Date(now.Year(), now.Month(), now.Day(), sessionOpen.Hour(), sessionOpen.Minute(), 0, 0, loc)
+	sClose := time.Date(now.Year(), now.Month(), now.Day(), sessionClose.Hour(), sessionClose.Minute(), 0, 0, loc)
 	if sClose.Before(sOpen) {
 		// Adjust asia closes to the next day.
 		sClose = sClose.Add(time.Hour * 24)

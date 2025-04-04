@@ -65,7 +65,11 @@ func (m *PositionManager) SendExitSignal(signal ExitSignal) {
 
 // handleEntrySignal processes the provided entry signal.
 func (m *PositionManager) handleEntrySignal(signal EntrySignal) {
-	position := NewPosition(&signal)
+	position, err := NewPosition(&signal)
+	if err != nil {
+		m.cfg.Logger.Error().Msgf("creating new position: %v", err)
+		return
+	}
 
 	m.positionsMtx.Lock()
 	m.positions = append(m.positions, position)

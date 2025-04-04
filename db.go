@@ -120,7 +120,12 @@ func (db *Database) PersistClosedPosition(ctx context.Context, position *Positio
 		db.cfg.Logger.Error().Msgf("unexpected closed position state for metadata calculations: %s", spew.Sdump(position))
 	}
 
-	id := generateMetadataID(time.Now().UTC(), position.Market)
+	now, _, err := NewYorkTime()
+	if err != nil {
+		return err
+	}
+
+	id := generateMetadataID(now, position.Market)
 	resp, err := db.client.QuerySingle(ctx, findMetadataSQL, id)
 	if err != nil {
 		return err
@@ -143,10 +148,15 @@ func (db *Database) PersistClosedPosition(ctx context.Context, position *Positio
 			return fmt.Errorf("updating metadata %s: %d -> %s", id, idx, errStr)
 		}
 	default:
+		now, _, err := NewYorkTime()
+		if err != nil {
+			return err
+		}
+
 		resp, err := db.client.Execute(ctx, rqlitehttp.SQLStatements{
 			{
 				SQL:              persistMetadataSQL,
-				PositionalParams: []any{id, 1, win, winpercent, loss, losspercent, time.Now().UTC().Unix()},
+				PositionalParams: []any{id, 1, win, winpercent, loss, losspercent, now.Unix()},
 			},
 		}, &rqlitehttp.ExecuteOptions{Transaction: true, Timings: true})
 		if err != nil {

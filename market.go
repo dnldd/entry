@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 )
 
 // Market tracks the metadata of a market.
@@ -59,8 +58,12 @@ func (m *Market) AddSessions() error {
 }
 
 // FetchNewLevels fetches newly generated levels from the previously completed session.
-func (m *Market) FetchNewLevels() []*Level {
-	now := time.Now().UTC()
+func (m *Market) FetchNewLevels() ([]*Level, error) {
+	now, _, err := NewYorkTime()
+	if err != nil {
+		return nil, err
+	}
+
 	var completedSession *Session
 	for idx := len(m.Sessions); idx > -1; idx-- {
 		if m.Sessions[idx].IsCurrentSession(now) {
@@ -72,7 +75,7 @@ func (m *Market) FetchNewLevels() []*Level {
 		}
 	}
 
-	return []*Level{NewLevel(m.Market, completedSession.High), NewLevel(m.Market, completedSession.Low)}
+	return []*Level{NewLevel(m.Market, completedSession.High), NewLevel(m.Market, completedSession.Low)}, nil
 }
 
 // Update processes incoming market data for the provided market.
@@ -84,7 +87,11 @@ func (m *Market) Update(candle *Candlestick) error {
 		return nil
 	}
 
-	now := time.Now().UTC()
+	now, _, err := NewYorkTime()
+	if err != nil {
+		return fmt.Errorf("updating %s market: %s", m.Market, err)
+	}
+
 	var newSession bool
 	for idx := len(m.Sessions) - 1; idx > -1; idx-- {
 		if m.Sessions[idx].IsCurrentSession(now) {
@@ -104,14 +111,18 @@ func (m *Market) Update(candle *Candlestick) error {
 	}
 
 	m.CurrentSession.Update(candle)
-	_, err := m.VWAP.Update(candle)
+	_, err = m.VWAP.Update(candle)
 	if err != nil {
 		return err
 	}
 
 	if newSession {
 		// Fetch and send new levels from completed sessions for tracking.
-		levels := m.FetchNewLevels()
+		levels, err := m.FetchNewLevels()
+		if err != nil {
+			return fmt.Errorf("fetching new levels: %w", err)
+		}
+
 		for idx := range levels {
 			m.SendLevel(*levels[idx])
 		}

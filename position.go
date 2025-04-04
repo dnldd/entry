@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -175,23 +174,35 @@ func stringifyExitReasons(reasons []ExitReason) string {
 }
 
 // NewPosition initializes a new position.
-func NewPosition(entry *EntrySignal) *Position {
-	return &Position{
+func NewPosition(entry *EntrySignal) (*Position, error) {
+	now, _, err := NewYorkTime()
+	if err != nil {
+		return nil, err
+	}
+
+	pos := &Position{
 		ID:           uuid.New().String(),
 		Market:       entry.Market,
 		Timeframe:    entry.Timeframe,
 		Direction:    entry.Direction,
-		CreatedOn:    uint64(time.Now().Unix()),
+		CreatedOn:    uint64(now.Unix()),
 		EntryPrice:   entry.Price,
 		EntryReasons: stringifyEntryReasons(entry.Reasons),
 		StopLoss:     entry.StopLoss,
 		Status:       Active,
 	}
+
+	return pos, nil
 }
 
 // ClosePosition closes the position using the provided exit details.
-func (p *Position) ClosePosition(exit *ExitSignal) PositionStatus {
-	p.ClosedOn = uint64(time.Now().Unix())
+func (p *Position) ClosePosition(exit *ExitSignal) (PositionStatus, error) {
+	now, _, err := NewYorkTime()
+	if err != nil {
+		return Closed, err
+	}
+
+	p.ClosedOn = uint64(now.Unix())
 	p.ExitPrice = exit.Price
 	p.ExitReasons = stringifyExitReasons(exit.Reasons)
 
@@ -204,7 +215,7 @@ func (p *Position) ClosePosition(exit *ExitSignal) PositionStatus {
 		p.Status = Closed
 	}
 
-	return p.Status
+	return p.Status, nil
 }
 
 // UpdatePNLPercent updates the percentage change of the position given the current price.
