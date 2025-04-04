@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 )
 
 // Market tracks the metadata of a market.
@@ -17,13 +18,25 @@ type Market struct {
 }
 
 // NewMarket initializes a new market.
-func NewMarket(market string, f func(level Level)) *Market {
-	return &Market{
+func NewMarket(market string, f func(level Level)) (*Market, error) {
+	mkt := &Market{
 		Market:    market,
 		Sessions:  make([]*Session, 0, maxSessions),
 		VWAP:      NewVWAP(market, FiveMinute),
 		SendLevel: f,
 	}
+
+	err := mkt.AddSessions()
+	if err != nil {
+		return nil, fmt.Errorf("adding sessions: %w", err)
+	}
+
+	err = mkt.setCurrentSession()
+	if err != nil {
+		return nil, fmt.Errorf("setting current session: %w", err)
+	}
+
+	return mkt, nil
 }
 
 // AddSessions adds the next set of sessions (london, new york and asia) to the market.
@@ -53,6 +66,32 @@ func (m *Market) AddSessions() error {
 	}
 
 	m.Sessions = append(m.Sessions, asianSession)
+
+	return nil
+}
+
+// setCurrentSession sets the current session.
+func (m *Market) setCurrentSession() error {
+	now, _, err := NewYorkTime()
+	if err != nil {
+		return err
+	}
+
+	// Set the current session.
+	var set bool
+	for idx := range m.Sessions {
+		if m.Sessions[idx].IsCurrentSession(now) {
+			m.CurrentSession = m.Sessions[idx]
+			set = true
+			break
+		}
+	}
+
+	// If the current session is not set then the market is closed and  current time is
+	// approaching asian session. Preemptively set the asian session.
+	if !set {
+		m.CurrentSession = m.Sessions[len(m.Sessions)-1]
+	}
 
 	return nil
 }
@@ -129,4 +168,21 @@ func (m *Market) Update(candle *Candlestick) error {
 	}
 
 	return nil
+}
+
+// FetchLastSessionOpen returns the last session open.
+func (m *Market) FetchLastSessionOpen() time.Time {
+	var open time.Time
+	for idx := range m.Sessions {
+		if m.Sessions[idx].Name == m.CurrentSession.Name {
+			if idx == 0 {
+				// There is no last session, set the open to the current one.
+				open = m.Sessions[idx].Open
+			}
+
+			open = m.Sessions[idx-1].Open
+		}
+	}
+
+	return open
 }
