@@ -25,6 +25,7 @@ type QueryManager struct {
 	lastUpdatedTimes map[string]time.Time
 	jobScheduler     *gocron.Scheduler
 	catchUpSignals   chan CatchUpSignal
+	workers          chan struct{}
 }
 
 // NewQueryManager initializes the query manager.
@@ -39,6 +40,7 @@ func NewQueryManager(cfg *QueryManagerConfig) (*QueryManager, error) {
 		lastUpdatedTimes: make(map[string]time.Time),
 		jobScheduler:     &scheduler,
 		catchUpSignals:   make(chan CatchUpSignal, bufferSize),
+		workers:          make(chan struct{}),
 	}
 
 	return mgr, nil
@@ -84,9 +86,12 @@ func (m *QueryManager) handleCatchUpSignal(signal CatchUpSignal) {
 func (m *QueryManager) Run(ctx context.Context) {
 	for {
 		select {
-		// todo: catch up signal workers.
 		case signal := <-m.catchUpSignals:
-			m.handleCatchUpSignal(signal)
+			m.workers <- struct{}{}
+			go func(signal *CatchUpSignal) {
+				m.handleCatchUpSignal(*signal)
+				<-m.workers
+			}(&signal)
 		default:
 			// fallthrough
 		}

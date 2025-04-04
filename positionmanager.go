@@ -9,8 +9,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// bufferSize is the default buffer size for channels.
-const bufferSize = 64
+const (
+	// bufferSize is the default buffer size for channels.
+	bufferSize = 64
+	// maxWorkers is the maximum number of concurrent workers.
+	maxWorkers = 8
+)
 
 // PositionManagerConfig represents the position manager configuration.
 type PositionManagerConfig struct {
@@ -29,6 +33,7 @@ type PositionManager struct {
 	positionsMtx sync.RWMutex
 	entrySignals chan EntrySignal
 	exitSignals  chan ExitSignal
+	workers      chan struct{}
 }
 
 // NewPositionManager initializes a new position manager.
@@ -38,6 +43,7 @@ func NewPositionManager(cfg *PositionManagerConfig) *PositionManager {
 		positions:    []*Position{},
 		entrySignals: make(chan EntrySignal, bufferSize),
 		exitSignals:  make(chan ExitSignal, bufferSize),
+		workers:      make(chan struct{}, maxWorkers),
 	}
 }
 
@@ -109,11 +115,18 @@ func (m *PositionManager) handleExitSignal(signal ExitSignal) {
 func (m *PositionManager) Run(ctx context.Context) {
 	for {
 		select {
-		// todo: add entry and exit signal workers.
 		case signal := <-m.entrySignals:
-			m.handleEntrySignal(signal)
+			m.workers <- struct{}{}
+			go func(signal *EntrySignal) {
+				m.handleEntrySignal(*signal)
+				<-m.workers
+			}(&signal)
 		case signal := <-m.exitSignals:
-			m.handleExitSignal(signal)
+			m.workers <- struct{}{}
+			go func(signal *ExitSignal) {
+				m.handleExitSignal(*signal)
+				<-m.workers
+			}(&signal)
 		default:
 			// fallthrough
 		}

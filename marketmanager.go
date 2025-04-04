@@ -32,14 +32,17 @@ type MarketManager struct {
 	cfg           *MarketManagerConfig
 	markets       map[string]*Market
 	updateSignals chan Candlestick
-	closeSignals  chan string
+	workers       map[string]chan struct{}
 }
 
 // NewMarketManager initializes a new market manager.
 func NewMarketManager(cfg *MarketManagerConfig) (*MarketManager, error) {
 	// initialize managed markets.
 	markets := make(map[string]*Market, 0)
+	workers := make(map[string]chan struct{})
 	for idx := range cfg.MarketIDs {
+		workers[cfg.MarketIDs[idx]] = make(chan struct{})
+
 		market, err := NewMarket(cfg.MarketIDs[idx], cfg.TrackLevel)
 		if err != nil {
 			return nil, fmt.Errorf("creating market: %w", err)
@@ -51,7 +54,7 @@ func NewMarketManager(cfg *MarketManagerConfig) (*MarketManager, error) {
 		cfg:           cfg,
 		markets:       markets,
 		updateSignals: make(chan Candlestick, bufferSize),
-		closeSignals:  make(chan string, bufferSize),
+		workers:       workers,
 	}, nil
 }
 
@@ -63,17 +66,6 @@ func (m *MarketManager) SendMarketUpdate(candle Candlestick) {
 	default:
 		m.cfg.Logger.Error().Msgf("market update channel at capacity: %d/%d",
 			len(m.updateSignals), bufferSize)
-	}
-}
-
-// SendMarketClose relays the provided closed market for processing.
-func (m *MarketManager) SendMarketClose(market string) {
-	select {
-	case m.closeSignals <- market:
-		// do nothing.
-	default:
-		m.cfg.Logger.Error().Msgf("market close channel at capacity: %d/%d",
-			len(m.closeSignals), bufferSize)
 	}
 }
 
@@ -113,9 +105,13 @@ func (m *MarketManager) Run(ctx context.Context) {
 
 	for {
 		select {
-		// todo: add update signal workers.
 		case candle := <-m.updateSignals:
-			m.handleUpdateCandle(&candle)
+			// use the dedicated market worker to handle the update signal.
+			m.workers[candle.Market] <- struct{}{}
+			go func(candle *Candlestick) {
+				m.handleUpdateCandle(candle)
+				<-m.workers[candle.Market]
+			}(&candle)
 		default:
 			// fallthrough
 		}
