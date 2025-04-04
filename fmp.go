@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	dateFormat = "2006-01-02 15:04:05"
-	base       = "https://financialmodelingprep.com/stable"
+	baseURL = "https://financialmodelingprep.com/stable"
 )
 
 // Candlestick represents a unit candlestick for a market.
@@ -26,6 +25,7 @@ type Candlestick struct {
 	Volume float64
 	Date   time.Time
 
+	// Metadata and derived fields.
 	Market    string
 	Timeframe Timeframe
 	VWAP      float64
@@ -47,7 +47,7 @@ func (t *Timeframe) String() string {
 	case FiveMinute:
 		return "5m"
 	default:
-		return ""
+		return "unknown"
 	}
 }
 
@@ -78,7 +78,7 @@ func NewFMPClient(cfg *FMPConfig) *FMPClient {
 
 // formURL creates full urls including paramters for the api.
 func (c *FMPClient) formURL(path string, params string) string {
-	c.buf.WriteString(base)
+	c.buf.WriteString(baseURL)
 	c.buf.WriteString(path)
 	c.buf.WriteString("?")
 	c.buf.WriteString(params)
@@ -104,7 +104,7 @@ func (c *FMPClient) ParseCandlesticks(data []gjson.Result, market string, timefr
 		candle.Market = market
 		candle.Timeframe = timeframe
 
-		dt, err := time.Parse(dateFormat, data[idx].Get("date").String())
+		dt, err := time.Parse(dateLayout, data[idx].Get("date").String())
 		if err != nil {
 			return nil, fmt.Errorf("parsing candlestick date: %w", err)
 		}
@@ -124,6 +124,10 @@ func (c *FMPClient) FetchIndexIntradayHistorical(ctx context.Context, market str
 	params := url.Values{}
 	params.Add("symbol", market)
 	params.Add("apikey", c.cfg.APIKey)
+	params.Add("from", start.Format(dateLayout))
+	if !end.IsZero() {
+		params.Add("to", end.Format(dateLayout))
+	}
 
 	var formedURL string
 
