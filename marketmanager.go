@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -9,8 +10,9 @@ import (
 
 // CatchUpSignal represents a signal to catchup on market data.
 type CatchUpSignal struct {
-	Market string
-	Start  time.Time
+	Market    string
+	Timeframe Timeframe
+	Start     time.Time
 }
 
 // MarketManagerConfig represents the market manager configuration.
@@ -34,11 +36,14 @@ type MarketManager struct {
 }
 
 // NewMarketManager initializes a new market manager.
-func NewMarketManager(cfg *MarketManagerConfig) *MarketManager {
+func NewMarketManager(cfg *MarketManagerConfig) (*MarketManager, error) {
 	// initialize managed markets.
 	markets := make(map[string]*Market, 0)
 	for idx := range cfg.MarketIDs {
-		market := NewMarket(cfg.MarketIDs[idx], cfg.TrackLevel)
+		market, err := NewMarket(cfg.MarketIDs[idx], cfg.TrackLevel)
+		if err != nil {
+			return nil, fmt.Errorf("creating market: %w", err)
+		}
 		markets[cfg.MarketIDs[idx]] = market
 	}
 
@@ -47,7 +52,7 @@ func NewMarketManager(cfg *MarketManagerConfig) *MarketManager {
 		markets:       markets,
 		updateSignals: make(chan Candlestick, bufferSize),
 		closeSignals:  make(chan string, bufferSize),
-	}
+	}, nil
 }
 
 // SendMarketUpdate relays the provided candlestick for processing.
@@ -87,8 +92,25 @@ func (m *MarketManager) handleUpdateCandle(candle *Candlestick) {
 	}
 }
 
+// catchup signals a catch up for all tracked markets.
+func (m *MarketManager) catchUp() {
+	for _, v := range m.markets {
+		market := *v
+
+		signal := CatchUpSignal{
+			Market:    market.Market,
+			Timeframe: FiveMinute,
+			Start:     market.FetchLastSessionOpen(),
+		}
+
+		m.cfg.CatchUp(signal)
+	}
+}
+
 // Run manages the lifecycle processes of the position manager.
 func (m *MarketManager) Run(ctx context.Context) {
+	m.catchUp()
+
 	for {
 		select {
 		// todo: add update signal workers.
