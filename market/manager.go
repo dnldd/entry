@@ -103,10 +103,15 @@ func (m *Manager) catchUp() {
 	for _, v := range m.markets {
 		market := *v
 
+		start, err := market.sessionSnapshot.FetchLastSessionOpen()
+		if err != nil {
+			m.cfg.Logger.Error().Msgf("fetching last session open: %v", err)
+		}
+
 		signal := CatchUpSignal{
 			Market:    market.cfg.Market,
 			Timeframe: shared.FiveMinute,
-			Start:     market.FetchLastSessionOpen(),
+			Start:     start,
 		}
 
 		m.cfg.CatchUp(signal)

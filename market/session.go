@@ -22,7 +22,7 @@ const (
 	newYorkClose = "17:00"
 
 	// maxSessions is the maximum number of sessions tracked by a market.
-	maxSessions = 30
+	maxSessions = 12
 )
 
 // Session represents a market session.
@@ -67,7 +67,7 @@ func NewSession(name string, open string, close string) (*Session, error) {
 	return session, nil
 }
 
-// Update updates the provided session's high and low, and whether they are ready to be used as levels.
+// Update updates the provided session's high and low.
 func (s *Session) Update(candle *shared.Candlestick) {
 	switch {
 	case candle.Low < s.Low:
