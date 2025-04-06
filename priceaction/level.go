@@ -1,4 +1,6 @@
-package main
+package priceaction
+
+import "github.com/dnldd/entry/shared"
 
 // LevelKind represents the type of level.
 type LevelKind int
@@ -30,15 +32,24 @@ type Level struct {
 }
 
 // NewLevel initializes a new level.
-func NewLevel(market string, price float64) *Level {
-	return &Level{
+func NewLevel(market string, price float64, candle *shared.Candlestick) *Level {
+	lvl := &Level{
 		Market: market,
 		Price:  price,
 	}
+
+	switch {
+	case price >= candle.High:
+		lvl.Kind = Resistance
+	case price <= candle.Low:
+		lvl.Kind = Support
+	}
+
+	return lvl
 }
 
 // Update updates the provided level based on the provided price reaction.
-func (l *Level) Update(reaction PriceReaction) {
+func (l *Level) Update(reaction Reaction) {
 	switch reaction {
 	case Chop:
 		// do nothing.
@@ -55,4 +66,10 @@ func (l *Level) Update(reaction PriceReaction) {
 			l.Kind = Support
 		}
 	}
+}
+
+// LevelSignal represents a level signal to outline a price level.
+type LevelSignal struct {
+	Market string
+	Price  float64
 }
