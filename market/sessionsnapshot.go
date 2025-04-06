@@ -90,7 +90,7 @@ func (s *SessionSnapshot) SetCurrentSession() (bool, error) {
 	var set bool
 	var changed bool
 	prev := s.current
-	for i := 0; i < s.count; i++ {
+	for i := range s.count {
 		idx := (s.start + i) % s.size
 		session := s.data[idx]
 		if session.IsCurrentSession(now) {
@@ -107,7 +107,7 @@ func (s *SessionSnapshot) SetCurrentSession() (bool, error) {
 	// If the current session is not set then the market is closed and current time is
 	// approaching the asian session. Preemptively set the asian session.
 	if !set {
-		for i := 0; i < s.count; i++ {
+		for i := range s.count {
 			idx := (s.start + s.count - 1 - i + s.size) % s.size
 			session := s.data[idx]
 			if session.Name == asia {
@@ -163,7 +163,7 @@ func (s *SessionSnapshot) FetchLastSessionHighLow() (float64, float64, error) {
 
 // ForEach applies the provided function to each element in the snapshot.
 func (s *SessionSnapshot) ForEach(fn func(*Session)) {
-	for i := 0; i < s.count; i++ {
+	for i := range s.count {
 		fn(s.data[(s.start+i)%s.size])
 	}
 }

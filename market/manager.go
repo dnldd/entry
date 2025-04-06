@@ -23,7 +23,7 @@ type CatchUpSignal struct {
 
 // ManagerConfig represents the market manager configuration.
 type ManagerConfig struct {
-	// MarketIDs represetns the collection of ids of the markets to manage.
+	// MarketIDs represents the collection of ids of the markets to manage.
 	MarketIDs []string
 	// CatchUp signals a catchup process for a market.
 	CatchUp func(signal CatchUpSignal)

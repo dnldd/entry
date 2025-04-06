@@ -49,7 +49,7 @@ func (s *CandlestickSnapshot) LastN(n int) []*shared.Candlestick {
 	set := make([]*shared.Candlestick, n)
 	start := (s.start + s.count - n + s.size) % s.size
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		idx := (start + i) % s.size
 		set[i] = s.data[idx]
 	}
