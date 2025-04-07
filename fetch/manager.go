@@ -16,14 +16,14 @@ const (
 	bufferSize = 64
 	// maxWorkers is the maximum number of concurrent workers.
 	maxWorkers = 8
+	// minSubscriberBuffer is the minimum buffer size for subscribers.
+	minSubscriberBuffer = 24
 )
 
 // ManagerConfig represents the configuration for the query manager.
 type ManagerConfig struct {
 	// ExchangeClient represents the market exchange client.
 	ExchangeClient *FMPClient
-	// SendMarketUpdate relays the provided candlestick for processing.
-	SendMarketUpdate func(candle shared.Candlestick)
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
 }
@@ -34,6 +34,7 @@ type Manager struct {
 	lastUpdatedTimes map[string]time.Time
 	jobScheduler     *gocron.Scheduler
 	catchUpSignals   chan market.CatchUpSignal
+	subscribers      []*chan shared.Candlestick
 	workers          chan struct{}
 }
 
@@ -49,10 +50,23 @@ func NewQueryManager(cfg *ManagerConfig) (*Manager, error) {
 		lastUpdatedTimes: make(map[string]time.Time),
 		jobScheduler:     &scheduler,
 		catchUpSignals:   make(chan market.CatchUpSignal, bufferSize),
+		subscribers:      make([]*chan shared.Candlestick, 0, minSubscriberBuffer),
 		workers:          make(chan struct{}),
 	}
 
 	return mgr, nil
+}
+
+// Subscriber registers the provided subscriber for market updates.
+func (m *Manager) Subscribe(sub *chan shared.Candlestick) {
+	m.subscribers = append(m.subscribers, sub)
+}
+
+// notifySubscribers notifies subscribers of the new market update.
+func (m *Manager) notifySubscribers(candle *shared.Candlestick) {
+	for k := range m.subscribers {
+		*m.subscribers[k] <- *candle
+	}
 }
 
 // SendCatchUpSignal relays the provided market catch up signal for processing.
@@ -82,7 +96,7 @@ func (m *Manager) handleCatchUpSignal(signal market.CatchUpSignal) {
 	}
 
 	for idx := range candles {
-		m.cfg.SendMarketUpdate(candles[idx])
+		m.notifySubscribers(&candles[idx])
 	}
 
 	m.lastUpdatedTimes[signal.Market] = candles[len(candles)-1].Date
