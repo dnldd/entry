@@ -21,16 +21,20 @@ type CatchUpSignal struct {
 	Start     time.Time
 }
 
+// LevelSignal represents a level signal to outline a price level.
+type LevelSignal struct {
+	Market string
+	Price  float64
+}
+
 // ManagerConfig represents the market manager configuration.
 type ManagerConfig struct {
 	// MarketIDs represents the collection of ids of the markets to manage.
 	MarketIDs []string
 	// CatchUp signals a catchup process for a market.
 	CatchUp func(signal CatchUpSignal)
-	// SignalSupport relays the provided support.
-	SignalSupport func(price float64)
-	// SignalResistance relays the provided resistance.
-	SignalResistance func(price float64)
+	// SignalLevel relays the provided  level signal for  processing.
+	SignalLevel func(signal LevelSignal)
 	// Logger represents the application logger.
 	Logger zerolog.Logger
 }
@@ -52,9 +56,8 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 		workers[cfg.MarketIDs[idx]] = make(chan struct{})
 
 		mCfg := &MarketConfig{
-			Market:           cfg.MarketIDs[idx],
-			SignalSupport:    cfg.SignalSupport,
-			SignalResistance: cfg.SignalResistance,
+			Market:      cfg.MarketIDs[idx],
+			SignalLevel: cfg.SignalLevel,
 		}
 		market, err := NewMarket(mCfg)
 		if err != nil {

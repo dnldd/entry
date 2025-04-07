@@ -67,9 +67,3 @@ func (l *Level) Update(reaction Reaction) {
 		}
 	}
 }
-
-// LevelSignal represents a level signal to outline a price level.
-type LevelSignal struct {
-	Market string
-	Price  float64
-}
