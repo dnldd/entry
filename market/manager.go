@@ -31,6 +31,8 @@ type LevelSignal struct {
 type ManagerConfig struct {
 	// MarketIDs represents the collection of ids of the markets to manage.
 	MarketIDs []string
+	// Subscribe registers the provided subscriber for market updates.
+	Subscribe func(sub *chan shared.Candlestick)
 	// CatchUp signals a catchup process for a market.
 	CatchUp func(signal CatchUpSignal)
 	// SignalLevel relays the provided  level signal for  processing.
@@ -123,6 +125,7 @@ func (m *Manager) catchUp() {
 
 // Run manages the lifecycle processes of the position manager.
 func (m *Manager) Run(ctx context.Context) {
+	m.cfg.Subscribe(&m.updateSignals)
 	m.catchUp()
 
 	for {
