@@ -3,11 +3,12 @@ package fetch
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/dnldd/entry/market"
 	"github.com/dnldd/entry/shared"
-	"github.com/go-co-op/gocron/v2"
+	"github.com/go-co-op/gocron"
 	"github.com/rs/zerolog"
 )
 
@@ -30,25 +31,29 @@ type ManagerConfig struct {
 
 // Manager represents the market query manager.
 type Manager struct {
-	cfg              *ManagerConfig
-	lastUpdatedTimes map[string]time.Time
-	jobScheduler     *gocron.Scheduler
-	catchUpSignals   chan market.CatchUpSignal
-	subscribers      []*chan shared.Candlestick
-	workers          chan struct{}
+	cfg                 *ManagerConfig
+	lastUpdatedTimes    map[string]time.Time
+	lastUpdatedTimesMtx sync.RWMutex
+	jobScheduler        *gocron.Scheduler
+	catchUpSignals      chan market.CatchUpSignal
+
+	subscribers []*chan shared.Candlestick
+	workers     chan struct{}
 }
 
 // NewManager initializes the query manager.
 func NewQueryManager(cfg *ManagerConfig) (*Manager, error) {
-	scheduler, err := gocron.NewScheduler()
+	loc, err := time.LoadLocation("America/New_York")
 	if err != nil {
-		return nil, fmt.Errorf("creating job scheduler: %w", err)
+		return nil, fmt.Errorf("loading new york timezone: %w", err)
 	}
+
+	scheduler := gocron.NewScheduler(loc)
 
 	mgr := &Manager{
 		cfg:              cfg,
 		lastUpdatedTimes: make(map[string]time.Time),
-		jobScheduler:     &scheduler,
+		jobScheduler:     scheduler,
 		catchUpSignals:   make(chan market.CatchUpSignal, bufferSize),
 		subscribers:      make([]*chan shared.Candlestick, 0, minSubscriberBuffer),
 		workers:          make(chan struct{}),
@@ -80,18 +85,18 @@ func (m *Manager) SendCatchUpSignal(catchUp market.CatchUpSignal) {
 	}
 }
 
-// handleCatchUpSignal processes the provided catch up signal.
-func (m *Manager) handleCatchUpSignal(signal market.CatchUpSignal) {
-	data, err := m.cfg.ExchangeClient.FetchIndexIntradayHistorical(context.Background(), signal.Market,
-		signal.Timeframe, signal.Start, time.Time{})
+// fetchMarketData fetches market data using the provided parameters.
+func (m *Manager) fetchMarketData(market string, timeframe shared.Timeframe, start time.Time) {
+	data, err := m.cfg.ExchangeClient.FetchIndexIntradayHistorical(context.Background(), market,
+		timeframe, start, time.Time{})
 	if err != nil {
-		m.cfg.Logger.Error().Msgf("catching up on %s: %v", signal.Market, err)
+		m.cfg.Logger.Error().Msgf("fetching market data %s: %v", market, err)
 		return
 	}
 
-	candles, err := m.cfg.ExchangeClient.ParseCandlesticks(data, signal.Market, signal.Timeframe)
+	candles, err := m.cfg.ExchangeClient.ParseCandlesticks(data, market, timeframe)
 	if err != nil {
-		m.cfg.Logger.Error().Msgf("parsing candlesticks for %s: %v", signal.Market, err)
+		m.cfg.Logger.Error().Msgf("parsing candlesticks for %s: %v", market, err)
 		return
 	}
 
@@ -99,10 +104,52 @@ func (m *Manager) handleCatchUpSignal(signal market.CatchUpSignal) {
 		m.notifySubscribers(&candles[idx])
 	}
 
-	m.lastUpdatedTimes[signal.Market] = candles[len(candles)-1].Date
+	m.lastUpdatedTimesMtx.Lock()
+	m.lastUpdatedTimes[market] = candles[len(candles)-1].Date
+	m.lastUpdatedTimesMtx.Unlock()
+}
 
-	// todo: set up periodic market data fetches on regular intervals, only proceeding when
-	// the market is open.
+// fetchMatketDataJob is a job used to fetch market data using the provided parameters.
+//
+// This job should be scheduled for periodic execution.
+func (m *Manager) fetchMarketDataJob(marketName string, timeframe shared.Timeframe) {
+	m.lastUpdatedTimesMtx.Lock()
+	lastUpdatedTime, ok := m.lastUpdatedTimes[marketName]
+	m.lastUpdatedTimesMtx.Unlock()
+
+	// A market is required to be caught up and have a last updated time in order to receive
+	// periodic market updates.
+	if !ok {
+		m.cfg.Logger.Error().Msgf("no last updated time found for %s, skipping market %s update",
+			marketName, timeframe.String())
+		return
+	}
+
+	// Avoid fetching periodic market data if the market is not open.
+	open, err := market.IsMarketOpen()
+	if err != nil {
+		m.cfg.Logger.Error().Msgf("checking market open status: %v", err)
+	}
+
+	if !open {
+		// do nothing.
+		m.cfg.Logger.Info().Msgf("%s not open, skipping periodic update", marketName)
+		return
+	}
+
+	m.fetchMarketData(marketName, timeframe, lastUpdatedTime)
+}
+
+// handleCatchUpSignal processes the provided catch up signal.
+func (m *Manager) handleCatchUpSignal(signal market.CatchUpSignal) {
+	m.fetchMarketData(signal.Market, signal.Timeframe, signal.Start)
+
+	_, err := m.jobScheduler.Every(5).Minutes().Do(m.fetchMarketDataJob, signal.Market, signal.Timeframe)
+	if err != nil {
+		m.cfg.Logger.Error().Msgf("scheduling %s market update job for %s: %v", signal.Market,
+			signal.Timeframe.String(), err)
+		return
+	}
 }
 
 // Run  manages the lifecycle processes of the query manager.
