@@ -1,7 +1,9 @@
 package priceaction
 
+import "github.com/dnldd/entry/shared"
+
 const (
-	// snapshotSize is the maximum number of entries for a session snapshot.
+	// snapshotSize is the maximum number of elements for a level snapshot.
 	levelSnapshotSize = 80
 )
 
@@ -35,13 +37,13 @@ func (s *LevelSnapshot) Add(level *Level) {
 }
 
 // Filter applies the provided function to the snapshot and returns the filtered subset.
-func (s *LevelSnapshot) Filter(fn func(*Level) bool) []Level {
-	levels := make([]Level, 0)
+func (s *LevelSnapshot) Filter(candle *shared.Candlestick, fn func(*Level, *shared.Candlestick) bool) []*Level {
+	levels := make([]*Level, 0)
 	for i := range s.count {
 		level := s.data[(s.start+i)%s.size]
-		ok := fn(level)
+		ok := fn(level, candle)
 		if ok {
-			levels = append(levels, *level)
+			levels = append(levels, level)
 		}
 	}
 
