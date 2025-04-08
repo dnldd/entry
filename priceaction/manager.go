@@ -2,7 +2,6 @@ package priceaction
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/dnldd/entry/market"
@@ -21,35 +20,32 @@ const (
 type ManagerConfig struct {
 	// Subscribe registers the provided subscriber for market updates.
 	Subscribe func(sub *chan shared.Candlestick)
+	// RequestPriceData sends a price data request.
+	RequestPriceData func(request *market.PriceDataRequest)
+	// SignalPriceLevelReactions relays price level reactions for processing.
+	SignalPriceLevelReactions func(signal PriceLevelReactionsSignal)
 	// Logger represents the application logger.
 	Logger zerolog.Logger
 }
 
 // Manager represents the price action manager.
 type Manager struct {
-	cfg               *ManagerConfig
-	levelSnapshot     *LevelSnapshot
-	levelSignals      chan market.LevelSignal
-	updateSignals     chan shared.Candlestick
-	currentCandles    map[string]*shared.Candlestick
-	currentCandlesMtx sync.RWMutex
-	workers           chan struct{}
+	cfg           *ManagerConfig
+	markets       map[string]*Market
+	marketsMtx    sync.RWMutex
+	levelSignals  chan market.LevelSignal
+	updateSignals chan shared.Candlestick
+	workers       chan struct{}
 }
 
 // NewManager initializes a new price action manager.
 func NewManager(cfg *ManagerConfig) (*Manager, error) {
-	levelSnapshot, err := NewLevelSnapshot()
-	if err != nil {
-		return nil, fmt.Errorf("creating level snapshot: %v", err)
-	}
-
 	return &Manager{
-		cfg:            cfg,
-		levelSnapshot:  levelSnapshot,
-		levelSignals:   make(chan market.LevelSignal, bufferSize),
-		updateSignals:  make(chan shared.Candlestick),
-		currentCandles: make(map[string]*shared.Candlestick),
-		workers:        make(chan struct{}, maxWorkers),
+		cfg:           cfg,
+		markets:       make(map[string]*Market),
+		levelSignals:  make(chan market.LevelSignal, bufferSize),
+		updateSignals: make(chan shared.Candlestick),
+		workers:       make(chan struct{}, maxWorkers),
 	}, nil
 }
 
@@ -65,25 +61,69 @@ func (m *Manager) SendLevelSignal(level market.LevelSignal) {
 }
 
 // handleUpdateSignal processes the provided update signal.
-func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) {
-	m.currentCandlesMtx.Lock()
-	m.currentCandles[candle.Market] = candle
-	m.currentCandlesMtx.Unlock()
+func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
+	m.marketsMtx.RLock()
+	mkt, ok := m.markets[candle.Market]
+	m.marketsMtx.RUnlock()
+
+	if !ok {
+		// Create and track a new market if it does not exist yet.
+		var err error
+		mkt, err = NewMarket(candle.Market)
+		if err != nil {
+			m.cfg.Logger.Error().Msgf("creating %s market: %v", candle.Market, err)
+			return
+		}
+
+		m.marketsMtx.Lock()
+		m.markets[candle.Market] = mkt
+		m.marketsMtx.Unlock()
+	}
+
+	// Update price action concepts related to the market.
+	mkt.Update(candle)
+	if mkt.RequestingPriceData() {
+		// Request price data and generate price reactions from them.
+		resp := make(chan []*shared.Candlestick)
+		req := &market.PriceDataRequest{
+			Market:   mkt.market,
+			Response: &resp,
+		}
+
+		m.cfg.RequestPriceData(req)
+		data := <-resp
+
+		reactions := mkt.GeneratePriceReaction(data)
+		signal := PriceLevelReactionsSignal{
+			Market:    mkt.market,
+			Reactions: reactions,
+		}
+		m.cfg.SignalPriceLevelReactions(signal)
+
+		mkt.ResetPriceDataState()
+	}
+
 }
 
 // handleLevelSignal processes the provided level signal.
 func (m *Manager) handleLevelSignal(signal market.LevelSignal) {
-	m.currentCandlesMtx.RLock()
-	currentCandle := m.currentCandles[signal.Market]
-	m.currentCandlesMtx.RUnlock()
+	m.marketsMtx.RLock()
+	mkt, ok := m.markets[signal.Market]
+	m.marketsMtx.RUnlock()
 
+	if !ok {
+		m.cfg.Logger.Error().Msgf("no market found with name %s", signal.Market)
+		return
+	}
+
+	currentCandle := mkt.FetchCurrentCandle()
 	if currentCandle == nil {
 		m.cfg.Logger.Error().Msgf("no current candle available, skipping level")
 		return
 	}
 
 	level := NewLevel(signal.Market, signal.Price, currentCandle)
-	m.levelSnapshot.Add(level)
+	mkt.levelSnapshot.Add(level)
 }
 
 // Run manages the lifecycle processes of the price action manager.
@@ -101,7 +141,7 @@ func (m *Manager) Run(ctx context.Context) {
 		case candle := <-m.updateSignals:
 			m.workers <- struct{}{}
 			go func(candle *shared.Candlestick) {
-				m.handleUpdateCandle(candle)
+				m.handleUpdateSignal(candle)
 				<-m.workers
 			}(&candle)
 		default:
