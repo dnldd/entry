@@ -67,3 +67,64 @@ func (l *Level) Update(reaction Reaction) {
 		}
 	}
 }
+
+// PriceLevelReaction describes the reaction of price at a level.
+type PriceLevelReaction struct {
+	Level         *Level
+	PriceMovement []Movement
+	Reaction      Reaction
+}
+
+// todo: generate a complete price level reaction using the constructor.
+func NewPriceLevelReaction(level *Level, data []*shared.Candlestick) *PriceLevelReaction {
+	plr := &PriceLevelReaction{
+		Level:         level,
+		PriceMovement: make([]Movement, 0, len(data)),
+	}
+
+	// Generate price movement data from the level and provided price data.
+	for idx := range data {
+		candle := data[idx]
+
+		switch {
+		case level.Kind == Support && candle.Close > level.Price:
+			plr.PriceMovement = append(plr.PriceMovement, Above)
+		case level.Kind == Support && candle.Close <= level.Price:
+			plr.PriceMovement = append(plr.PriceMovement, Below)
+		case level.Kind == Resistance && candle.Close > level.Price:
+			plr.PriceMovement = append(plr.PriceMovement, Above)
+		case level.Kind == Resistance && candle.Close <= level.Price:
+			plr.PriceMovement = append(plr.PriceMovement, Below)
+		}
+	}
+
+	// Generate a price reaction based on the price movement data.
+	var above, below uint32
+	for idx := range plr.PriceMovement {
+		switch {
+		case plr.PriceMovement[idx] == Above:
+			above++
+		case plr.PriceMovement[idx] == Below:
+			below++
+		}
+	}
+
+	first := plr.PriceMovement[0]
+	last := plr.PriceMovement[len(plr.PriceMovement)-1]
+
+	switch {
+	case above == 0 && level.Kind == Resistance:
+		plr.Reaction = Reversal
+	case below == 0 && level.Kind == Support:
+		plr.Reaction = Reversal
+	case below >= 2 && first == Above && last == Below && level.Kind == Support:
+		plr.Reaction = Break
+	case above >= 2 && first == Below && last == Above && level.Kind == Resistance:
+		plr.Reaction = Break
+		// todo: add more cases.
+	default:
+		plr.Reaction = Chop
+	}
+
+	return plr
+}
