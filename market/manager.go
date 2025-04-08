@@ -16,7 +16,7 @@ const (
 	// maxWorkers is the maximum number of concurrent workers.
 	maxWorkers = 8
 	// minPriceDataRange is the minimum number of candles sent for a price data range request.
-	minPriceDataRange = 6
+	minPriceDataRange = 5
 )
 
 // CatchUpSignal represents a signal to catchup on market data.
