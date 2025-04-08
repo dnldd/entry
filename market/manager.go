@@ -3,6 +3,7 @@ package market
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/dnldd/entry/shared"
@@ -12,6 +13,10 @@ import (
 const (
 	// bufferSize is the default buffer size for channels.
 	bufferSize = 64
+	// maxWorkers is the maximum number of concurrent workers.
+	maxWorkers = 8
+	// minPriceDataRange is the minimum number of candles sent for a price data range request.
+	minPriceDataRange = 6
 )
 
 // CatchUpSignal represents a signal to catchup on market data.
@@ -25,6 +30,12 @@ type CatchUpSignal struct {
 type LevelSignal struct {
 	Market string
 	Price  float64
+}
+
+// PriceDataRequest represents a price data request to fetch price data for a time range.
+type PriceDataRequest struct {
+	Market   string
+	Response *chan []*shared.Candlestick
 }
 
 // ManagerConfig represents the market manager configuration.
@@ -43,10 +54,13 @@ type ManagerConfig struct {
 
 // Manager manages the lifecycle processes of all tracked markets.
 type Manager struct {
-	cfg           *ManagerConfig
-	markets       map[string]*Market
-	updateSignals chan shared.Candlestick
-	workers       map[string]chan struct{}
+	cfg               *ManagerConfig
+	markets           map[string]*Market
+	marketsMtx        sync.RWMutex
+	updateSignals     chan shared.Candlestick
+	priceDataRequests chan *PriceDataRequest
+	workers           map[string]chan struct{}
+	requestWorkers    chan struct{}
 }
 
 // NewManager initializes a new market manager.
@@ -70,10 +84,12 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 	}
 
 	return &Manager{
-		cfg:           cfg,
-		markets:       markets,
-		updateSignals: make(chan shared.Candlestick, bufferSize),
-		workers:       workers,
+		cfg:               cfg,
+		markets:           markets,
+		updateSignals:     make(chan shared.Candlestick, bufferSize),
+		priceDataRequests: make(chan *PriceDataRequest, bufferSize),
+		workers:           workers,
+		requestWorkers:    make(chan struct{}, maxWorkers),
 	}, nil
 }
 
@@ -88,9 +104,23 @@ func (m *Manager) SendMarketUpdate(candle shared.Candlestick) {
 	}
 }
 
+// SendPriceDataRequest relays the provided price data request for processing.
+func (m *Manager) SendPriceDataRequest(request *PriceDataRequest) {
+	select {
+	case m.priceDataRequests <- request:
+		// do nothing.
+	default:
+		m.cfg.Logger.Error().Msgf("price data requests channel at capacity: %d/%d",
+			len(m.priceDataRequests), bufferSize)
+	}
+}
+
 // handleUpdateSignal processes the provided market update candle.
 func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) {
+	m.marketsMtx.RLock()
 	market, ok := m.markets[candle.Market]
+	m.marketsMtx.RUnlock()
+
 	if !ok {
 		m.cfg.Logger.Error().Msgf("no market found with name %s for update", candle.Market)
 		return
@@ -103,8 +133,27 @@ func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) {
 	}
 }
 
+// handlePriceDateRequest process the requested price data.
+func (m *Manager) handlePriceDataRequest(req *PriceDataRequest) {
+	m.marketsMtx.RLock()
+	mkt, ok := m.markets[req.Market]
+	m.marketsMtx.RUnlock()
+
+	if !ok {
+		m.cfg.Logger.Error().Msgf("no market found with name %s", req.Market)
+		return
+	}
+
+	data := mkt.candleSnapshot.LastN(minPriceDataRange)
+
+	*req.Response <- data
+}
+
 // catchup signals a catch up for all tracked markets.
 func (m *Manager) catchUp() {
+	m.marketsMtx.RLock()
+	defer m.marketsMtx.RUnlock()
+
 	for _, v := range m.markets {
 		market := *v
 
@@ -137,6 +186,13 @@ func (m *Manager) Run(ctx context.Context) {
 				m.handleUpdateCandle(candle)
 				<-m.workers[candle.Market]
 			}(&candle)
+		case req := <-m.priceDataRequests:
+			// handle price data requests concurrently.
+			m.requestWorkers <- struct{}{}
+			go func(req *PriceDataRequest) {
+				m.handlePriceDataRequest(req)
+				<-m.requestWorkers
+			}(req)
 		default:
 			// fallthrough
 		}
