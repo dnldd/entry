@@ -70,6 +70,7 @@ func (l *Level) Update(reaction Reaction) {
 
 // PriceLevelReaction describes the reaction of price at a level.
 type PriceLevelReaction struct {
+	Market        string
 	Level         *Level
 	PriceMovement []Movement
 	Reaction      Reaction
@@ -77,8 +78,9 @@ type PriceLevelReaction struct {
 
 // NewPriceLevelReaction initializes a new price level reaction from the provided level and
 // candlestick data.
-func NewPriceLevelReaction(level *Level, data []*shared.Candlestick) *PriceLevelReaction {
+func NewPriceLevelReaction(market string, level *Level, data []*shared.Candlestick) *PriceLevelReaction {
 	plr := &PriceLevelReaction{
+		Market:        market,
 		Level:         level,
 		PriceMovement: make([]Movement, 0, len(data)),
 	}
@@ -151,4 +153,10 @@ func NewPriceLevelReaction(level *Level, data []*shared.Candlestick) *PriceLevel
 	}
 
 	return plr
+}
+
+// PriceLevelReactionsSignal relays price level reactions for processing.
+type PriceLevelReactionsSignal struct {
+	Market    string
+	Reactions []*PriceLevelReaction
 }
