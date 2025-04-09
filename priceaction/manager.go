@@ -2,7 +2,7 @@ package priceaction
 
 import (
 	"context"
-	"sync"
+	"fmt"
 
 	"github.com/dnldd/entry/market"
 	"github.com/dnldd/entry/shared"
@@ -18,6 +18,8 @@ const (
 
 // ManagerConfig represents the price action manager configuration.
 type ManagerConfig struct {
+	// MarketIDs represents the collection of ids of the markets to manage.
+	MarketIDs []string
 	// Subscribe registers the provided subscriber for market updates.
 	Subscribe func(sub *chan shared.Candlestick)
 	// RequestPriceData sends a price data request.
@@ -32,7 +34,6 @@ type ManagerConfig struct {
 type Manager struct {
 	cfg           *ManagerConfig
 	markets       map[string]*Market
-	marketsMtx    sync.RWMutex
 	levelSignals  chan market.LevelSignal
 	updateSignals chan shared.Candlestick
 	metaSignals   chan shared.CandleMetadataRequest
@@ -41,9 +42,18 @@ type Manager struct {
 
 // NewManager initializes a new price action manager.
 func NewManager(cfg *ManagerConfig) (*Manager, error) {
+	markets := make(map[string]*Market)
+	for idx := range cfg.MarketIDs {
+		mkt, err := NewMarket(cfg.MarketIDs[idx])
+		if err != nil {
+			return nil, fmt.Errorf("creating %s market: %v", cfg.MarketIDs[idx], err)
+		}
+
+		markets[cfg.MarketIDs[idx]] = mkt
+	}
 	return &Manager{
 		cfg:           cfg,
-		markets:       make(map[string]*Market),
+		markets:       markets,
 		levelSignals:  make(chan market.LevelSignal, bufferSize),
 		updateSignals: make(chan shared.Candlestick, bufferSize),
 		metaSignals:   make(chan shared.CandleMetadataRequest, bufferSize),
@@ -75,22 +85,10 @@ func (m *Manager) SendCandleMetadataRequest(req shared.CandleMetadataRequest) {
 
 // handleUpdateSignal processes the provided update signal.
 func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
-	m.marketsMtx.RLock()
 	mkt, ok := m.markets[candle.Market]
-	m.marketsMtx.RUnlock()
-
 	if !ok {
-		// Create and track a new market if it does not exist yet.
-		var err error
-		mkt, err = NewMarket(candle.Market)
-		if err != nil {
-			m.cfg.Logger.Error().Msgf("creating %s market: %v", candle.Market, err)
-			return
-		}
-
-		m.marketsMtx.Lock()
-		m.markets[candle.Market] = mkt
-		m.marketsMtx.Unlock()
+		m.cfg.Logger.Error().Msgf("no market found with name: %s", candle.Market)
+		return
 	}
 
 	// Update price action concepts related to the market.
@@ -125,10 +123,7 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
 
 // handleLevelSignal processes the provided level signal.
 func (m *Manager) handleLevelSignal(signal market.LevelSignal) {
-	m.marketsMtx.RLock()
 	mkt, ok := m.markets[signal.Market]
-	m.marketsMtx.RUnlock()
-
 	if !ok {
 		m.cfg.Logger.Error().Msgf("no market found with name %s", signal.Market)
 		return
@@ -146,12 +141,9 @@ func (m *Manager) handleLevelSignal(signal market.LevelSignal) {
 
 // handleCandleMetadataRequest processes the provided candle metadata request.
 func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest) {
-	m.marketsMtx.RLock()
 	mkt, ok := m.markets[req.Market]
-	m.marketsMtx.RUnlock()
-
 	if !ok {
-		m.cfg.Logger.Error().Msgf("no market found with name %s", req.Market)
+		m.cfg.Logger.Error().Msgf("no market found with name: %s", req.Market)
 		return
 	}
 
