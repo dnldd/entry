@@ -35,6 +35,7 @@ type Manager struct {
 	marketsMtx    sync.RWMutex
 	levelSignals  chan market.LevelSignal
 	updateSignals chan shared.Candlestick
+	metaSignals   chan shared.CandleMetadataRequest
 	workers       chan struct{}
 }
 
@@ -44,7 +45,8 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 		cfg:           cfg,
 		markets:       make(map[string]*Market),
 		levelSignals:  make(chan market.LevelSignal, bufferSize),
-		updateSignals: make(chan shared.Candlestick),
+		updateSignals: make(chan shared.Candlestick, bufferSize),
+		metaSignals:   make(chan shared.CandleMetadataRequest, bufferSize),
 		workers:       make(chan struct{}, maxWorkers),
 	}, nil
 }
@@ -57,6 +59,17 @@ func (m *Manager) SendLevelSignal(level market.LevelSignal) {
 	default:
 		m.cfg.Logger.Error().Msgf("level channel at capacity: %d/%d",
 			len(m.levelSignals), bufferSize)
+	}
+}
+
+// SendCandleMetadataRequest relays the provided candle metadata signal for processing.
+func (m *Manager) SendCandleMetadataRequest(req shared.CandleMetadataRequest) {
+	select {
+	case m.metaSignals <- req:
+		// do nothing.
+	default:
+		m.cfg.Logger.Error().Msgf("candle metadata request channel at capacity: %d/%d",
+			len(m.metaSignals), bufferSize)
 	}
 }
 
@@ -126,6 +139,44 @@ func (m *Manager) handleLevelSignal(signal market.LevelSignal) {
 	mkt.levelSnapshot.Add(level)
 }
 
+// handleCandleMetadataRequest processes the provided candle metadata request.
+func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest) {
+	m.marketsMtx.RLock()
+	mkt, ok := m.markets[req.Market]
+	m.marketsMtx.RUnlock()
+
+	if !ok {
+		m.cfg.Logger.Error().Msgf("no market found with name %s", req.Market)
+		return
+	}
+
+	currentCandle := mkt.FetchCurrentCandle()
+	if currentCandle == nil {
+		m.cfg.Logger.Error().Msgf("no current candle available")
+		return
+	}
+
+	previousCandle := mkt.FetchPreviousCandle()
+	if previousCandle == nil {
+		m.cfg.Logger.Error().Msgf("no previous candle available")
+		return
+	}
+
+	kind := currentCandle.FetchKind()
+	sentiment := currentCandle.FetchSentiment()
+	momentum := shared.GenerateMomentum(currentCandle, previousCandle)
+	isEngulfing := shared.IsEngulfing(currentCandle, previousCandle)
+
+	meta := shared.CandleMetadata{
+		Kind:      kind,
+		Sentiment: sentiment,
+		Momentum:  momentum,
+		Engulfing: isEngulfing,
+	}
+
+	*req.Response <- meta
+}
+
 // Run manages the lifecycle processes of the price action manager.
 func (m *Manager) Run(ctx context.Context) {
 	m.cfg.Subscribe(&m.updateSignals)
@@ -134,8 +185,8 @@ func (m *Manager) Run(ctx context.Context) {
 		select {
 		case signal := <-m.levelSignals:
 			m.workers <- struct{}{}
-			go func(level *market.LevelSignal) {
-				m.handleLevelSignal(signal)
+			go func(signal *market.LevelSignal) {
+				m.handleLevelSignal(*signal)
 				<-m.workers
 			}(&signal)
 		case candle := <-m.updateSignals:
@@ -144,6 +195,13 @@ func (m *Manager) Run(ctx context.Context) {
 				m.handleUpdateSignal(candle)
 				<-m.workers
 			}(&candle)
+		case req := <-m.metaSignals:
+			m.workers <- struct{}{}
+			go func(req *shared.CandleMetadataRequest) {
+				m.handleCandleMetadataRequest(req)
+				<-m.workers
+			}(&req)
+
 		default:
 			// fallthrough
 		}
