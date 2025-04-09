@@ -98,8 +98,8 @@ func (c *Candlestick) FetchKind() Kind {
 	}
 }
 
-// FetchMomentum returns the current candles momentum.
-func FetchMomentum(current *Candlestick, prev *Candlestick) Momentum {
+// GenerateMomentum returns the current candles momentum.
+func GenerateMomentum(current *Candlestick, prev *Candlestick) Momentum {
 	if prev.Volume == 0 {
 		return Low
 	}
@@ -123,4 +123,50 @@ func FetchMomentum(current *Candlestick, prev *Candlestick) Momentum {
 	default:
 		return Low
 	}
+}
+
+// IsEngulfing detects whether the current candle engulfs the previous candle.
+func IsEngulfing(current *Candlestick, prev *Candlestick) bool {
+	currentKind := current.FetchKind()
+	prevKind := prev.FetchKind()
+
+	if currentKind == Doji || prevKind == Doji {
+		// Exclude dojis from detecting engulfing candles.
+		return false
+	}
+
+	// Detect bearish engulfing setups.
+	isBearishEngulf := prev.Open < prev.Close && current.Open > current.Close &&
+		current.Open >= prev.Close && current.Close <= prev.Open
+
+	// Detect bullish engulfing setups.
+	isBullishEngulf := prev.Open > prev.Close && current.Open < current.Close &&
+		current.Open <= prev.Close && current.Close >= prev.Open
+
+	if isBearishEngulf || isBullishEngulf {
+		bodyPercent := math.Abs(current.Close-current.Open) / (current.High - current.Low)
+		if bodyPercent < 0.5 {
+			// Disqualify weaked bodied engulfing setups.
+			return false
+		}
+
+		return true
+	}
+
+	return false
+}
+
+// CandleMetadata represents a candle's associated metadata.
+type CandleMetadata struct {
+	Kind      Kind
+	Sentiment Sentiment
+	Momentum  Momentum
+	Engulfing bool
+}
+
+// CandleMetadataRequest represents a request to fetch the current candle's metadata.
+// todo: move definition to caller
+type CandleMetadataRequest struct {
+	Market   string
+	Response *chan CandleMetadata
 }
