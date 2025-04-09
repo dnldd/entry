@@ -106,7 +106,12 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
 		m.cfg.RequestPriceData(req)
 		data := <-resp
 
-		reactions := mkt.GeneratePriceReaction(data)
+		reactions, err := mkt.GeneratePriceReaction(data)
+		if err != nil {
+			m.cfg.Logger.Error().Msgf("generating price reactions: %v", err)
+			return
+		}
+
 		signal := PriceLevelReactionsSignal{
 			Market:    mkt.market,
 			Reactions: reactions,
@@ -131,7 +136,7 @@ func (m *Manager) handleLevelSignal(signal market.LevelSignal) {
 
 	currentCandle := mkt.FetchCurrentCandle()
 	if currentCandle == nil {
-		m.cfg.Logger.Error().Msgf("no current candle available, skipping level")
+		m.cfg.Logger.Error().Msgf("no current candle available for market: %s", mkt.market)
 		return
 	}
 
@@ -152,13 +157,13 @@ func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest)
 
 	currentCandle := mkt.FetchCurrentCandle()
 	if currentCandle == nil {
-		m.cfg.Logger.Error().Msgf("no current candle available")
+		m.cfg.Logger.Error().Msgf("no current candle available for market: %s", mkt.market)
 		return
 	}
 
 	previousCandle := mkt.FetchPreviousCandle()
 	if previousCandle == nil {
-		m.cfg.Logger.Error().Msgf("no previous candle available")
+		m.cfg.Logger.Error().Msgf("no previous candle available for market: %s", mkt.market)
 		return
 	}
 

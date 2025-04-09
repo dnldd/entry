@@ -1,6 +1,15 @@
 package priceaction
 
-import "github.com/dnldd/entry/shared"
+import (
+	"fmt"
+
+	"github.com/dnldd/entry/shared"
+)
+
+const (
+	// minPriceDataSize is the minimum size for price data.
+	minPriceDataSize = 5
+)
 
 // LevelKind represents the type of level.
 type LevelKind int
@@ -78,7 +87,11 @@ type PriceLevelReaction struct {
 
 // NewPriceLevelReaction initializes a new price level reaction from the provided level and
 // candlestick data.
-func NewPriceLevelReaction(market string, level *Level, data []*shared.Candlestick) *PriceLevelReaction {
+func NewPriceLevelReaction(market string, level *Level, data []*shared.Candlestick) (*PriceLevelReaction, error) {
+	if len(data) < minPriceDataSize {
+		return nil, fmt.Errorf("price data is less than expected minumum: %d < %d", len(data), minPriceDataSize)
+	}
+
 	plr := &PriceLevelReaction{
 		Market:        market,
 		Level:         level,
@@ -90,14 +103,10 @@ func NewPriceLevelReaction(market string, level *Level, data []*shared.Candlesti
 		candle := data[idx]
 
 		switch {
-		case level.Kind == Support && candle.Close > level.Price:
-			plr.PriceMovement[idx] = Above
-		case level.Kind == Support && candle.Close <= level.Price:
-			plr.PriceMovement[idx] = Below
-		case level.Kind == Resistance && candle.Close > level.Price:
-			plr.PriceMovement[idx] = Above
-		case level.Kind == Resistance && candle.Close <= level.Price:
-			plr.PriceMovement[idx] = Below
+		case candle.Close > level.Price:
+			plr.PriceMovement = append(plr.PriceMovement, Above)
+		case candle.Close <= level.Price:
+			plr.PriceMovement = append(plr.PriceMovement, Below)
 		}
 	}
 
@@ -148,11 +157,12 @@ func NewPriceLevelReaction(market string, level *Level, data []*shared.Candlesti
 	case first == Below && above > 0 && last == Below && level.Kind == Resistance:
 		// If price was below a resistance level but closed above it briefly and pushed
 		// back below it then it is likely setting up a reversal.
+		plr.Reaction = Reversal
 	default:
 		plr.Reaction = Chop
 	}
 
-	return plr
+	return plr, nil
 }
 
 // PriceLevelReactionsSignal relays price level reactions for processing.

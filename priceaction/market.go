@@ -107,7 +107,7 @@ func (m *Market) FilterTaggedLevels(candle *shared.Candlestick) []*Level {
 
 // GeneratePriceReaction creates price level reactions for all levels tagged by the provided
 // market candlestick data.
-func (m *Market) GeneratePriceReaction(data []*shared.Candlestick) []*PriceLevelReaction {
+func (m *Market) GeneratePriceReaction(data []*shared.Candlestick) ([]*PriceLevelReaction, error) {
 	// Fetch all levels tagged by the provided price data.
 	taggedSet := make([]*Level, 0)
 	for idx := range data {
@@ -120,11 +120,14 @@ func (m *Market) GeneratePriceReaction(data []*shared.Candlestick) []*PriceLevel
 	reactions := make([]*PriceLevelReaction, 0, len(taggedSet))
 	for idx := range taggedSet {
 		taggedLevel := taggedSet[idx]
-		reaction := NewPriceLevelReaction(m.market, taggedLevel, data)
+		reaction, err := NewPriceLevelReaction(m.market, taggedLevel, data)
+		if err != nil {
+			return nil, err
+		}
 		reactions[idx] = reaction
 	}
 
-	return reactions
+	return reactions, nil
 }
 
 // ResetPriceDataState resets the flags and counters associated with price data state for the market.
