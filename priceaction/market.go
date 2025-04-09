@@ -18,6 +18,7 @@ type Market struct {
 	market              string
 	levelSnapshot       *LevelSnapshot
 	currentCandle       atomic.Pointer[shared.Candlestick]
+	previousCandle      atomic.Pointer[shared.Candlestick]
 	taggedLevels        atomic.Bool
 	updateCounter       atomic.Uint32
 	requestingPriceData atomic.Bool
@@ -43,8 +44,14 @@ func (m *Market) FetchCurrentCandle() *shared.Candlestick {
 	return m.currentCandle.Load()
 }
 
+// FetchPreviousCandle fetches the previous market candlestick.
+func (m *Market) FetchPreviousCandle() *shared.Candlestick {
+	return m.previousCandle.Load()
+}
+
 // UpdateCurrentCandle market's price action concepts .
 func (m *Market) Update(candle *shared.Candlestick) {
+	m.previousCandle.Store(m.currentCandle.Load())
 	m.currentCandle.Store(candle)
 
 	filteredLevels := m.FilterTaggedLevels(candle)
