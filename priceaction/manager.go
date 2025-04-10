@@ -23,8 +23,8 @@ type ManagerConfig struct {
 	Subscribe func(sub *chan shared.Candlestick)
 	// RequestPriceData sends a price data request.
 	RequestPriceData func(request *shared.PriceDataRequest)
-	// SignalPriceLevelReactions relays price level reactions for processing.
-	SignalPriceLevelReactions func(signal PriceLevelReactionsSignal)
+	// SignalLevelReaction relays a level reaction for processing.
+	SignalLevelReaction func(signal *shared.LevelReaction)
 	// Logger represents the application logger.
 	Logger zerolog.Logger
 }

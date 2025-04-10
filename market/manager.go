@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/dnldd/entry/shared"
 	"github.com/rs/zerolog"
@@ -35,20 +34,14 @@ type ManagerConfig struct {
 
 // Manager manages the lifecycle processes of all tracked markets.
 type Manager struct {
-	cfg                    *ManagerConfig
-	markets                map[string]*Market
-	marketsMtx             sync.RWMutex
-	updateSignals          chan shared.Candlestick
 	cfg               *ManagerConfig
 	markets           map[string]*Market
 	marketsMtx        sync.RWMutex
 	updateSignals     chan shared.Candlestick
-	priceDataRequests chan *PriceDataRequest
+	caughtUpSignals   chan shared.CaughtUpSignal
+	priceDataRequests chan *shared.PriceDataRequest
 	workers           map[string]chan struct{}
 	requestWorkers    chan struct{}
-	priceDataRequests      chan *shared.PriceDataRequest
-	workers                map[string]chan struct{}
-	requestWorkers         chan struct{}
 }
 
 // NewManager initializes a new market manager.
@@ -92,6 +85,17 @@ func (m *Manager) SendMarketUpdate(candle shared.Candlestick) {
 	}
 }
 
+// SendCaughtUpSignal relays the provided caught up signal for processing.
+func (m *Manager) SendCaughtUpSignal(signal shared.CaughtUpSignal) {
+	select {
+	case m.caughtUpSignals <- signal:
+		// do nothing.
+	default:
+		m.cfg.Logger.Error().Msgf("caught up signal update channel at capacity: %d/%d",
+			len(m.caughtUpSignals), bufferSize)
+	}
+}
+
 // SendPriceDataRequest relays the provided price data request for processing.
 func (m *Manager) SendPriceDataRequest(request *shared.PriceDataRequest) {
 	select {
@@ -121,6 +125,20 @@ func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) {
 	}
 }
 
+// handleCaughtUpSignal processes the provided caught up signal.
+func (m *Manager) handleCaughtUpSignal(signal *shared.CaughtUpSignal) {
+	m.marketsMtx.RLock()
+	mkt, ok := m.markets[signal.Market]
+	m.marketsMtx.RUnlock()
+
+	if !ok {
+		m.cfg.Logger.Error().Msgf("no market found with name %s for update", signal.Market)
+		return
+	}
+
+	mkt.SetCaughtUpStatus(true)
+}
+
 // handlePriceDateRequest process the requested price data.
 func (m *Manager) handlePriceDataRequest(req *shared.PriceDataRequest) {
 	m.marketsMtx.RLock()
@@ -129,6 +147,11 @@ func (m *Manager) handlePriceDataRequest(req *shared.PriceDataRequest) {
 
 	if !ok {
 		m.cfg.Logger.Error().Msgf("no market found with name %s", req.Market)
+		return
+	}
+
+	if !mkt.CaughtUp() {
+		m.cfg.Logger.Error().Msgf("%s is not caught up to current market data", req.Market)
 		return
 	}
 
@@ -172,6 +195,13 @@ func (m *Manager) Run(ctx context.Context) {
 			m.workers[candle.Market] <- struct{}{}
 			go func(candle *shared.Candlestick) {
 				m.handleUpdateCandle(candle)
+				<-m.workers[candle.Market]
+			}(&candle)
+		case candle := <-m.caughtUpSignals:
+			// use the dedicated market worker to handle the caught up signal.
+			m.workers[candle.Market] <- struct{}{}
+			go func(signal *shared.CaughtUpSignal) {
+				m.handleCaughtUpSignal(signal)
 				<-m.workers[candle.Market]
 			}(&candle)
 		case req := <-m.priceDataRequests:

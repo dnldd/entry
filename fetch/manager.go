@@ -24,8 +24,8 @@ const (
 type ManagerConfig struct {
 	// ExchangeClient represents the market exchange client.
 	ExchangeClient *FMPClient
-	// SignalCatchUpComplete signals a market is done catching up on market data.
-	SignalCatchUpComplete func(signal shared.CatchUpCompleteSignal)
+	// SignalCaughtUp signals a market is caught up on market data.
+	SignalCaughtUp func(signal shared.CaughtUpSignal)
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
 }
@@ -145,11 +145,11 @@ func (m *Manager) fetchMarketDataJob(marketName string, timeframe shared.Timefra
 func (m *Manager) handleCatchUpSignal(signal shared.CatchUpSignal) {
 	m.fetchMarketData(signal.Market, signal.Timeframe, signal.Start)
 
-	completeSignal := shared.CatchUpCompleteSignal{
+	sig := shared.CaughtUpSignal{
 		Market: signal.Market,
 	}
 
-	m.cfg.SignalCatchUpComplete(completeSignal)
+	m.cfg.SignalCaughtUp(sig)
 
 	_, err := m.jobScheduler.Every(5).Minutes().Do(m.fetchMarketDataJob, signal.Market, signal.Timeframe)
 	if err != nil {

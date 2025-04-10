@@ -2,6 +2,7 @@ package market
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/dnldd/entry/indicator"
 	"github.com/dnldd/entry/shared"
@@ -22,6 +23,7 @@ type Market struct {
 	candleSnapshot  *CandlestickSnapshot
 	sessionSnapshot *SessionSnapshot
 	vwap            *indicator.VWAP
+	caughtUp        atomic.Bool
 }
 
 // NewMarket initializes a new market.
@@ -39,6 +41,16 @@ func NewMarket(cfg *MarketConfig) (*Market, error) {
 	}
 
 	return mkt, nil
+}
+
+// SetCaughtUpStatus updates the caught up status of the provided market.
+func (m *Market) SetCaughtUpStatus(status bool) {
+	m.caughtUp.Store(status)
+}
+
+// CaughtUp returns whether the provided market has caught up on market data.
+func (m *Market) CaughtUp() bool {
+	return m.caughtUp.Load()
 }
 
 // Update processes incoming market data for the provided market.

@@ -34,7 +34,7 @@ type CatchUpSignal struct {
 	Start     time.Time
 }
 
-// CatchUpCompleteSignal represents concluding signal on market data catch up process.
-type CatchUpCompleteSignal struct {
+// CaughtUpSignal represents a signal to conclude a catch up on market data.
+type CaughtUpSignal struct {
 	Market string
 }
