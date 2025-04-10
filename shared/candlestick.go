@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	// minimumVolumeDifferencePercent is the minimum difference in volume considered substantive.
-	minimumVolumeDifferencePercent = 0.2
+	// minimumVolumeSpikePercent is the minimum percentage difference in volume considered substantive.
+	minimumVolumeSpikePercent = 0.35
 )
 
 // Momentum represents the momentum of a candlestick.
@@ -98,28 +98,28 @@ func (c *Candlestick) FetchKind() Kind {
 	}
 }
 
+// IsVolumeSpike checks whether there was a surge in volume for the current candle compared to
+// the prevous candle.
+func IsVolumeSpike(current *Candlestick, prev *Candlestick) bool {
+	if prev.Volume == 0 {
+		return false
+	}
+
+	diff := current.Volume - prev.Volume
+	return diff > 0 && diff/prev.Volume >= minimumVolumeSpikePercent
+}
+
 // GenerateMomentum returns the current candles momentum.
 func GenerateMomentum(current *Candlestick, prev *Candlestick) Momentum {
-	if prev.Volume == 0 {
+	if prev.Volume == 0 || current.Volume == 0 {
 		return Low
 	}
 
-	volumeDifference := current.Volume - prev.Volume
-	volumeDifferencePercent := volumeDifference / prev.Volume
-
-	kind := current.FetchKind()
 	switch {
-	case kind == Marubozu:
-		switch {
-		case volumeDifference > 0 && volumeDifferencePercent >= minimumVolumeDifferencePercent:
-			return High
-		case volumeDifference > 0 && volumeDifferencePercent < minimumVolumeDifferencePercent:
-			return Medium
-		default:
-			// If there is a marubozu candle with little to no volume backing it, it is likely a
-			// momentum trap. Avoid it.
-			return Low
-		}
+	case IsVolumeSpike(current, prev):
+		return High
+	case current.Volume > prev.Volume:
+		return Medium
 	default:
 		return Low
 	}
@@ -162,11 +162,4 @@ type CandleMetadata struct {
 	Sentiment Sentiment
 	Momentum  Momentum
 	Engulfing bool
-}
-
-// CandleMetadataRequest represents a request to fetch the current candle's metadata.
-// todo: move definition to caller
-type CandleMetadataRequest struct {
-	Market   string
-	Response *chan CandleMetadata
 }
