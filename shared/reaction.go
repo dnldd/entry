@@ -1,4 +1,4 @@
-package priceaction
+package shared
 
 // Movement represents price movement relative to a point of interest.
 type Movement int

@@ -1,25 +1,23 @@
-package market
+package shared
 
 import (
 	"fmt"
 	"time"
-
-	"github.com/dnldd/entry/shared"
 )
 
 const (
 	// Session names.
-	asia    = "asia"
-	london  = "london"
-	newYork = "newyork"
+	Asia    = "asia"
+	London  = "london"
+	NewYork = "newyork"
 
 	// Market session time in new york time (ET).
-	asiaOpen     = "19:00"
-	asiaClose    = "04:00"
-	londonOpen   = "03:00"
-	londonClose  = "12:00"
-	newYorkOpen  = "08:00"
-	newYorkClose = "17:00"
+	AsiaOpen     = "19:00"
+	AsiaClose    = "04:00"
+	LondonOpen   = "03:00"
+	LondonClose  = "12:00"
+	NewYorkOpen  = "08:00"
+	NewYorkClose = "17:00"
 
 	// maxSessions is the maximum number of sessions tracked by a market.
 	maxSessions = 12
@@ -36,17 +34,17 @@ type Session struct {
 
 // NewSession initializes new market session.
 func NewSession(name string, open string, close string) (*Session, error) {
-	sessionOpen, err := time.Parse(shared.SessionTimeLayout, open)
+	sessionOpen, err := time.Parse(SessionTimeLayout, open)
 	if err != nil {
 		return nil, fmt.Errorf("parsing session open: %w", err)
 	}
 
-	sessionClose, err := time.Parse(shared.SessionTimeLayout, close)
+	sessionClose, err := time.Parse(SessionTimeLayout, close)
 	if err != nil {
 		return nil, fmt.Errorf("parsing session close: %w", err)
 	}
 
-	now, loc, err := shared.NewYorkTime()
+	now, loc, err := NewYorkTime()
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +66,7 @@ func NewSession(name string, open string, close string) (*Session, error) {
 }
 
 // Update updates the provided session's high and low.
-func (s *Session) Update(candle *shared.Candlestick) {
+func (s *Session) Update(candle *Candlestick) {
 	switch {
 	case candle.Low < s.Low:
 		s.Low = candle.Low
@@ -85,7 +83,7 @@ func (s *Session) IsCurrentSession(current time.Time) bool {
 // IsMarketOpen checks whether the markets (only NQ currently) are open by checking if the current
 // time is within one of the market sessions.
 func IsMarketOpen() (bool, error) {
-	now, loc, err := shared.NewYorkTime()
+	now, loc, err := NewYorkTime()
 	if err != nil {
 		return false, err
 	}
@@ -94,18 +92,18 @@ func IsMarketOpen() (bool, error) {
 		Open  string
 		Close string
 	}{
-		{asiaOpen, asiaClose},
-		{londonOpen, londonClose},
-		{newYorkOpen, newYorkClose},
+		{AsiaOpen, AsiaClose},
+		{LondonOpen, LondonClose},
+		{NewYorkOpen, NewYorkClose},
 	}
 
 	var match bool
 	for idx := range sessions {
-		open, err := time.Parse(shared.SessionTimeLayout, sessions[idx].Open)
+		open, err := time.Parse(SessionTimeLayout, sessions[idx].Open)
 		if err != nil {
 			return false, fmt.Errorf("parsing open: %w", err)
 		}
-		close, err := time.Parse(shared.SessionTimeLayout, sessions[idx].Close)
+		close, err := time.Parse(SessionTimeLayout, sessions[idx].Close)
 		if err != nil {
 			return false, fmt.Errorf("parsing close: %w", err)
 		}

@@ -19,25 +19,6 @@ const (
 	minPriceDataRange = 5
 )
 
-// CatchUpSignal represents a signal to catchup on market data.
-type CatchUpSignal struct {
-	Market    string
-	Timeframe shared.Timeframe
-	Start     time.Time
-}
-
-// LevelSignal represents a level signal to outline a price level.
-type LevelSignal struct {
-	Market string
-	Price  float64
-}
-
-// PriceDataRequest represents a price data request to fetch price data for a time range.
-type PriceDataRequest struct {
-	Market   string
-	Response *chan []*shared.Candlestick
-}
-
 // ManagerConfig represents the market manager configuration.
 type ManagerConfig struct {
 	// MarketIDs represents the collection of ids of the markets to manage.
@@ -45,15 +26,19 @@ type ManagerConfig struct {
 	// Subscribe registers the provided subscriber for market updates.
 	Subscribe func(sub *chan shared.Candlestick)
 	// CatchUp signals a catchup process for a market.
-	CatchUp func(signal CatchUpSignal)
+	CatchUp func(signal shared.CatchUpSignal)
 	// SignalLevel relays the provided  level signal for  processing.
-	SignalLevel func(signal LevelSignal)
+	SignalLevel func(signal shared.LevelSignal)
 	// Logger represents the application logger.
 	Logger zerolog.Logger
 }
 
 // Manager manages the lifecycle processes of all tracked markets.
 type Manager struct {
+	cfg                    *ManagerConfig
+	markets                map[string]*Market
+	marketsMtx             sync.RWMutex
+	updateSignals          chan shared.Candlestick
 	cfg               *ManagerConfig
 	markets           map[string]*Market
 	marketsMtx        sync.RWMutex
@@ -61,6 +46,9 @@ type Manager struct {
 	priceDataRequests chan *PriceDataRequest
 	workers           map[string]chan struct{}
 	requestWorkers    chan struct{}
+	priceDataRequests      chan *shared.PriceDataRequest
+	workers                map[string]chan struct{}
+	requestWorkers         chan struct{}
 }
 
 // NewManager initializes a new market manager.
@@ -87,7 +75,7 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 		cfg:               cfg,
 		markets:           markets,
 		updateSignals:     make(chan shared.Candlestick, bufferSize),
-		priceDataRequests: make(chan *PriceDataRequest, bufferSize),
+		priceDataRequests: make(chan *shared.PriceDataRequest, bufferSize),
 		workers:           workers,
 		requestWorkers:    make(chan struct{}, maxWorkers),
 	}, nil
@@ -105,7 +93,7 @@ func (m *Manager) SendMarketUpdate(candle shared.Candlestick) {
 }
 
 // SendPriceDataRequest relays the provided price data request for processing.
-func (m *Manager) SendPriceDataRequest(request *PriceDataRequest) {
+func (m *Manager) SendPriceDataRequest(request *shared.PriceDataRequest) {
 	select {
 	case m.priceDataRequests <- request:
 		// do nothing.
@@ -118,7 +106,7 @@ func (m *Manager) SendPriceDataRequest(request *PriceDataRequest) {
 // handleUpdateSignal processes the provided market update candle.
 func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) {
 	m.marketsMtx.RLock()
-	market, ok := m.markets[candle.Market]
+	mkt, ok := m.markets[candle.Market]
 	m.marketsMtx.RUnlock()
 
 	if !ok {
@@ -126,7 +114,7 @@ func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) {
 		return
 	}
 
-	err := market.Update(candle)
+	err := mkt.Update(candle)
 	if err != nil {
 		m.cfg.Logger.Error().Msgf("updating %s market: %v", candle.Market, err)
 		return
@@ -134,7 +122,7 @@ func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) {
 }
 
 // handlePriceDateRequest process the requested price data.
-func (m *Manager) handlePriceDataRequest(req *PriceDataRequest) {
+func (m *Manager) handlePriceDataRequest(req *shared.PriceDataRequest) {
 	m.marketsMtx.RLock()
 	mkt, ok := m.markets[req.Market]
 	m.marketsMtx.RUnlock()
@@ -154,15 +142,15 @@ func (m *Manager) catchUp() {
 	m.marketsMtx.RLock()
 	defer m.marketsMtx.RUnlock()
 
-	for _, v := range m.markets {
-		market := *v
+	for idx := range m.markets {
+		market := m.markets[idx]
 
 		start, err := market.sessionSnapshot.FetchLastSessionOpen()
 		if err != nil {
 			m.cfg.Logger.Error().Msgf("fetching last session open: %v", err)
 		}
 
-		signal := CatchUpSignal{
+		signal := shared.CatchUpSignal{
 			Market:    market.cfg.Market,
 			Timeframe: shared.FiveMinute,
 			Start:     start,
@@ -189,7 +177,7 @@ func (m *Manager) Run(ctx context.Context) {
 		case req := <-m.priceDataRequests:
 			// handle price data requests concurrently.
 			m.requestWorkers <- struct{}{}
-			go func(req *PriceDataRequest) {
+			go func(req *shared.PriceDataRequest) {
 				m.handlePriceDataRequest(req)
 				<-m.requestWorkers
 			}(req)

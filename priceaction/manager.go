@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dnldd/entry/market"
 	"github.com/dnldd/entry/shared"
 	"github.com/rs/zerolog"
 )
@@ -23,7 +22,7 @@ type ManagerConfig struct {
 	// Subscribe registers the provided subscriber for market updates.
 	Subscribe func(sub *chan shared.Candlestick)
 	// RequestPriceData sends a price data request.
-	RequestPriceData func(request *market.PriceDataRequest)
+	RequestPriceData func(request *shared.PriceDataRequest)
 	// SignalPriceLevelReactions relays price level reactions for processing.
 	SignalPriceLevelReactions func(signal PriceLevelReactionsSignal)
 	// Logger represents the application logger.
@@ -34,7 +33,7 @@ type ManagerConfig struct {
 type Manager struct {
 	cfg           *ManagerConfig
 	markets       map[string]*Market
-	levelSignals  chan market.LevelSignal
+	levelSignals  chan shared.LevelSignal
 	updateSignals chan shared.Candlestick
 	metaSignals   chan shared.CandleMetadataRequest
 	workers       chan struct{}
@@ -54,7 +53,7 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 	return &Manager{
 		cfg:           cfg,
 		markets:       markets,
-		levelSignals:  make(chan market.LevelSignal, bufferSize),
+		levelSignals:  make(chan shared.LevelSignal, bufferSize),
 		updateSignals: make(chan shared.Candlestick, bufferSize),
 		metaSignals:   make(chan shared.CandleMetadataRequest, bufferSize),
 		workers:       make(chan struct{}, maxWorkers),
@@ -62,7 +61,7 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 }
 
 // SendLevel relays the provided level signal for processing.
-func (m *Manager) SendLevelSignal(level market.LevelSignal) {
+func (m *Manager) SendLevelSignal(level shared.LevelSignal) {
 	select {
 	case m.levelSignals <- level:
 		// do nothing.
@@ -96,7 +95,7 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
 	if mkt.RequestingPriceData() {
 		// Request price data and generate price reactions from them.
 		resp := make(chan []*shared.Candlestick)
-		req := &market.PriceDataRequest{
+		req := &shared.PriceDataRequest{
 			Market:   mkt.market,
 			Response: &resp,
 		}
@@ -104,25 +103,22 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
 		m.cfg.RequestPriceData(req)
 		data := <-resp
 
-		reactions, err := mkt.GeneratePriceReaction(data)
+		reactions, err := mkt.GenerateLevelReactions(data)
 		if err != nil {
-			m.cfg.Logger.Error().Msgf("generating price reactions: %v", err)
+			m.cfg.Logger.Error().Msgf("generating level reactions: %v", err)
 			return
 		}
 
-		signal := PriceLevelReactionsSignal{
-			Market:    mkt.market,
-			Reactions: reactions,
+		for idx := range reactions {
+			m.cfg.SignalLevelReaction(reactions[idx])
 		}
-		m.cfg.SignalPriceLevelReactions(signal)
 
 		mkt.ResetPriceDataState()
 	}
-
 }
 
 // handleLevelSignal processes the provided level signal.
-func (m *Manager) handleLevelSignal(signal market.LevelSignal) {
+func (m *Manager) handleLevelSignal(signal shared.LevelSignal) {
 	mkt, ok := m.markets[signal.Market]
 	if !ok {
 		m.cfg.Logger.Error().Msgf("no market found with name %s", signal.Market)
@@ -135,7 +131,7 @@ func (m *Manager) handleLevelSignal(signal market.LevelSignal) {
 		return
 	}
 
-	level := NewLevel(signal.Market, signal.Price, currentCandle)
+	level := shared.NewLevel(signal.Market, signal.Price, currentCandle)
 	mkt.levelSnapshot.Add(level)
 }
 
@@ -182,7 +178,7 @@ func (m *Manager) Run(ctx context.Context) {
 		select {
 		case signal := <-m.levelSignals:
 			m.workers <- struct{}{}
-			go func(signal *market.LevelSignal) {
+			go func(signal *shared.LevelSignal) {
 				m.handleLevelSignal(*signal)
 				<-m.workers
 			}(&signal)

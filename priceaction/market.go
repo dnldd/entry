@@ -79,18 +79,18 @@ func (m *Market) RequestingPriceData() bool {
 }
 
 // AddLevel adds the provided level to the market's level snapshot.
-func (m *Market) AddLevel(level *Level) {
+func (m *Market) AddLevel(level *shared.Level) {
 	m.levelSnapshot.Add(level)
 }
 
 // tagged checks whether the provided level is tagged by the provided candlestick.
-func (m *Market) tagged(level *Level, candle *shared.Candlestick) bool {
+func (m *Market) tagged(level *shared.Level, candle *shared.Candlestick) bool {
 	switch level.Kind {
-	case Support:
+	case shared.Support:
 		if candle.Low <= level.Price {
 			return true
 		}
-	case Resistance:
+	case shared.Resistance:
 		if candle.High >= level.Price {
 			return true
 		}
@@ -100,16 +100,16 @@ func (m *Market) tagged(level *Level, candle *shared.Candlestick) bool {
 }
 
 // FilterTaggedLevels filters levels tagged by the provided candle.
-func (m *Market) FilterTaggedLevels(candle *shared.Candlestick) []*Level {
+func (m *Market) FilterTaggedLevels(candle *shared.Candlestick) []*shared.Level {
 	taggedLevels := m.levelSnapshot.Filter(candle, m.tagged)
 	return taggedLevels
 }
 
-// GeneratePriceReaction creates price level reactions for all levels tagged by the provided
+// GenerateLevelReactions generates level reactions for all levels tagged by the provided
 // market candlestick data.
-func (m *Market) GeneratePriceReaction(data []*shared.Candlestick) ([]*PriceLevelReaction, error) {
+func (m *Market) GenerateLevelReactions(data []*shared.Candlestick) ([]*shared.LevelReaction, error) {
 	// Fetch all levels tagged by the provided price data.
-	taggedSet := make([]*Level, 0)
+	taggedSet := make([]*shared.Level, 0)
 	for idx := range data {
 		candle := data[idx]
 		filtered := m.FilterTaggedLevels(candle)
@@ -117,10 +117,10 @@ func (m *Market) GeneratePriceReaction(data []*shared.Candlestick) ([]*PriceLeve
 	}
 
 	// Create the associated price level reactions for all tagged levels.
-	reactions := make([]*PriceLevelReaction, 0, len(taggedSet))
+	reactions := make([]*shared.LevelReaction, 0, len(taggedSet))
 	for idx := range taggedSet {
 		taggedLevel := taggedSet[idx]
-		reaction, err := NewPriceLevelReaction(m.market, taggedLevel, data)
+		reaction, err := shared.NewLevelReaction(m.market, taggedLevel, data)
 		if err != nil {
 			return nil, err
 		}

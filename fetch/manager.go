@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dnldd/entry/market"
 	"github.com/dnldd/entry/shared"
 	"github.com/go-co-op/gocron"
 	"github.com/rs/zerolog"
@@ -25,6 +24,8 @@ const (
 type ManagerConfig struct {
 	// ExchangeClient represents the market exchange client.
 	ExchangeClient *FMPClient
+	// SignalCatchUpComplete signals a market is done catching up on market data.
+	SignalCatchUpComplete func(signal shared.CatchUpCompleteSignal)
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
 }
@@ -35,14 +36,14 @@ type Manager struct {
 	lastUpdatedTimes    map[string]time.Time
 	lastUpdatedTimesMtx sync.RWMutex
 	jobScheduler        *gocron.Scheduler
-	catchUpSignals      chan market.CatchUpSignal
+	catchUpSignals      chan shared.CatchUpSignal
 
 	subscribers []*chan shared.Candlestick
 	workers     chan struct{}
 }
 
 // NewManager initializes the query manager.
-func NewQueryManager(cfg *ManagerConfig) (*Manager, error) {
+func NewManager(cfg *ManagerConfig) (*Manager, error) {
 	loc, err := time.LoadLocation("America/New_York")
 	if err != nil {
 		return nil, fmt.Errorf("loading new york timezone: %w", err)
@@ -54,7 +55,7 @@ func NewQueryManager(cfg *ManagerConfig) (*Manager, error) {
 		cfg:              cfg,
 		lastUpdatedTimes: make(map[string]time.Time),
 		jobScheduler:     scheduler,
-		catchUpSignals:   make(chan market.CatchUpSignal, bufferSize),
+		catchUpSignals:   make(chan shared.CatchUpSignal, bufferSize),
 		subscribers:      make([]*chan shared.Candlestick, 0, minSubscriberBuffer),
 		workers:          make(chan struct{}),
 	}
@@ -75,7 +76,7 @@ func (m *Manager) notifySubscribers(candle *shared.Candlestick) {
 }
 
 // SendCatchUpSignal relays the provided market catch up signal for processing.
-func (m *Manager) SendCatchUpSignal(catchUp market.CatchUpSignal) {
+func (m *Manager) SendCatchUpSignal(catchUp shared.CatchUpSignal) {
 	select {
 	case m.catchUpSignals <- catchUp:
 		// do nothing.
@@ -126,7 +127,7 @@ func (m *Manager) fetchMarketDataJob(marketName string, timeframe shared.Timefra
 	}
 
 	// Avoid fetching periodic market data if the market is not open.
-	open, err := market.IsMarketOpen()
+	open, err := shared.IsMarketOpen()
 	if err != nil {
 		m.cfg.Logger.Error().Msgf("checking market open status: %v", err)
 	}
@@ -141,8 +142,14 @@ func (m *Manager) fetchMarketDataJob(marketName string, timeframe shared.Timefra
 }
 
 // handleCatchUpSignal processes the provided catch up signal.
-func (m *Manager) handleCatchUpSignal(signal market.CatchUpSignal) {
+func (m *Manager) handleCatchUpSignal(signal shared.CatchUpSignal) {
 	m.fetchMarketData(signal.Market, signal.Timeframe, signal.Start)
+
+	completeSignal := shared.CatchUpCompleteSignal{
+		Market: signal.Market,
+	}
+
+	m.cfg.SignalCatchUpComplete(completeSignal)
 
 	_, err := m.jobScheduler.Every(5).Minutes().Do(m.fetchMarketDataJob, signal.Market, signal.Timeframe)
 	if err != nil {
@@ -158,7 +165,7 @@ func (m *Manager) Run(ctx context.Context) {
 		select {
 		case signal := <-m.catchUpSignals:
 			m.workers <- struct{}{}
-			go func(signal *market.CatchUpSignal) {
+			go func(signal *shared.CatchUpSignal) {
 				m.handleCatchUpSignal(*signal)
 				<-m.workers
 			}(&signal)

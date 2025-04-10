@@ -11,7 +11,7 @@ type MarketConfig struct {
 	// Market is the name of the tracked market.
 	Market string
 	// SignalLevel relays the provided level signal for processing.
-	SignalLevel func(signal LevelSignal)
+	SignalLevel func(signal shared.LevelSignal)
 	// SignalResistance relays the provided resistance.
 	SignalResistance func(price float64)
 }
@@ -69,13 +69,13 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 			return fmt.Errorf("fetching new levels: %w", err)
 		}
 
-		sessionHigh := LevelSignal{
+		sessionHigh := shared.LevelSignal{
 			Market: candle.Market,
 			Price:  high,
 		}
 		m.cfg.SignalLevel(sessionHigh)
 
-		sessionLow := LevelSignal{
+		sessionLow := shared.LevelSignal{
 			Market: candle.Market,
 			Price:  low,
 		}

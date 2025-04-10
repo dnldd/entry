@@ -1,9 +1,7 @@
-package priceaction
+package shared
 
 import (
 	"fmt"
-
-	"github.com/dnldd/entry/shared"
 )
 
 const (
@@ -41,7 +39,7 @@ type Level struct {
 }
 
 // NewLevel initializes a new level.
-func NewLevel(market string, price float64, candle *shared.Candlestick) *Level {
+func NewLevel(market string, price float64, candle *Candlestick) *Level {
 	lvl := &Level{
 		Market: market,
 		Price:  price,
@@ -77,22 +75,22 @@ func (l *Level) Update(reaction Reaction) {
 	}
 }
 
-// PriceLevelReaction describes the reaction of price at a level.
-type PriceLevelReaction struct {
+// LevelReaction describes the reaction of price at a level.
+type LevelReaction struct {
 	Market        string
 	Level         *Level
 	PriceMovement []Movement
 	Reaction      Reaction
 }
 
-// NewPriceLevelReaction initializes a new price level reaction from the provided level and
+// NewLevelReaction initializes a new level reaction from the provided level and
 // candlestick data.
-func NewPriceLevelReaction(market string, level *Level, data []*shared.Candlestick) (*PriceLevelReaction, error) {
+func NewLevelReaction(market string, level *Level, data []*Candlestick) (*LevelReaction, error) {
 	if len(data) < minPriceDataSize {
 		return nil, fmt.Errorf("price data is less than expected minumum: %d < %d", len(data), minPriceDataSize)
 	}
 
-	plr := &PriceLevelReaction{
+	plr := &LevelReaction{
 		Market:        market,
 		Level:         level,
 		PriceMovement: make([]Movement, 0, len(data)),
@@ -163,10 +161,4 @@ func NewPriceLevelReaction(market string, level *Level, data []*shared.Candlesti
 	}
 
 	return plr, nil
-}
-
-// PriceLevelReactionsSignal relays price level reactions for processing.
-type PriceLevelReactionsSignal struct {
-	Market    string
-	Reactions []*PriceLevelReaction
 }

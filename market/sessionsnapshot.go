@@ -14,7 +14,7 @@ const (
 
 // CandlestickSnapshot represents a snapshot of session data.
 type SessionSnapshot struct {
-	data    []*Session
+	data    []*shared.Session
 	start   int
 	current int
 	count   int
@@ -24,7 +24,7 @@ type SessionSnapshot struct {
 // NewSessionSnapshot initializes a new session snapshot.
 func NewSessionSnapshot() (*SessionSnapshot, error) {
 	snapshot := &SessionSnapshot{
-		data: make([]*Session, candlestickSnapshotSize),
+		data: make([]*shared.Session, candlestickSnapshotSize),
 	}
 
 	err := snapshot.AddSessions()
@@ -41,7 +41,7 @@ func NewSessionSnapshot() (*SessionSnapshot, error) {
 }
 
 // Adds adds the provided session to the snapshot.
-func (s *SessionSnapshot) Add(session *Session) {
+func (s *SessionSnapshot) Add(session *shared.Session) {
 	end := (s.start + s.count) % s.size
 	s.data[end] = session
 
@@ -55,21 +55,21 @@ func (s *SessionSnapshot) Add(session *Session) {
 
 // Add sessions adds a new set of sessions (london, new york, asia - covering a day) to the snapshot.
 func (s *SessionSnapshot) AddSessions() error {
-	londonSession, err := NewSession(london, londonOpen, londonClose)
+	londonSession, err := shared.NewSession(shared.London, shared.LondonOpen, shared.LondonClose)
 	if err != nil {
 		return fmt.Errorf("creating london session: %w", err)
 	}
 
 	s.Add(londonSession)
 
-	newYorkSession, err := NewSession(newYork, newYorkOpen, newYorkClose)
+	newYorkSession, err := shared.NewSession(shared.NewYork, shared.NewYorkOpen, shared.NewYorkClose)
 	if err != nil {
 		return fmt.Errorf("creating new york session: %w", err)
 	}
 
 	s.Add(newYorkSession)
 
-	asianSession, err := NewSession(asia, asiaOpen, asiaClose)
+	asianSession, err := shared.NewSession(shared.Asia, shared.AsiaOpen, shared.AsiaClose)
 	if err != nil {
 		return fmt.Errorf("creating asian session: %w", err)
 	}
@@ -110,7 +110,7 @@ func (s *SessionSnapshot) SetCurrentSession() (bool, error) {
 		for i := range s.count {
 			idx := (s.start + s.count - 1 - i + s.size) % s.size
 			session := s.data[idx]
-			if session.Name == asia {
+			if session.Name == shared.Asia {
 				s.current = idx
 				break
 			}
@@ -121,7 +121,7 @@ func (s *SessionSnapshot) SetCurrentSession() (bool, error) {
 }
 
 // FetchCurrentSession returns the current market session.
-func (s *SessionSnapshot) FetchCurrentSession() *Session {
+func (s *SessionSnapshot) FetchCurrentSession() *shared.Session {
 	return s.data[s.current]
 }
 
@@ -162,7 +162,7 @@ func (s *SessionSnapshot) FetchLastSessionHighLow() (float64, float64, error) {
 }
 
 // ForEach applies the provided function to each element in the snapshot.
-func (s *SessionSnapshot) ForEach(fn func(*Session)) {
+func (s *SessionSnapshot) ForEach(fn func(*shared.Session)) {
 	for i := range s.count {
 		fn(s.data[(s.start+i)%s.size])
 	}
