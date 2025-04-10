@@ -16,6 +16,10 @@ const (
 	maxWorkers = 8
 	// minPriceDataRange is the minimum number of candles sent for a price data range request.
 	minPriceDataRange = 5
+	// averageVolumeRange is the minimum range for average volume calculations.
+	averageVolumeRange = 30
+	// fiveMinutesInSeconds is five minutes in seconds.
+	fiveMinutesInSeconds = 300
 )
 
 // ManagerConfig represents the market manager configuration.
@@ -34,14 +38,17 @@ type ManagerConfig struct {
 
 // Manager manages the lifecycle processes of all tracked markets.
 type Manager struct {
-	cfg               *ManagerConfig
-	markets           map[string]*Market
-	marketsMtx        sync.RWMutex
-	updateSignals     chan shared.Candlestick
-	caughtUpSignals   chan shared.CaughtUpSignal
-	priceDataRequests chan *shared.PriceDataRequest
-	workers           map[string]chan struct{}
-	requestWorkers    chan struct{}
+	cfg                   *ManagerConfig
+	markets               map[string]*Market
+	marketsMtx            sync.RWMutex
+	averageVolume         map[string]shared.AverageVolumeEntry
+	averageVolumeMtx      sync.RWMutex
+	updateSignals         chan shared.Candlestick
+	caughtUpSignals       chan shared.CaughtUpSignal
+	priceDataRequests     chan *shared.PriceDataRequest
+	averageVolumeRequests chan *shared.AverageVolumeRequest
+	workers               map[string]chan struct{}
+	requestWorkers        chan struct{}
 }
 
 // NewManager initializes a new market manager.
@@ -65,12 +72,14 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 	}
 
 	return &Manager{
-		cfg:               cfg,
-		markets:           markets,
-		updateSignals:     make(chan shared.Candlestick, bufferSize),
-		priceDataRequests: make(chan *shared.PriceDataRequest, bufferSize),
-		workers:           workers,
-		requestWorkers:    make(chan struct{}, maxWorkers),
+		cfg:                   cfg,
+		markets:               markets,
+		updateSignals:         make(chan shared.Candlestick, bufferSize),
+		priceDataRequests:     make(chan *shared.PriceDataRequest, bufferSize),
+		averageVolumeRequests: make(chan *shared.AverageVolumeRequest, bufferSize),
+		averageVolume:         make(map[string]shared.AverageVolumeEntry),
+		workers:               workers,
+		requestWorkers:        make(chan struct{}, maxWorkers),
 	}, nil
 }
 
@@ -107,6 +116,17 @@ func (m *Manager) SendPriceDataRequest(request *shared.PriceDataRequest) {
 	}
 }
 
+// SendAverageVolumeRequest relays the provided average volume request for processing.
+func (m *Manager) SendAverageVolumeRequest(request *shared.AverageVolumeRequest) {
+	select {
+	case m.averageVolumeRequests <- request:
+		// do nothing.
+	default:
+		m.cfg.Logger.Error().Msgf("average volume requests channel at capacity: %d/%d",
+			len(m.averageVolume), bufferSize)
+	}
+}
+
 // handleUpdateSignal processes the provided market update candle.
 func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) {
 	m.marketsMtx.RLock()
@@ -137,6 +157,48 @@ func (m *Manager) handleCaughtUpSignal(signal *shared.CaughtUpSignal) {
 	}
 
 	mkt.SetCaughtUpStatus(true)
+}
+
+// handleAverageVolumeRequest processes the provided average volume request.
+func (m *Manager) handleAverageVolumeRequest(req *shared.AverageVolumeRequest) {
+	m.averageVolumeMtx.RLock()
+	avgVolume, ok := m.averageVolume[req.Market]
+	m.averageVolumeMtx.RUnlock()
+
+	if !ok {
+		m.cfg.Logger.Error().Msgf("no average volume for %s market", req.Market)
+		return
+	}
+
+	now, _, err := shared.NewYorkTime()
+	if err != nil {
+		m.cfg.Logger.Error().Msgf("fetching new york time: %v", err)
+	}
+
+	if now.Unix()-avgVolume.CreatedAt > fiveMinutesInSeconds {
+		// Generate a new average volume entry for the market if it is older than five minutes.
+		m.marketsMtx.RLock()
+		mkt := m.markets[req.Market]
+		m.marketsMtx.RUnlock()
+
+		if !ok {
+			m.cfg.Logger.Error().Msgf("no market found with name %s", req.Market)
+			return
+		}
+
+		avg := mkt.candleSnapshot.AverageVolumeN(averageVolumeRange)
+
+		avgVolume = shared.AverageVolumeEntry{
+			Average:   avg,
+			CreatedAt: now.Unix(),
+		}
+
+		m.averageVolumeMtx.Lock()
+		m.averageVolume[req.Market] = avgVolume
+		m.averageVolumeMtx.Unlock()
+	}
+
+	*req.Response <- avgVolume.Average
 }
 
 // handlePriceDateRequest process the requested price data.
@@ -209,6 +271,13 @@ func (m *Manager) Run(ctx context.Context) {
 			m.requestWorkers <- struct{}{}
 			go func(req *shared.PriceDataRequest) {
 				m.handlePriceDataRequest(req)
+				<-m.requestWorkers
+			}(req)
+		case req := <-m.averageVolumeRequests:
+			// handle average volume data requests concurrently.
+			m.requestWorkers <- struct{}{}
+			go func(req *shared.AverageVolumeRequest) {
+				m.handleAverageVolumeRequest(req)
 				<-m.requestWorkers
 			}(req)
 		default:

@@ -56,3 +56,16 @@ func (s *CandlestickSnapshot) LastN(n int) []*shared.Candlestick {
 
 	return set
 }
+
+// AverageVolumeN returns the average volume for all candles besides the most recent one.
+func (s *CandlestickSnapshot) AverageVolumeN(n int) float64 {
+	candles := s.LastN(n + 1)
+
+	var volumeSum float64
+	for idx := range candles[:n] {
+		volumeSum += candles[idx].Volume
+	}
+
+	average := volumeSum / float64(len(candles))
+	return average
+}

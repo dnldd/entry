@@ -11,3 +11,16 @@ type PriceDataRequest struct {
 	Market   string
 	Response *chan []*Candlestick
 }
+
+// AverageVolumeEntry represents an average volume entry.
+type AverageVolumeEntry struct {
+	Average   float64
+	CreatedAt int64
+}
+
+// AverageVolumeRequest represents an average volume request to fetch the average
+// volume for a market.
+type AverageVolumeRequest struct {
+	Market   string
+	Response *chan float64
+}
