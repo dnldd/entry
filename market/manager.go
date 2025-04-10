@@ -252,6 +252,8 @@ func (m *Manager) Run(ctx context.Context) {
 
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case candle := <-m.updateSignals:
 			// use the dedicated market worker to handle the update signal.
 			m.workers[candle.Market] <- struct{}{}

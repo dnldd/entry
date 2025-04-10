@@ -163,6 +163,8 @@ func (m *Manager) handleCatchUpSignal(signal shared.CatchUpSignal) {
 func (m *Manager) Run(ctx context.Context) {
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case signal := <-m.catchUpSignals:
 			m.workers <- struct{}{}
 			go func(signal *shared.CatchUpSignal) {

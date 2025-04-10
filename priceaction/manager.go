@@ -177,6 +177,8 @@ func (m *Manager) Run(ctx context.Context) {
 
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case signal := <-m.levelSignals:
 			m.workers <- struct{}{}
 			go func(signal *shared.LevelSignal) {

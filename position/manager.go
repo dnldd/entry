@@ -116,6 +116,8 @@ func (m *Manager) handleExitSignal(signal shared.ExitSignal) {
 func (m *Manager) Run(ctx context.Context) {
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case signal := <-m.entrySignals:
 			m.workers <- struct{}{}
 			go func(signal *shared.EntrySignal) {
