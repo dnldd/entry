@@ -164,6 +164,7 @@ func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest)
 		Kind:      kind,
 		Sentiment: sentiment,
 		Momentum:  momentum,
+		Volume:    currentCandle.Volume,
 		Engulfing: isEngulfing,
 	}
 

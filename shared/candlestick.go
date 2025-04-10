@@ -161,5 +161,6 @@ type CandleMetadata struct {
 	Kind      Kind
 	Sentiment Sentiment
 	Momentum  Momentum
+	Volume    float64
 	Engulfing bool
 }
