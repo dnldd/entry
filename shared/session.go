@@ -67,10 +67,16 @@ func NewSession(name string, open string, close string) (*Session, error) {
 
 // Update updates the provided session's high and low.
 func (s *Session) Update(candle *Candlestick) {
-	switch {
-	case candle.Low < s.Low:
+	if s.Low == 0 {
 		s.Low = candle.Low
-	case candle.High > s.High:
+	}
+	if s.High == 0 {
+		s.High = candle.High
+	}
+	if candle.Low < s.Low {
+		s.Low = candle.Low
+	}
+	if candle.High > s.High {
 		s.High = candle.High
 	}
 }
@@ -82,10 +88,15 @@ func (s *Session) IsCurrentSession(current time.Time) bool {
 
 // IsMarketOpen checks whether the markets (only NQ currently) are open by checking if the current
 // time is within one of the market sessions.
-func IsMarketOpen() (bool, error) {
-	now, loc, err := NewYorkTime()
+func IsMarketOpen(now time.Time) (bool, error) {
+	const locality = "America/New_York"
+	if now.Location().String() != locality {
+		return false, fmt.Errorf("time provided is not new york localized")
+	}
+
+	loc, err := time.LoadLocation(locality)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("loading new york timezone: %w", err)
 	}
 
 	sessions := []struct {

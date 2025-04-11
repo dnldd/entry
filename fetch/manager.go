@@ -127,7 +127,12 @@ func (m *Manager) fetchMarketDataJob(marketName string, timeframe shared.Timefra
 	}
 
 	// Avoid fetching periodic market data if the market is not open.
-	open, err := shared.IsMarketOpen()
+	now, _, err := shared.NewYorkTime()
+	if err != nil {
+		m.cfg.Logger.Error().Msgf("creating new york time: %v", err)
+	}
+
+	open, err := shared.IsMarketOpen(now)
 	if err != nil {
 		m.cfg.Logger.Error().Msgf("checking market open status: %v", err)
 	}
