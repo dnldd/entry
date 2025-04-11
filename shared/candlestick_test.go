@@ -302,3 +302,111 @@ func TestIsEngulfing(t *testing.T) {
 		}
 	}
 }
+
+func TestMomentumString(t *testing.T) {
+	tests := []struct {
+		name     string
+		momentum Momentum
+		want     string
+	}{
+		{
+			"high momentum",
+			High,
+			"high",
+		},
+		{
+			"medium momentum",
+			Medium,
+			"medium",
+		},
+		{
+			"low momentum",
+			Low,
+			"low",
+		},
+		{
+			"unknown momentum",
+			Momentum(999),
+			"low",
+		},
+	}
+
+	for _, test := range tests {
+		str := test.momentum.String()
+		if str != test.want {
+			t.Errorf("%s: expected %v, got %v", test.name, test.want, str)
+		}
+	}
+}
+
+func TestKindString(t *testing.T) {
+	tests := []struct {
+		name string
+		kind Kind
+		want string
+	}{
+		{
+			"marubozu kind",
+			Marubozu,
+			"marubozu",
+		},
+		{
+			"pinbar kind",
+			Pinbar,
+			"pinbar",
+		},
+		{
+			"doji kind",
+			Doji,
+			"doji",
+		},
+		{
+			"unknown kind",
+			Kind(999),
+			"unknown",
+		},
+	}
+
+	for _, test := range tests {
+		str := test.kind.String()
+		if str != test.want {
+			t.Errorf("%s: expected %v, got %v", test.name, test.want, str)
+		}
+	}
+}
+
+func TestSentimentString(t *testing.T) {
+	tests := []struct {
+		name      string
+		sentiment Sentiment
+		want      string
+	}{
+		{
+			"neutral sentiment",
+			Neutral,
+			"neutral",
+		},
+		{
+			"bullish sentiment",
+			Bullish,
+			"bullish",
+		},
+		{
+			"bearish sentiment",
+			Bearish,
+			"bearish",
+		},
+		{
+			"unknown sentiment",
+			Sentiment(999),
+			"neutral",
+		},
+	}
+
+	for _, test := range tests {
+		str := test.sentiment.String()
+		if str != test.want {
+			t.Errorf("%s: expected %v, got %v", test.name, test.want, str)
+		}
+	}
+}
