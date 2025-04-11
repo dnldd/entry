@@ -2,7 +2,6 @@ package position
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 
 	"github.com/dnldd/entry/shared"
@@ -30,18 +29,6 @@ func (s *PositionStatus) String() string {
 	default:
 		return "unknown"
 	}
-}
-
-// EntryFinder defines the requirements for finding market entries.
-type EntryFinder interface {
-	// IsEntry analyzes the provided candle for entry conditions.
-	IsEntry(ctx context.Context, candle *shared.Candlestick) (bool, *shared.EntrySignal)
-}
-
-// ExitFinder defines the requirements for finding market exits.
-type ExitFinder interface {
-	// IsExit analyzes the provided candle for exit conditions.
-	IsExit(ctx context.Context, candle *shared.Candlestick) (bool, *shared.ExitSignal)
 }
 
 // Position represents valid market position started by the given entry criteria.
