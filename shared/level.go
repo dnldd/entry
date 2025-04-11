@@ -7,6 +7,8 @@ import (
 const (
 	// minPriceDataSize is the minimum size for price data.
 	minPriceDataSize = 5
+	// maxBreaks is the maximum number of breaks that renders a level void.
+	maxBreaks = 2
 )
 
 // LevelKind represents the type of level.
@@ -46,9 +48,9 @@ func NewLevel(market string, price float64, candle *Candlestick) *Level {
 	}
 
 	switch {
-	case price >= candle.High:
+	case candle.Close < price:
 		lvl.Kind = Resistance
-	case price <= candle.Low:
+	case candle.Close >= price:
 		lvl.Kind = Support
 	}
 
@@ -73,6 +75,11 @@ func (l *Level) Update(reaction Reaction) {
 			l.Kind = Support
 		}
 	}
+}
+
+// IsInvalidated checks whether the provided level has been invalidated.
+func (l *Level) IsInvalidated() bool {
+	return l.Breaks >= maxBreaks
 }
 
 // LevelReaction describes the reaction of price at a level.
@@ -123,41 +130,57 @@ func NewLevelReaction(market string, level *Level, data []*Candlestick) (*LevelR
 	lastButOne := plr.PriceMovement[len(plr.PriceMovement)-2]
 	last := plr.PriceMovement[len(plr.PriceMovement)-1]
 
-	switch {
-	case above == 0 && level.Kind == Resistance:
-		// If price consistently stayed below a resistance level it tagged then
-		// it is likely setting up for a reversal.
-		plr.Reaction = Reversal
-	case below == 0 && level.Kind == Support:
-		// If price consistently stayed above a a support level it tagged then it
-		// it is likely setting up for a reversal.
-		plr.Reaction = Reversal
-	case first == Above && lastButOne == Below && last == Below && level.Kind == Support:
-		// If price was above a support level but starts to consistently close below it
-		// then it is likely breaking the level.
-		plr.Reaction = Break
-	case first == Below && lastButOne == Above && last == Above && level.Kind == Resistance:
-		// If price was below a resistance level but starts to consistently close above it
-		// then it is likely breaking the level.
-		plr.Reaction = Break
-	case first == Above && lastButOne == Above && last == Below && level.Kind == Support:
-		// If price was above a support but turns sharply to close below it then
-		// it is likely breaking the level.
-		plr.Reaction = Break
-	case first == Below && lastButOne == Below && last == Above && level.Kind == Resistance:
-		// If price was below a resistance but turns sharply to close above it then it is
-		// likely breaking the level.
-		plr.Reaction = Break
-	case first == Above && below > 0 && last == Above && level.Kind == Support:
-		// If price was above a support level but closed below it briefly and pushed back
-		// above it then it is likely setting up a reversal.
-		plr.Reaction = Reversal
-	case first == Below && above > 0 && last == Below && level.Kind == Resistance:
-		// If price was below a resistance level but closed above it briefly and pushed
-		// back below it then it is likely setting up a reversal.
-		plr.Reaction = Reversal
-	default:
-		plr.Reaction = Chop
+	switch level.Kind {
+	case Support:
+		switch {
+		case below == 0:
+			// If price consistently stayed above or below a support level it tagged then it
+			// it is likely reversing at the level.
+			plr.Reaction = Reversal
+		case first == Below && lastButOne == Above && last == Above:
+			// If price was below a support level but starts to consistently close above it
+			// then it is likely reversing at the level.
+			plr.Reaction = Reversal
+		case first == Above && lastButOne == Below && last == Below:
+			// If price was above a support level but starts to consistently close below it
+			// then it is likely breaking the level.
+			plr.Reaction = Break
+		case first == Above && lastButOne == Above && last == Below:
+			// If price was above a support but turns sharply to close below it then
+			// it is likely breaking the level.
+			plr.Reaction = Break
+		case first == Above && below > 0 && last == Above:
+			// If price was above a support level but closed below it briefly and pushed back
+			// above it then it is likely reversing at the level.
+			plr.Reaction = Reversal
+		default:
+			plr.Reaction = Chop
+		}
+	case Resistance:
+		switch {
+		case above == 0:
+			// If price consistently stayed below a resistance level it tagged then
+			// it is likely reversing at the level.
+			plr.Reaction = Reversal
+		case first == Above && lastButOne == Below && last == Below:
+			// If price was above a resistance level but starts to consistently close below it
+			// then it is likely reversing at the level.
+			plr.Reaction = Reversal
+		case first == Below && lastButOne == Above && last == Above:
+			// If price was below a resistance level but starts to consistently close above it
+			// then it is likely breaking the level.
+			plr.Reaction = Break
+		case first == Below && lastButOne == Below && last == Above:
+			// If price was below a resistance but turns sharply to close above it then it is
+			// likely breaking the level.
+			plr.Reaction = Break
+		case first == Below && above > 0 && last == Below:
+			// If price was below a resistance level but closed above it briefly and pushed
+			// back below it then it is likely breaking the level.
+			plr.Reaction = Reversal
+		default:
+			plr.Reaction = Chop
+		}
 	}
 
 	return plr, nil

@@ -21,6 +21,9 @@ const (
 
 	// maxSessions is the maximum number of sessions tracked by a market.
 	maxSessions = 12
+
+	// locality is the locale used for fetching time.
+	locality = "America/New_York"
 )
 
 // Session represents a market session.
@@ -89,7 +92,6 @@ func (s *Session) IsCurrentSession(current time.Time) bool {
 // IsMarketOpen checks whether the markets (only NQ currently) are open by checking if the current
 // time is within one of the market sessions.
 func IsMarketOpen(now time.Time) (bool, error) {
-	const locality = "America/New_York"
 	if now.Location().String() != locality {
 		return false, fmt.Errorf("time provided is not new york localized")
 	}
