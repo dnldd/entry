@@ -80,22 +80,3 @@ func (d *Direction) String() string {
 		return "unknown"
 	}
 }
-
-// EntrySignal represents an entry signal for a position.
-type EntrySignal struct {
-	Market    string
-	Timeframe Timeframe
-	Direction Direction
-	Price     float64
-	Reasons   []EntryReason
-	StopLoss  float64
-}
-
-// ExitSignal represents an exit signal for a position.
-type ExitSignal struct {
-	Market    string
-	Timeframe Timeframe
-	Direction Direction
-	Price     float64
-	Reasons   []ExitReason
-}

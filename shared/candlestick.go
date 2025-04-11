@@ -19,6 +19,18 @@ const (
 	Low
 )
 
+// String stringifies the provided momentum.
+func (m *Momentum) String() string {
+	switch *m {
+	case High:
+		return "high"
+	case Medium:
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
 // Kind represents type of candlestick.
 type Kind int
 
@@ -29,6 +41,20 @@ const (
 	Unknown
 )
 
+// String stringifies the candlestick kind.
+func (k *Kind) String() string {
+	switch *k {
+	case Marubozu:
+		return "marubozu"
+	case Pinbar:
+		return "pinbar"
+	case Doji:
+		return "doji"
+	default:
+		return "unknown"
+	}
+}
+
 // Sentiment represents the candlestick sentiment.
 type Sentiment int
 
@@ -37,6 +63,18 @@ const (
 	Bullish
 	Bearish
 )
+
+// String stringifies the provided sentiment.
+func (s *Sentiment) String() string {
+	switch *s {
+	case Bullish:
+		return "bullish"
+	case Bearish:
+		return "bearish"
+	default:
+		return "neutral"
+	}
+}
 
 // Candlestick represents a unit candlestick for a market.
 type Candlestick struct {
@@ -68,6 +106,10 @@ func (c *Candlestick) FetchSentiment() Sentiment {
 
 // FetchKind returns the candlestick type.
 func (c *Candlestick) FetchKind() Kind {
+	if c.High == 0 || c.Low == 0 {
+		return Unknown
+	}
+
 	candleRange := c.High - c.Low
 	if candleRange == 0 {
 		return Unknown
@@ -82,9 +124,8 @@ func (c *Candlestick) FetchKind() Kind {
 	lowerWickPercent := lowerWickRange / candleRange
 
 	switch {
-	case bodyPercent <= 0.3 && (upperWickPercent >= 0.6 || lowerWickPercent >= 0.6):
-		// If the candle body is not more than 30 percent of the candle and has one of its wicks
-		// being at least 60 percent of the candle, it's a pin bar.
+	case (upperWickPercent >= 0.5 && lowerWickPercent <= 0.2) || (lowerWickPercent >= 0.5 && upperWickPercent <= 0.2):
+		// If the candle body has one of its wicks being at least 50 percent of the candle, it's a pin bar.
 		return Pinbar
 	case bodyPercent <= 0.3 && upperWickPercent >= 0.3 && lowerWickPercent >= 0.3:
 		// If the candle body is not more than 30 percent of the candle and has almost
@@ -101,7 +142,7 @@ func (c *Candlestick) FetchKind() Kind {
 // IsVolumeSpike checks whether there was a surge in volume for the current candle compared to
 // the prevous candle.
 func IsVolumeSpike(current *Candlestick, prev *Candlestick) bool {
-	if prev.Volume == 0 {
+	if prev.Volume == 0 || current.Volume == 0 {
 		return false
 	}
 
