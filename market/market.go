@@ -28,7 +28,7 @@ type Market struct {
 
 // NewMarket initializes a new market.
 func NewMarket(cfg *MarketConfig) (*Market, error) {
-	sessionsSnapshot, err := NewSessionSnapshot()
+	sessionsSnapshot, err := NewSessionSnapshot(SnapshotSize)
 	if err != nil {
 		return nil, err
 	}

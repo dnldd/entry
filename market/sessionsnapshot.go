@@ -7,11 +7,6 @@ import (
 	"github.com/dnldd/entry/shared"
 )
 
-const (
-	// snapshotSize is the maximum number of entries for a session snapshot.
-	sessionSnapshotSize = 12
-)
-
 // CandlestickSnapshot represents a snapshot of session data.
 type SessionSnapshot struct {
 	data    []*shared.Session
@@ -22,9 +17,10 @@ type SessionSnapshot struct {
 }
 
 // NewSessionSnapshot initializes a new session snapshot.
-func NewSessionSnapshot() (*SessionSnapshot, error) {
+func NewSessionSnapshot(size int) (*SessionSnapshot, error) {
 	snapshot := &SessionSnapshot{
-		data: make([]*shared.Session, candlestickSnapshotSize),
+		data: make([]*shared.Session, size),
+		size: size,
 	}
 
 	err := snapshot.AddSessions()
@@ -159,11 +155,4 @@ func (s *SessionSnapshot) FetchLastSessionHighLow() (float64, float64, error) {
 	}
 
 	return 0, 0, fmt.Errorf("session snapshot has no elements")
-}
-
-// ForEach applies the provided function to each element in the snapshot.
-func (s *SessionSnapshot) ForEach(fn func(*shared.Session)) {
-	for i := range s.count {
-		fn(s.data[(s.start+i)%s.size])
-	}
 }
