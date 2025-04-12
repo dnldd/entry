@@ -3,6 +3,7 @@ package market
 import (
 	"testing"
 
+	"github.com/dnldd/entry/shared"
 	"github.com/peterldowns/testy/assert"
 )
 
@@ -31,4 +32,14 @@ func TestSessionSnapshot(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, high, 0)
 	assert.Equal(t, low, 0)
+
+	// Ensure adding a session at capacity advances the start index for the next addition.
+	londonSession, err := shared.NewSession(shared.London, shared.LondonOpen, shared.LondonClose)
+	assert.NoError(t, err)
+
+	sessionSnapshot.Add(londonSession)
+	assert.Equal(t, sessionSnapshot.count, size)
+	assert.Equal(t, sessionSnapshot.size, size)
+	assert.Equal(t, sessionSnapshot.start, 1)
+	assert.Equal(t, len(sessionSnapshot.data), size)
 }
