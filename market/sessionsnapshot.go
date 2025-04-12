@@ -1,6 +1,7 @@
 package market
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,6 +19,13 @@ type SessionSnapshot struct {
 
 // NewSessionSnapshot initializes a new session snapshot.
 func NewSessionSnapshot(size int) (*SessionSnapshot, error) {
+	if size < 0 {
+		return nil, errors.New("snapshot size cannot be negative")
+	}
+	if size == 0 {
+		return nil, errors.New("snapshot size cannot be zero")
+	}
+
 	snapshot := &SessionSnapshot{
 		data: make([]*shared.Session, size),
 		size: size,

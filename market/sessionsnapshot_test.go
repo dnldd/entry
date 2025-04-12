@@ -8,9 +8,16 @@ import (
 )
 
 func TestSessionSnapshot(t *testing.T) {
+	// Ensure session snapshot size cannot be negaitve or zero.
+	sessionSnapshot, err := NewSessionSnapshot(-1)
+	assert.Error(t, err)
+
+	sessionSnapshot, err = NewSessionSnapshot(0)
+	assert.Error(t, err)
+
 	// Ensure a session snapshot can be created.
 	size := 3
-	sessionSnapshot, err := NewSessionSnapshot(size)
+	sessionSnapshot, err = NewSessionSnapshot(size)
 	assert.NoError(t, err)
 
 	assert.Equal(t, sessionSnapshot.count, size)

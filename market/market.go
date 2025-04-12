@@ -33,9 +33,14 @@ func NewMarket(cfg *MarketConfig) (*Market, error) {
 		return nil, err
 	}
 
+	candleSnapshot, err := NewCandlestickSnapshot(SnapshotSize)
+	if err != nil {
+		return nil, err
+	}
+
 	mkt := &Market{
 		cfg:             cfg,
-		candleSnapshot:  NewCandlestickSnapshot(SnapshotSize),
+		candleSnapshot:  candleSnapshot,
 		sessionSnapshot: sessionsSnapshot,
 		vwap:            indicator.NewVWAP(cfg.Market, shared.FiveMinute),
 	}
