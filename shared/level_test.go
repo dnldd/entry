@@ -309,6 +309,12 @@ func TestNewLevelReaction(t *testing.T) {
 			wantPriceMovement: []Movement{Below, Above, Below, Above, Below},
 			wantErr:           false,
 		},
+		{
+			name:    "not enough data",
+			level:   NewLevel(market, price, supportCandle),
+			data:    []*Candlestick{},
+			wantErr: true,
+		},
 	}
 
 	for _, test := range tests {

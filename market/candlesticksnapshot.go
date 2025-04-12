@@ -3,8 +3,8 @@ package market
 import "github.com/dnldd/entry/shared"
 
 const (
-	// snapshotSize is the maximum number of entries for a candlestick snapshot.
-	candlestickSnapshotSize = 36
+	// SnapshotSize is the maximum number of entries for a candlestick snapshot.
+	SnapshotSize = 36
 )
 
 // CandlestickSnapshot represents a snapshot of candlestick data.
@@ -16,9 +16,10 @@ type CandlestickSnapshot struct {
 }
 
 // NewCandlestickSnapshot initializes a new candlestick snapshot.
-func NewCandlestickSnapshot() *CandlestickSnapshot {
+func NewCandlestickSnapshot(size int) *CandlestickSnapshot {
 	return &CandlestickSnapshot{
-		data: make([]*shared.Candlestick, candlestickSnapshotSize),
+		data: make([]*shared.Candlestick, size),
+		size: size,
 	}
 }
 
@@ -57,7 +58,7 @@ func (s *CandlestickSnapshot) LastN(n int) []*shared.Candlestick {
 	return set
 }
 
-// AverageVolumeN returns the average volume for all candles besides the most recent one.
+// AverageVolumeN returns the average volume for last n candles besides the most recent one.
 func (s *CandlestickSnapshot) AverageVolumeN(n int) float64 {
 	candles := s.LastN(n + 1)
 
@@ -66,6 +67,6 @@ func (s *CandlestickSnapshot) AverageVolumeN(n int) float64 {
 		volumeSum += candles[idx].Volume
 	}
 
-	average := volumeSum / float64(len(candles))
+	average := volumeSum / float64(n)
 	return average
 }
