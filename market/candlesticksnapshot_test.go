@@ -8,9 +8,17 @@ import (
 )
 
 func TestCandlestickSnapshot(t *testing.T) {
+	// Ensure candle snapshot size cannot be negaitve or zero.
+	candleSnapshot, err := NewCandlestickSnapshot(-1)
+	assert.Error(t, err)
+
+	candleSnapshot, err = NewCandlestickSnapshot(0)
+	assert.Error(t, err)
+
 	// Ensure a candlestick snapshot can be created.
 	size := 4
-	candleSnapshot := NewCandlestickSnapshot(size)
+	candleSnapshot, err = NewCandlestickSnapshot(size)
+	assert.NoError(t, err)
 
 	// Ensure the snapshot can be updated with candles.
 	for idx := range size {

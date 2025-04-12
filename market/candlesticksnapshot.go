@@ -1,6 +1,10 @@
 package market
 
-import "github.com/dnldd/entry/shared"
+import (
+	"errors"
+
+	"github.com/dnldd/entry/shared"
+)
 
 const (
 	// SnapshotSize is the maximum number of entries for a candlestick snapshot.
@@ -16,11 +20,17 @@ type CandlestickSnapshot struct {
 }
 
 // NewCandlestickSnapshot initializes a new candlestick snapshot.
-func NewCandlestickSnapshot(size int) *CandlestickSnapshot {
+func NewCandlestickSnapshot(size int) (*CandlestickSnapshot, error) {
+	if size < 0 {
+		return nil, errors.New("snapshot size cannot be negative")
+	}
+	if size == 0 {
+		return nil, errors.New("snapshot size cannot be zero")
+	}
 	return &CandlestickSnapshot{
 		data: make([]*shared.Candlestick, size),
 		size: size,
-	}
+	}, nil
 }
 
 // Update adds the provided candlestick to the snapshot.
