@@ -70,3 +70,40 @@ func TestStringifyExitReasons(t *testing.T) {
 	assert.True(t, strings.Contains(str, "strong volume"))
 	assert.True(t, strings.Contains(str, "unknown"))
 }
+
+func TestPosition(t *testing.T) {
+	entrySignal := &shared.EntrySignal{
+		Market:    "^GSPC",
+		Timeframe: shared.FiveMinute,
+		Direction: shared.Long,
+		Price:     10,
+		Reasons:   []shared.EntryReason{shared.BullishEngulfingEntry, shared.StrongVolumeEntry},
+		StopLoss:  8,
+	}
+
+	// Ensure positions cannot be created with nil entry signals.
+	position, err := NewPosition(nil)
+	assert.Error(t, err)
+
+	// Ensure positions can be created with valid entry signals.
+	position, err = NewPosition(entrySignal)
+	assert.NoError(t, err)
+
+	// Ensure position's profit and loss can be updated.
+	currentPrice := float64(15)
+	position.UpdatePNLPercent(currentPrice)
+	assert.GreaterThan(t, position.PNLPercent, 0)
+
+	// Ensure a position can be closed.
+	exitSignal := &shared.ExitSignal{
+		Market:    "^GSPC",
+		Timeframe: shared.FiveMinute,
+		Direction: shared.Long,
+		Price:     18,
+		Reasons:   []shared.ExitReason{shared.TargetHitExit},
+	}
+
+	status, err := position.ClosePosition(exitSignal)
+	assert.NoError(t, err)
+	assert.Equal(t, status, Closed)
+}

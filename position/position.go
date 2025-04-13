@@ -76,6 +76,10 @@ func stringifyExitReasons(reasons []shared.ExitReason) string {
 
 // NewPosition initializes a new position.
 func NewPosition(entry *shared.EntrySignal) (*Position, error) {
+	if entry == nil {
+		return nil, fmt.Errorf("entry signal cannot be nil")
+	}
+
 	now, _, err := shared.NewYorkTime()
 	if err != nil {
 		return nil, err
