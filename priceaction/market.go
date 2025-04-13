@@ -26,7 +26,7 @@ type Market struct {
 
 // NewMarket initializes a new market.
 func NewMarket(market string) (*Market, error) {
-	levelSnapshot, err := NewLevelSnapshot()
+	levelSnapshot, err := NewLevelSnapshot(levelSnapshotSize)
 	if err != nil {
 		return nil, fmt.Errorf("creating level snapshot: %v", err)
 	}

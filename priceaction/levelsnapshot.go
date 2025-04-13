@@ -1,6 +1,10 @@
 package priceaction
 
-import "github.com/dnldd/entry/shared"
+import (
+	"errors"
+
+	"github.com/dnldd/entry/shared"
+)
 
 const (
 	// snapshotSize is the maximum number of elements for a level snapshot.
@@ -16,11 +20,18 @@ type LevelSnapshot struct {
 }
 
 // NewLevelSnapshot initializes a new level snapshot.
-func NewLevelSnapshot() (*LevelSnapshot, error) {
-	snapshot := &LevelSnapshot{
-		data: make([]*shared.Level, levelSnapshotSize),
+func NewLevelSnapshot(size int) (*LevelSnapshot, error) {
+	if size < 0 {
+		return nil, errors.New("snapshot size cannot be negative")
 	}
-	return snapshot, nil
+	if size == 0 {
+		return nil, errors.New("snapshot size cannot be zero")
+	}
+
+	return &LevelSnapshot{
+		data: make([]*shared.Level, size),
+		size: size,
+	}, nil
 }
 
 // Adds adds the provided session to the snapshot.
