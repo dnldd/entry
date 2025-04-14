@@ -18,8 +18,8 @@ const (
 )
 
 // String stringifies the provided position status.
-func (s *PositionStatus) String() string {
-	switch *s {
+func (s PositionStatus) String() string {
+	switch s {
 	case Active:
 		return "active"
 	case StoppedOut:

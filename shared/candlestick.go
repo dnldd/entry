@@ -20,8 +20,8 @@ const (
 )
 
 // String stringifies the provided momentum.
-func (m *Momentum) String() string {
-	switch *m {
+func (m Momentum) String() string {
+	switch m {
 	case High:
 		return "high"
 	case Medium:
@@ -42,8 +42,8 @@ const (
 )
 
 // String stringifies the candlestick kind.
-func (k *Kind) String() string {
-	switch *k {
+func (k Kind) String() string {
+	switch k {
 	case Marubozu:
 		return "marubozu"
 	case Pinbar:
@@ -65,8 +65,8 @@ const (
 )
 
 // String stringifies the provided sentiment.
-func (s *Sentiment) String() string {
-	switch *s {
+func (s Sentiment) String() string {
+	switch s {
 	case Bullish:
 		return "bullish"
 	case Bearish:

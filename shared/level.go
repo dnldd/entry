@@ -20,8 +20,8 @@ const (
 )
 
 // String stringifies the provided level kind.
-func (l *LevelKind) String() string {
-	switch *l {
+func (l LevelKind) String() string {
+	switch l {
 	case Support:
 		return "support"
 	case Resistance:

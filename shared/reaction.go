@@ -9,8 +9,8 @@ const (
 )
 
 // String stringifies the provided price movement.
-func (m *Movement) String() string {
-	switch *m {
+func (m Movement) String() string {
+	switch m {
 	case Above:
 		return "above"
 	case Below:
@@ -30,8 +30,8 @@ const (
 )
 
 // String stringifies the provided price movement.
-func (m *Reaction) String() string {
-	switch *m {
+func (m Reaction) String() string {
+	switch m {
 	case Chop:
 		return "chop"
 	case Reversal:

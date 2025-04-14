@@ -12,8 +12,8 @@ const (
 )
 
 // String stringifies the provided entry reason.
-func (r *EntryReason) String() string {
-	switch *r {
+func (r EntryReason) String() string {
+	switch r {
 	case BullishEngulfingEntry:
 		return "bullish engulfing"
 	case BearishEngulfingEntry:
@@ -42,8 +42,8 @@ const (
 )
 
 // String stringifies the provided exit reason.
-func (r *ExitReason) String() string {
-	switch *r {
+func (r ExitReason) String() string {
+	switch r {
 	case TargetHitExit:
 		return "target hit"
 	case BullishEngulfingExit:
@@ -70,8 +70,8 @@ const (
 )
 
 // String stringifies the provided direction.
-func (d *Direction) String() string {
-	switch *d {
+func (d Direction) String() string {
+	switch d {
 	case Long:
 		return "long"
 	case Short:

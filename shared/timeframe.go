@@ -10,6 +10,8 @@ const (
 	SessionTimeLayout = "15:04"
 	// DateLatout is the format layout for parsing dates.
 	DateLayout = "2006-01-02 15:04:05"
+	// NewYorkLocation is the new york time location
+	NewYorkLocation = "America/New_York"
 )
 
 // Timeframe represents the market data time period.
@@ -21,8 +23,8 @@ const (
 )
 
 // String stringifies the provided timeframe.
-func (t *Timeframe) String() string {
-	switch *t {
+func (t Timeframe) String() string {
+	switch t {
 	case OneHour:
 		return "1H"
 	case FiveMinute:
@@ -34,7 +36,7 @@ func (t *Timeframe) String() string {
 
 // NewYorkTime returns the current time in new york (EST/EDT adjusted automatically).
 func NewYorkTime() (time.Time, *time.Location, error) {
-	loc, err := time.LoadLocation("America/New_York")
+	loc, err := time.LoadLocation(NewYorkLocation)
 	if err != nil {
 		return time.Time{}, nil, fmt.Errorf("loading new york timezone: %w", err)
 	}
