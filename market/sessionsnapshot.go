@@ -31,12 +31,7 @@ func NewSessionSnapshot(size int) (*SessionSnapshot, error) {
 		size: size,
 	}
 
-	now, _, err := shared.NewYorkTime()
-	if err != nil {
-		return nil, fmt.Errorf("fetching new york time: %v", err)
-	}
-
-	err = snapshot.GenerateNewSessions(now)
+	err := snapshot.GenerateNewSessions(now)
 	if err != nil {
 		return nil, fmt.Errorf("adding sessions to snapshot: %v", err)
 	}
@@ -68,8 +63,7 @@ func (s *SessionSnapshot) Exists(name string, open time.Time) bool {
 	for i := s.count - 1; i >= 0; i-- {
 		idx := (s.start + i) % s.size
 		session := s.data[idx]
-		if session.Name == name && session.Open.Year() == open.Year() &&
-			session.Open.Month() == open.Month() && session.Open.Day() == open.Day() {
+		if session.Name == name && session.Open.Equal(open) {
 			return true
 		}
 	}
@@ -79,18 +73,22 @@ func (s *SessionSnapshot) Exists(name string, open time.Time) bool {
 
 // GenerateNewSessions generate a new set of sessions for the snapshot.
 func (s *SessionSnapshot) GenerateNewSessions(now time.Time) error {
+	tomorrow := now.Add(24 * time.Hour)
+
 	sessions := []struct {
 		name  string
 		open  string
 		close string
+		time  time.Time
 	}{
-		{shared.Asia, shared.AsiaOpen, shared.AsiaClose},
-		{shared.London, shared.LondonOpen, shared.LondonClose},
-		{shared.NewYork, shared.NewYorkOpen, shared.NewYorkClose},
+		{shared.Asia, shared.AsiaOpen, shared.AsiaClose, now},
+		{shared.London, shared.LondonOpen, shared.LondonClose, now},
+		{shared.NewYork, shared.NewYorkOpen, shared.NewYorkClose, now},
+		{shared.Asia, shared.AsiaOpen, shared.AsiaClose, tomorrow},
 	}
 
 	for _, sess := range sessions {
-		session, err := shared.NewSession(sess.name, sess.open, sess.close, now)
+		session, err := shared.NewSession(sess.name, sess.open, sess.close, sess.time)
 		if err != nil {
 			return fmt.Errorf("creating %s session: %w", sess.name, err)
 		}
