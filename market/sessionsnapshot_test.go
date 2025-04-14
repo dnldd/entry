@@ -9,16 +9,19 @@ import (
 )
 
 func TestSessionSnapshot(t *testing.T) {
+	now, _, err := shared.NewYorkTime()
+	assert.NoError(t, err)
+
 	// Ensure session snapshot size cannot be negaitve or zero.
-	sessionSnapshot, err := NewSessionSnapshot(-1)
+	sessionSnapshot, err := NewSessionSnapshot(-1, now)
 	assert.Error(t, err)
 
-	sessionSnapshot, err = NewSessionSnapshot(0)
+	sessionSnapshot, err = NewSessionSnapshot(0, now)
 	assert.Error(t, err)
 
 	// Ensure a session snapshot can be created.
 	size := 3
-	sessionSnapshot, err = NewSessionSnapshot(size)
+	sessionSnapshot, err = NewSessionSnapshot(size, now)
 	assert.NoError(t, err)
 
 	assert.Equal(t, sessionSnapshot.count, size)
@@ -41,9 +44,6 @@ func TestSessionSnapshot(t *testing.T) {
 	assert.Equal(t, high, 0)
 	assert.Equal(t, low, 0)
 
-	now, _, err := shared.NewYorkTime()
-	assert.NoError(t, err)
-
 	tomorrow := now.Add(time.Hour * 24)
 
 	// Ensure adding a session at capacity advances the start index for the next addition.
@@ -55,4 +55,22 @@ func TestSessionSnapshot(t *testing.T) {
 	assert.Equal(t, sessionSnapshot.size, size)
 	assert.Equal(t, sessionSnapshot.start, 1)
 	assert.Equal(t, len(sessionSnapshot.data), size)
+}
+
+func TestGenerateNewSessions(t *testing.T) {
+	now, _, err := shared.NewYorkTime()
+	assert.NoError(t, err)
+
+	sessionSnapshot, err := NewSessionSnapshot(SnapshotSize, now)
+	assert.NoError(t, err)
+
+	// Asia -> London -> New York -> Asia (today-tomorrow)
+	assert.Equal(t, sessionSnapshot.count, 4)
+
+	tomorrow := now.Add(time.Hour * 24)
+	err = sessionSnapshot.GenerateNewSessions(tomorrow)
+	assert.NoError(t, err)
+
+	// Asia -> London -> New York -> Asia (today-tomorrow) -> London (tomorrow) -> New York (tomorrow) -> Asia (tomorrow-nextday)
+	assert.Equal(t, sessionSnapshot.count, 7)
 }

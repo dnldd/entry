@@ -11,6 +11,9 @@ import (
 )
 
 func TestMarket(t *testing.T) {
+	now, _, err := shared.NewYorkTime()
+	assert.NoError(t, err)
+
 	// Ensure a market can be created.
 	levelSignals := make(chan shared.LevelSignal, 2)
 	signalLevel := func(signal *shared.LevelSignal) {
@@ -22,7 +25,7 @@ func TestMarket(t *testing.T) {
 		Logger:      &log.Logger,
 	}
 
-	mkt, err := NewMarket(cfg)
+	mkt, err := NewMarket(cfg, now)
 	assert.NoError(t, err)
 
 	// Ensure a market's caught status can be set and fetched.
@@ -38,9 +41,6 @@ func TestMarket(t *testing.T) {
 	fmt.Println(currentSession.Close)
 	nextSessionTime := currentSession.Close.Add(time.Hour * 2)
 	fmt.Println(nextSessionTime)
-
-	now, _, err := shared.NewYorkTime()
-	assert.NoError(t, err)
 
 	// Ensure a market ignores candle updates that are not of the expected update timeframe (five minute timeframe).
 	ignoredCandle := &shared.Candlestick{

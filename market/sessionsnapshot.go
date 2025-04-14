@@ -18,7 +18,7 @@ type SessionSnapshot struct {
 }
 
 // NewSessionSnapshot initializes a new session snapshot.
-func NewSessionSnapshot(size int) (*SessionSnapshot, error) {
+func NewSessionSnapshot(size int, now time.Time) (*SessionSnapshot, error) {
 	if size < 0 {
 		return nil, errors.New("snapshot size cannot be negative")
 	}

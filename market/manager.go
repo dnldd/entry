@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/dnldd/entry/shared"
 	"github.com/rs/zerolog"
@@ -29,9 +30,9 @@ type ManagerConfig struct {
 	// Subscribe registers the provided subscriber for market updates.
 	Subscribe func(sub *chan shared.Candlestick)
 	// CatchUp signals a catchup process for a market.
-	CatchUp func(signal shared.CatchUpSignal)
+	CatchUp func(signal *shared.CatchUpSignal)
 	// SignalLevel relays the provided  level signal for  processing.
-	SignalLevel func(signal shared.LevelSignal)
+	SignalLevel func(signal *shared.LevelSignal)
 	// Logger represents the application logger.
 	Logger zerolog.Logger
 }
@@ -52,7 +53,7 @@ type Manager struct {
 }
 
 // NewManager initializes a new market manager.
-func NewManager(cfg *ManagerConfig) (*Manager, error) {
+func NewManager(cfg *ManagerConfig, now time.Time) (*Manager, error) {
 	// initialize managed markets.
 	markets := make(map[string]*Market, 0)
 	workers := make(map[string]chan struct{})
@@ -63,7 +64,7 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 			Market:      cfg.MarketIDs[idx],
 			SignalLevel: cfg.SignalLevel,
 		}
-		market, err := NewMarket(mCfg)
+		market, err := NewMarket(mCfg, now)
 		if err != nil {
 			return nil, fmt.Errorf("creating market: %w", err)
 		}
@@ -235,7 +236,7 @@ func (m *Manager) catchUp() {
 			m.cfg.Logger.Error().Msgf("fetching last session open: %v", err)
 		}
 
-		signal := shared.CatchUpSignal{
+		signal := &shared.CatchUpSignal{
 			Market:    market.cfg.Market,
 			Timeframe: shared.FiveMinute,
 			Start:     start,

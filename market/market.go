@@ -3,6 +3,7 @@ package market
 import (
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/dnldd/entry/indicator"
 	"github.com/dnldd/entry/shared"
@@ -33,8 +34,8 @@ type Market struct {
 }
 
 // NewMarket initializes a new market.
-func NewMarket(cfg *MarketConfig) (*Market, error) {
-	sessionsSnapshot, err := NewSessionSnapshot(SnapshotSize)
+func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
+	sessionsSnapshot, err := NewSessionSnapshot(SnapshotSize, now)
 	if err != nil {
 		return nil, err
 	}
