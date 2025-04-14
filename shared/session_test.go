@@ -8,16 +8,19 @@ import (
 )
 
 func TestSession(t *testing.T) {
+	now, _, err := NewYorkTime()
+	assert.NoError(t, err)
+
 	// Ensure asia, london and new york sessions can be created.
-	asia, err := NewSession(Asia, AsiaOpen, AsiaClose)
+	asia, err := NewSession(Asia, AsiaOpen, AsiaClose, now)
 	assert.NoError(t, err)
 	assert.GreaterThan(t, asia.Close.Unix(), asia.Open.Unix())
 
-	london, err := NewSession(London, LondonOpen, LondonClose)
+	london, err := NewSession(London, LondonOpen, LondonClose, now)
 	assert.NoError(t, err)
 	assert.GreaterThan(t, london.Close.Unix(), london.Open.Unix())
 
-	newYork, err := NewSession(NewYork, NewYorkOpen, NewYorkClose)
+	newYork, err := NewSession(NewYork, NewYorkOpen, NewYorkClose, now)
 	assert.NoError(t, err)
 	assert.GreaterThan(t, newYork.Close.Unix(), newYork.Open.Unix())
 
@@ -44,14 +47,14 @@ func TestSession(t *testing.T) {
 	assert.Equal(t, asia.Low, secondCandle.Low)
 	assert.Equal(t, asia.High, secondCandle.High)
 
-	// Ensure session can be checked if they are the current session.
-	now := asia.Close.Add(time.Hour * 4)
+	// Ensure sessions can be checked to assert if they are the current session.
+	futureTime := asia.Close.Add(time.Hour * 4)
 
-	current := london.IsCurrentSession(now)
+	current := london.IsCurrentSession(futureTime)
 	assert.NotNil(t, current)
 
 	// Ensure it can be checked if the market is open.
-	open, err := IsMarketOpen(now)
+	open, _, err := IsMarketOpen(now)
 	assert.NoError(t, err)
 	assert.True(t, open)
 }

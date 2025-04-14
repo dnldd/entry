@@ -36,7 +36,7 @@ type Session struct {
 }
 
 // NewSession initializes new market session.
-func NewSession(name string, open string, close string) (*Session, error) {
+func NewSession(name string, open string, close string, now time.Time) (*Session, error) {
 	sessionOpen, err := time.Parse(SessionTimeLayout, open)
 	if err != nil {
 		return nil, fmt.Errorf("parsing session open: %w", err)
@@ -47,16 +47,26 @@ func NewSession(name string, open string, close string) (*Session, error) {
 		return nil, fmt.Errorf("parsing session close: %w", err)
 	}
 
-	now, loc, err := NewYorkTime()
-	if err != nil {
-		return nil, err
+	loc := now.Location()
+	if loc.String() != NewYorkLocation {
+		return nil, fmt.Errorf("expected new york location for provided time, got %v", loc.String())
 	}
 
 	sOpen := time.Date(now.Year(), now.Month(), now.Day(), sessionOpen.Hour(), sessionOpen.Minute(), 0, 0, loc)
 	sClose := time.Date(now.Year(), now.Month(), now.Day(), sessionClose.Hour(), sessionClose.Minute(), 0, 0, loc)
 	if sClose.Before(sOpen) {
-		// Adjust asia closes to the next day.
 		sClose = sClose.Add(time.Hour * 24)
+	}
+
+	if now.Before(sOpen) {
+		// Shift session window to yesterday.
+		prev := now.AddDate(0, 0, -1)
+		sOpen = time.Date(prev.Year(), prev.Month(), prev.Day(), sessionOpen.Hour(), sessionOpen.Minute(), 0, 0, loc)
+		sClose = time.Date(prev.Year(), prev.Month(), prev.Day(), sessionClose.Hour(), sessionClose.Minute(), 0, 0, loc)
+
+		if sClose.Before(sOpen) {
+			sClose = sClose.Add(24 * time.Hour)
+		}
 	}
 
 	session := &Session{
@@ -91,45 +101,58 @@ func (s *Session) IsCurrentSession(current time.Time) bool {
 
 // IsMarketOpen checks whether the markets (only NQ currently) are open by checking if the current
 // time is within one of the market sessions.
-func IsMarketOpen(now time.Time) (bool, error) {
+func IsMarketOpen(now time.Time) (bool, string, error) {
 	if now.Location().String() != locality {
-		return false, fmt.Errorf("time provided is not new york localized")
+		return false, "", fmt.Errorf("time provided is not new york localized")
 	}
 
 	loc, err := time.LoadLocation(locality)
 	if err != nil {
-		return false, fmt.Errorf("loading new york timezone: %w", err)
+		return false, "", fmt.Errorf("loading new york timezone: %w", err)
 	}
 
 	sessions := []struct {
+		Name  string
 		Open  string
 		Close string
 	}{
-		{AsiaOpen, AsiaClose},
-		{LondonOpen, LondonClose},
-		{NewYorkOpen, NewYorkClose},
+		{Asia, AsiaOpen, AsiaClose},
+		{London, LondonOpen, LondonClose},
+		{NewYork, NewYorkOpen, NewYorkClose},
 	}
 
 	var match bool
+	var name string
 	for idx := range sessions {
 		open, err := time.Parse(SessionTimeLayout, sessions[idx].Open)
 		if err != nil {
-			return false, fmt.Errorf("parsing open: %w", err)
+			return false, "", fmt.Errorf("parsing open: %w", err)
 		}
 		close, err := time.Parse(SessionTimeLayout, sessions[idx].Close)
 		if err != nil {
-			return false, fmt.Errorf("parsing close: %w", err)
+			return false, "", fmt.Errorf("parsing close: %w", err)
 		}
 
 		sOpen := time.Date(now.Year(), now.Month(), now.Day(), open.Hour(), open.Minute(), 0, 0, loc)
 		sClose := time.Date(now.Year(), now.Month(), now.Day(), close.Hour(), close.Minute(), 0, 0, loc)
 		if sClose.Before(sOpen) {
-			// Adjust asia closes to the next day.
 			sClose = sClose.Add(time.Hour * 24)
+		}
+
+		if now.Before(sOpen) {
+			// Shift session window to yesterday.
+			prev := now.AddDate(0, 0, -1)
+			sOpen = time.Date(prev.Year(), prev.Month(), prev.Day(), open.Hour(), open.Minute(), 0, 0, loc)
+			sClose = time.Date(prev.Year(), prev.Month(), prev.Day(), close.Hour(), close.Minute(), 0, 0, loc)
+
+			if sClose.Before(sOpen) {
+				sClose = sClose.Add(24 * time.Hour)
+			}
 		}
 
 		if (now.Equal(sOpen) || now.After(sOpen)) && now.Before(sClose) {
 			match = true
+			name = sessions[idx].Name
 		}
 
 		if match {
@@ -137,5 +160,5 @@ func IsMarketOpen(now time.Time) (bool, error) {
 		}
 	}
 
-	return match, nil
+	return match, name, nil
 }
