@@ -132,7 +132,7 @@ func (m *Manager) fetchMarketDataJob(marketName string, timeframe shared.Timefra
 		m.cfg.Logger.Error().Msgf("creating new york time: %v", err)
 	}
 
-	open, err := shared.IsMarketOpen(now)
+	open, _, err := shared.IsMarketOpen(now)
 	if err != nil {
 		m.cfg.Logger.Error().Msgf("checking market open status: %v", err)
 	}

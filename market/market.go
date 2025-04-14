@@ -6,6 +6,12 @@ import (
 
 	"github.com/dnldd/entry/indicator"
 	"github.com/dnldd/entry/shared"
+	"github.com/rs/zerolog"
+)
+
+const (
+	// updateTimeframe is the expected timeframe for candle updates.
+	updateTimeframe = shared.FiveMinute
 )
 
 type MarketConfig struct {
@@ -13,6 +19,8 @@ type MarketConfig struct {
 	Market string
 	// SignalLevel relays the provided level signal for processing.
 	SignalLevel func(signal *shared.LevelSignal)
+	// Logger represents the application logger.
+	Logger *zerolog.Logger
 }
 
 // Market tracks the metadata of a market.
@@ -62,11 +70,13 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 	// and vwap calculations.
 	if candle.Timeframe != shared.FiveMinute {
 		// do nothing.
+		m.cfg.Logger.Info().Msgf("encountered %s candle for updates instead of the expected "+
+			"%s timeframe, skipping", candle.Timeframe.String(), updateTimeframe.String())
 		return nil
 	}
 
 	m.candleSnapshot.Update(candle)
-	changed, err := m.sessionSnapshot.SetCurrentSession()
+	changed, err := m.sessionSnapshot.SetCurrentSession(candle.Date)
 	if err != nil {
 		return fmt.Errorf("setting current session: %w", err)
 	}
@@ -84,13 +94,13 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 			return fmt.Errorf("fetching new levels: %w", err)
 		}
 
-		sessionHigh := shared.LevelSignal{
+		sessionHigh := &shared.LevelSignal{
 			Market: candle.Market,
 			Price:  high,
 		}
 		m.cfg.SignalLevel(sessionHigh)
 
-		sessionLow := shared.LevelSignal{
+		sessionLow := &shared.LevelSignal{
 			Market: candle.Market,
 			Price:  low,
 		}

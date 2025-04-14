@@ -31,12 +31,17 @@ func NewSessionSnapshot(size int) (*SessionSnapshot, error) {
 		size: size,
 	}
 
-	err := snapshot.AddSessions()
+	now, _, err := shared.NewYorkTime()
+	if err != nil {
+		return nil, fmt.Errorf("fetching new york time: %v", err)
+	}
+
+	err = snapshot.GenerateNewSessions(now)
 	if err != nil {
 		return nil, fmt.Errorf("adding sessions to snapshot: %v", err)
 	}
 
-	_, err = snapshot.SetCurrentSession()
+	_, err = snapshot.SetCurrentSession(now)
 	if err != nil {
 		return nil, fmt.Errorf("setting current session: %v", err)
 	}
@@ -57,39 +62,49 @@ func (s *SessionSnapshot) Add(session *shared.Session) {
 	}
 }
 
-// Add sessions adds a new set of sessions (london, new york, asia - covering a day) to the snapshot.
-func (s *SessionSnapshot) AddSessions() error {
-	londonSession, err := shared.NewSession(shared.London, shared.LondonOpen, shared.LondonClose)
-	if err != nil {
-		return fmt.Errorf("creating london session: %w", err)
+// Exists checks whether the snapshot has an existing session corresponding to
+// the provided name and opening day.
+func (s *SessionSnapshot) Exists(name string, open time.Time) bool {
+	for i := s.count - 1; i >= 0; i-- {
+		idx := (s.start + i) % s.size
+		session := s.data[idx]
+		if session.Name == name && session.Open.Year() == open.Year() &&
+			session.Open.Month() == open.Month() && session.Open.Day() == open.Day() {
+			return true
+		}
 	}
 
-	s.Add(londonSession)
+	return false
+}
 
-	newYorkSession, err := shared.NewSession(shared.NewYork, shared.NewYorkOpen, shared.NewYorkClose)
-	if err != nil {
-		return fmt.Errorf("creating new york session: %w", err)
+// GenerateNewSessions generate a new set of sessions for the snapshot.
+func (s *SessionSnapshot) GenerateNewSessions(now time.Time) error {
+	sessions := []struct {
+		name  string
+		open  string
+		close string
+	}{
+		{shared.Asia, shared.AsiaOpen, shared.AsiaClose},
+		{shared.London, shared.LondonOpen, shared.LondonClose},
+		{shared.NewYork, shared.NewYorkOpen, shared.NewYorkClose},
 	}
 
-	s.Add(newYorkSession)
+	for _, sess := range sessions {
+		session, err := shared.NewSession(sess.name, sess.open, sess.close, now)
+		if err != nil {
+			return fmt.Errorf("creating %s session: %w", sess.name, err)
+		}
 
-	asianSession, err := shared.NewSession(shared.Asia, shared.AsiaOpen, shared.AsiaClose)
-	if err != nil {
-		return fmt.Errorf("creating asian session: %w", err)
+		if !s.Exists(session.Name, session.Open) {
+			s.Add(session)
+		}
 	}
-
-	s.Add(asianSession)
 
 	return nil
 }
 
 // setCurrentSession sets the current session.
-func (s *SessionSnapshot) SetCurrentSession() (bool, error) {
-	now, _, err := shared.NewYorkTime()
-	if err != nil {
-		return false, err
-	}
-
+func (s *SessionSnapshot) SetCurrentSession(now time.Time) (bool, error) {
 	// Set the current session.
 	var set bool
 	var changed bool
