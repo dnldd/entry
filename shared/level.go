@@ -6,7 +6,7 @@ import (
 
 const (
 	// minPriceDataSize is the minimum size for price data.
-	minPriceDataSize = 5
+	minPriceDataSize = 4
 	// maxBreaks is the maximum number of breaks that renders a level void.
 	maxBreaks = 2
 )

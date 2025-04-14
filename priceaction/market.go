@@ -117,7 +117,7 @@ func (m *Market) GenerateLevelReactions(data []*shared.Candlestick) ([]*shared.L
 	}
 
 	// Create the associated price level reactions for all tagged levels.
-	reactions := make([]*shared.LevelReaction, 0, len(taggedSet))
+	reactions := make([]*shared.LevelReaction, len(taggedSet))
 	for idx := range taggedSet {
 		taggedLevel := taggedSet[idx]
 		reaction, err := shared.NewLevelReaction(m.market, taggedLevel, data)

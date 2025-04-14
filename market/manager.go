@@ -15,7 +15,7 @@ const (
 	// maxWorkers is the maximum number of concurrent workers.
 	maxWorkers = 8
 	// minPriceDataRange is the minimum number of candles sent for a price data range request.
-	minPriceDataRange = 5
+	minPriceDataRange = 4
 	// averageVolumeRange is the minimum range for average volume calculations.
 	averageVolumeRange = 30
 	// fiveMinutesInSeconds is five minutes in seconds.
