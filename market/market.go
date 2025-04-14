@@ -12,9 +12,7 @@ type MarketConfig struct {
 	// Market is the name of the tracked market.
 	Market string
 	// SignalLevel relays the provided level signal for processing.
-	SignalLevel func(signal shared.LevelSignal)
-	// SignalResistance relays the provided resistance.
-	SignalResistance func(price float64)
+	SignalLevel func(signal *shared.LevelSignal)
 }
 
 // Market tracks the metadata of a market.
