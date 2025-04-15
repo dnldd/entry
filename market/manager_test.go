@@ -112,4 +112,8 @@ func TestManager(t *testing.T) {
 	mgr.SendAverageVolumeRequest(avgVolumeReq)
 	avgVol := <-avgVolumeReq.Response
 	assert.Equal(t, avgVol, float64(2))
+
+	// Ensure the manager can be gracefully shutdown.
+	cancel()
+	<-done
 }

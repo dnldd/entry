@@ -28,8 +28,24 @@ func TestVWAP(t *testing.T) {
 	_, err := vwap.Update(ignoredCandle)
 	assert.Error(t, err)
 
-	// Ensure vwap can be updated.
+	// Ensure vwap can be zero.
 	candle := &shared.Candlestick{
+		Open:   float64(5),
+		Close:  float64(8),
+		High:   float64(9),
+		Low:    float64(3),
+		Volume: float64(0),
+
+		Market:    market,
+		Timeframe: timeframe,
+	}
+
+	vwp, err := vwap.Update(candle)
+	assert.NoError(t, err)
+	assert.Equal(t, vwp, 0)
+
+	// Ensure vwap can be updated.
+	candle = &shared.Candlestick{
 		Open:   float64(5),
 		Close:  float64(8),
 		High:   float64(9),
@@ -40,7 +56,7 @@ func TestVWAP(t *testing.T) {
 		Timeframe: timeframe,
 	}
 
-	vwp, err := vwap.Update(candle)
+	vwp, err = vwap.Update(candle)
 	assert.NoError(t, err)
 	assert.GreaterThan(t, vwp, 0)
 	assert.GreaterThan(t, vwap.TypicalPriceVolume, 0)
