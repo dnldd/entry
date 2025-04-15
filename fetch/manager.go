@@ -148,6 +148,12 @@ func (m *Manager) fetchMarketDataJob(marketName string, timeframe shared.Timefra
 
 // handleCatchUpSignal processes the provided catch up signal.
 func (m *Manager) handleCatchUpSignal(signal shared.CatchUpSignal) {
+	defer func() {
+		if signal.Done != nil {
+			close(signal.Done)
+		}
+	}()
+
 	m.fetchMarketData(signal.Market, signal.Timeframe, signal.Start)
 
 	sig := shared.CaughtUpSignal{
@@ -164,7 +170,7 @@ func (m *Manager) handleCatchUpSignal(signal shared.CatchUpSignal) {
 	}
 }
 
-// Run  manages the lifecycle processes of the query manager.
+// Run manages the lifecycle processes of the query manager.
 func (m *Manager) Run(ctx context.Context) {
 	for {
 		select {
@@ -172,10 +178,10 @@ func (m *Manager) Run(ctx context.Context) {
 			return
 		case signal := <-m.catchUpSignals:
 			m.workers <- struct{}{}
-			go func(signal *shared.CatchUpSignal) {
-				m.handleCatchUpSignal(*signal)
+			go func(signal shared.CatchUpSignal) {
+				m.handleCatchUpSignal(signal)
 				<-m.workers
-			}(&signal)
+			}(signal)
 		default:
 			// fallthrough
 		}

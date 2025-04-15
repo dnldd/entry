@@ -82,14 +82,13 @@ func (e *Engine) evaluateReversal(market string, meta *shared.CandleMetadata, se
 		confluences += 2
 	}
 
-	resp := make(chan float64)
 	req := &shared.AverageVolumeRequest{
 		Market:   market,
-		Response: &resp,
+		Response: make(chan float64),
 	}
 
 	e.cfg.RequestAverageVolume(req)
-	averageVolume := <-resp
+	averageVolume := <-req.Response
 
 	// A reversal with above average volume signifies strength.
 	volumeDiff := meta.Volume - averageVolume
@@ -129,14 +128,13 @@ func (e *Engine) evaluateBreak(market string, meta *shared.CandleMetadata, senti
 		confluences += 2
 	}
 
-	resp := make(chan float64)
 	req := &shared.AverageVolumeRequest{
 		Market:   market,
-		Response: &resp,
+		Response: make(chan float64),
 	}
 
 	e.cfg.RequestAverageVolume(req)
-	averageVolume := <-resp
+	averageVolume := <-req.Response
 
 	// A level break with above average volume signifies strength.
 	volumeDiff := meta.Volume - averageVolume
@@ -155,15 +153,14 @@ func (e *Engine) evaluateBreak(market string, meta *shared.CandleMetadata, senti
 // handleLevelReaction processes the provided level reaction.
 func (e *Engine) handleLevelReaction(reaction *shared.LevelReaction) {
 	// Fetch the current candle's metadata.
-	resp := make(chan shared.CandleMetadata)
 	req := shared.CandleMetadataRequest{
 		Market:   reaction.Market,
-		Response: &resp,
+		Response: make(chan shared.CandleMetadata),
 	}
 
 	e.cfg.RequestCandleMetadata(req)
 
-	meta := <-resp
+	meta := <-req.Response
 
 	switch reaction.Reaction {
 	case shared.Reversal:

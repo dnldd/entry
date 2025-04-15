@@ -13,6 +13,8 @@ import (
 const (
 	// bufferSize is the default buffer size for channels.
 	bufferSize = 64
+	// workerBufferSize is the default buffer size for workers.
+	workerBufferSize = 4
 	// maxWorkers is the maximum number of concurrent workers.
 	maxWorkers = 8
 	// minPriceDataRange is the minimum number of candles sent for a price data range request.
@@ -34,7 +36,7 @@ type ManagerConfig struct {
 	// SignalLevel relays the provided  level signal for  processing.
 	SignalLevel func(signal *shared.LevelSignal)
 	// Logger represents the application logger.
-	Logger zerolog.Logger
+	Logger *zerolog.Logger
 }
 
 // Manager manages the lifecycle processes of all tracked markets.
@@ -46,8 +48,8 @@ type Manager struct {
 	averageVolumeMtx      sync.RWMutex
 	updateSignals         chan shared.Candlestick
 	caughtUpSignals       chan shared.CaughtUpSignal
-	priceDataRequests     chan *shared.PriceDataRequest
-	averageVolumeRequests chan *shared.AverageVolumeRequest
+	priceDataRequests     chan shared.PriceDataRequest
+	averageVolumeRequests chan shared.AverageVolumeRequest
 	workers               map[string]chan struct{}
 	requestWorkers        chan struct{}
 }
@@ -58,7 +60,7 @@ func NewManager(cfg *ManagerConfig, now time.Time) (*Manager, error) {
 	markets := make(map[string]*Market, 0)
 	workers := make(map[string]chan struct{})
 	for idx := range cfg.MarketIDs {
-		workers[cfg.MarketIDs[idx]] = make(chan struct{})
+		workers[cfg.MarketIDs[idx]] = make(chan struct{}, workerBufferSize)
 
 		mCfg := &MarketConfig{
 			Market:      cfg.MarketIDs[idx],
@@ -76,8 +78,9 @@ func NewManager(cfg *ManagerConfig, now time.Time) (*Manager, error) {
 		cfg:                   cfg,
 		markets:               markets,
 		updateSignals:         make(chan shared.Candlestick, bufferSize),
-		priceDataRequests:     make(chan *shared.PriceDataRequest, bufferSize),
-		averageVolumeRequests: make(chan *shared.AverageVolumeRequest, bufferSize),
+		priceDataRequests:     make(chan shared.PriceDataRequest, bufferSize),
+		averageVolumeRequests: make(chan shared.AverageVolumeRequest, bufferSize),
+		caughtUpSignals:       make(chan shared.CaughtUpSignal, bufferSize),
 		averageVolume:         make(map[string]shared.AverageVolumeEntry),
 		workers:               workers,
 		requestWorkers:        make(chan struct{}, maxWorkers),
@@ -107,7 +110,7 @@ func (m *Manager) SendCaughtUpSignal(signal shared.CaughtUpSignal) {
 }
 
 // SendPriceDataRequest relays the provided price data request for processing.
-func (m *Manager) SendPriceDataRequest(request *shared.PriceDataRequest) {
+func (m *Manager) SendPriceDataRequest(request shared.PriceDataRequest) {
 	select {
 	case m.priceDataRequests <- request:
 		// do nothing.
@@ -118,7 +121,7 @@ func (m *Manager) SendPriceDataRequest(request *shared.PriceDataRequest) {
 }
 
 // SendAverageVolumeRequest relays the provided average volume request for processing.
-func (m *Manager) SendAverageVolumeRequest(request *shared.AverageVolumeRequest) {
+func (m *Manager) SendAverageVolumeRequest(request shared.AverageVolumeRequest) {
 	select {
 	case m.averageVolumeRequests <- request:
 		// do nothing.
@@ -148,6 +151,12 @@ func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) {
 
 // handleCaughtUpSignal processes the provided caught up signal.
 func (m *Manager) handleCaughtUpSignal(signal *shared.CaughtUpSignal) {
+	defer func() {
+		if signal.Done != nil {
+			close(signal.Done)
+		}
+	}()
+
 	m.marketsMtx.RLock()
 	mkt, ok := m.markets[signal.Market]
 	m.marketsMtx.RUnlock()
@@ -162,24 +171,25 @@ func (m *Manager) handleCaughtUpSignal(signal *shared.CaughtUpSignal) {
 
 // handleAverageVolumeRequest processes the provided average volume request.
 func (m *Manager) handleAverageVolumeRequest(req *shared.AverageVolumeRequest) {
-	m.averageVolumeMtx.RLock()
-	avgVolume, ok := m.averageVolume[req.Market]
-	m.averageVolumeMtx.RUnlock()
-
-	if !ok {
-		m.cfg.Logger.Error().Msgf("no average volume for %s market", req.Market)
-		return
-	}
 
 	now, _, err := shared.NewYorkTime()
 	if err != nil {
 		m.cfg.Logger.Error().Msgf("fetching new york time: %v", err)
 	}
 
+	m.averageVolumeMtx.RLock()
+	avgVolume, ok := m.averageVolume[req.Market]
+	m.averageVolumeMtx.RUnlock()
+
+	if ok && now.Unix()-avgVolume.CreatedAt < fiveMinutesInSeconds {
+		req.Response <- avgVolume.Average
+		return
+	}
+
 	if now.Unix()-avgVolume.CreatedAt > fiveMinutesInSeconds {
 		// Generate a new average volume entry for the market if it is older than five minutes.
 		m.marketsMtx.RLock()
-		mkt := m.markets[req.Market]
+		mkt, ok := m.markets[req.Market]
 		m.marketsMtx.RUnlock()
 
 		if !ok {
@@ -199,7 +209,7 @@ func (m *Manager) handleAverageVolumeRequest(req *shared.AverageVolumeRequest) {
 		m.averageVolumeMtx.Unlock()
 	}
 
-	*req.Response <- avgVolume.Average
+	req.Response <- avgVolume.Average
 }
 
 // handlePriceDateRequest process the requested price data.
@@ -220,7 +230,7 @@ func (m *Manager) handlePriceDataRequest(req *shared.PriceDataRequest) {
 
 	data := mkt.candleSnapshot.LastN(minPriceDataRange)
 
-	*req.Response <- data
+	req.Response <- data
 }
 
 // catchup signals a catch up for all tracked markets.
@@ -240,6 +250,7 @@ func (m *Manager) catchUp() {
 			Market:    market.cfg.Market,
 			Timeframe: shared.FiveMinute,
 			Start:     start,
+			Done:      make(chan struct{}),
 		}
 
 		m.cfg.CatchUp(signal)
@@ -258,29 +269,29 @@ func (m *Manager) Run(ctx context.Context) {
 		case candle := <-m.updateSignals:
 			// use the dedicated market worker to handle the update signal.
 			m.workers[candle.Market] <- struct{}{}
-			go func(candle *shared.Candlestick) {
-				m.handleUpdateCandle(candle)
+			go func(candle shared.Candlestick) {
+				m.handleUpdateCandle(&candle)
 				<-m.workers[candle.Market]
-			}(&candle)
-		case candle := <-m.caughtUpSignals:
+			}(candle)
+		case signal := <-m.caughtUpSignals:
 			// use the dedicated market worker to handle the caught up signal.
-			m.workers[candle.Market] <- struct{}{}
-			go func(signal *shared.CaughtUpSignal) {
-				m.handleCaughtUpSignal(signal)
-				<-m.workers[candle.Market]
-			}(&candle)
+			m.workers[signal.Market] <- struct{}{}
+			go func(signal shared.CaughtUpSignal) {
+				m.handleCaughtUpSignal(&signal)
+				<-m.workers[signal.Market]
+			}(signal)
 		case req := <-m.priceDataRequests:
 			// handle price data requests concurrently.
 			m.requestWorkers <- struct{}{}
-			go func(req *shared.PriceDataRequest) {
-				m.handlePriceDataRequest(req)
+			go func(req shared.PriceDataRequest) {
+				m.handlePriceDataRequest(&req)
 				<-m.requestWorkers
 			}(req)
 		case req := <-m.averageVolumeRequests:
 			// handle average volume data requests concurrently.
 			m.requestWorkers <- struct{}{}
-			go func(req *shared.AverageVolumeRequest) {
-				m.handleAverageVolumeRequest(req)
+			go func(req shared.AverageVolumeRequest) {
+				m.handleAverageVolumeRequest(&req)
 				<-m.requestWorkers
 			}(req)
 		default:

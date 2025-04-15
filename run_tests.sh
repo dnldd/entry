@@ -8,7 +8,7 @@ go version
 OUT_FORMAT="github-actions"
 
 # run tests
-env GORACE="halt_on_error=1" go test -race -cover ./...
+env GORACE="halt_on_error=1" go test -timeout 10s -race -cover ./...
 
 
 echo "------------------------------------------"

@@ -94,14 +94,13 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
 	mkt.Update(candle)
 	if mkt.RequestingPriceData() {
 		// Request price data and generate price reactions from them.
-		resp := make(chan []*shared.Candlestick)
 		req := &shared.PriceDataRequest{
 			Market:   mkt.market,
-			Response: &resp,
+			Response: make(chan []*shared.Candlestick),
 		}
 
 		m.cfg.RequestPriceData(req)
-		data := <-resp
+		data := <-req.Response
 
 		reactions, err := mkt.GenerateLevelReactions(data)
 		if err != nil {
@@ -168,7 +167,7 @@ func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest)
 		Engulfing: isEngulfing,
 	}
 
-	*req.Response <- meta
+	req.Response <- meta
 }
 
 // Run manages the lifecycle processes of the price action manager.

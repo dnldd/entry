@@ -89,6 +89,7 @@ type Candlestick struct {
 	Market    string
 	Timeframe Timeframe
 	VWAP      float64
+	Done      chan struct{}
 }
 
 // FetchSentiment returns the provided candlestick's sentiment.
@@ -204,4 +205,10 @@ type CandleMetadata struct {
 	Momentum  Momentum
 	Volume    float64
 	Engulfing bool
+}
+
+// AverageVolumeEntry represents an average volume entry.
+type AverageVolumeEntry struct {
+	Average   float64
+	CreatedAt int64
 }

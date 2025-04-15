@@ -72,6 +72,11 @@ func (s *CandlestickSnapshot) LastN(n int) []*shared.Candlestick {
 func (s *CandlestickSnapshot) AverageVolumeN(n int) float64 {
 	candles := s.LastN(n + 1)
 
+	// Clamp the number of elements excpected if it is greater than the snapshot count.
+	if n > s.count {
+		n = s.count
+	}
+
 	var volumeSum float64
 	for idx := range candles[:n] {
 		volumeSum += candles[idx].Volume
