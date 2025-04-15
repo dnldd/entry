@@ -1,7 +1,6 @@
 package market
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -28,7 +27,10 @@ func TestMarket(t *testing.T) {
 	mkt, err := NewMarket(cfg, now)
 	assert.NoError(t, err)
 
-	// Ensure a market's caught status can be set and fetched.
+	tomorrow := now.AddDate(0, 0, 1)
+	mkt.sessionSnapshot.GenerateNewSessions(tomorrow)
+
+	// Ensure a market's caught up status can be set and fetched.
 	mkt.SetCaughtUpStatus(true)
 	status := mkt.CaughtUp()
 	assert.Equal(t, status, true)
@@ -37,10 +39,7 @@ func TestMarket(t *testing.T) {
 
 	// Set the update candle's time to a time in the next session
 	// to trigger level signals.
-	fmt.Println(currentSession.Name)
-	fmt.Println(currentSession.Close)
 	nextSessionTime := currentSession.Close.Add(time.Hour * 2)
-	fmt.Println(nextSessionTime)
 
 	// Ensure a market ignores candle updates that are not of the expected update timeframe (five minute timeframe).
 	ignoredCandle := &shared.Candlestick{

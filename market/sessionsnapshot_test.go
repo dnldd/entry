@@ -2,7 +2,6 @@ package market
 
 import (
 	"testing"
-	"time"
 
 	"github.com/dnldd/entry/shared"
 	"github.com/peterldowns/testy/assert"
@@ -20,7 +19,7 @@ func TestSessionSnapshot(t *testing.T) {
 	assert.Error(t, err)
 
 	// Ensure a session snapshot can be created.
-	size := 3
+	size := 4
 	sessionSnapshot, err = NewSessionSnapshot(size, now)
 	assert.NoError(t, err)
 
@@ -44,7 +43,7 @@ func TestSessionSnapshot(t *testing.T) {
 	assert.Equal(t, high, 0)
 	assert.Equal(t, low, 0)
 
-	tomorrow := now.Add(time.Hour * 24)
+	tomorrow := now.AddDate(0, 0, 1)
 
 	// Ensure adding a session at capacity advances the start index for the next addition.
 	londonSession, err := shared.NewSession(shared.London, shared.LondonOpen, shared.LondonClose, tomorrow)
@@ -61,16 +60,41 @@ func TestGenerateNewSessions(t *testing.T) {
 	now, _, err := shared.NewYorkTime()
 	assert.NoError(t, err)
 
+	yesterday := now.AddDate(0, 0, -1)
+	tomorrow := now.AddDate(0, 0, 1)
+	tomorrowNext := tomorrow.AddDate(0, 0, 1)
+
 	sessionSnapshot, err := NewSessionSnapshot(SnapshotSize, now)
 	assert.NoError(t, err)
 
 	// Asia -> London -> New York -> Asia (today-tomorrow)
 	assert.Equal(t, sessionSnapshot.count, 4)
+	assert.Equal(t, sessionSnapshot.data[0].Open.Day(), yesterday.Day())
+	assert.Equal(t, sessionSnapshot.data[0].Close.Day(), now.Day())
+	assert.Equal(t, sessionSnapshot.data[1].Open.Day(), now.Day())
+	assert.Equal(t, sessionSnapshot.data[1].Close.Day(), now.Day())
+	assert.Equal(t, sessionSnapshot.data[2].Open.Day(), now.Day())
+	assert.Equal(t, sessionSnapshot.data[2].Close.Day(), now.Day())
+	assert.Equal(t, sessionSnapshot.data[3].Open.Day(), now.Day())
+	assert.Equal(t, sessionSnapshot.data[3].Close.Day(), tomorrow.Day())
 
-	tomorrow := now.Add(time.Hour * 24)
 	err = sessionSnapshot.GenerateNewSessions(tomorrow)
 	assert.NoError(t, err)
 
 	// Asia -> London -> New York -> Asia (today-tomorrow) -> London (tomorrow) -> New York (tomorrow) -> Asia (tomorrow-nextday)
 	assert.Equal(t, sessionSnapshot.count, 7)
+	assert.Equal(t, sessionSnapshot.data[0].Open.Day(), yesterday.Day())
+	assert.Equal(t, sessionSnapshot.data[0].Close.Day(), now.Day())
+	assert.Equal(t, sessionSnapshot.data[1].Open.Day(), now.Day())
+	assert.Equal(t, sessionSnapshot.data[1].Close.Day(), now.Day())
+	assert.Equal(t, sessionSnapshot.data[2].Open.Day(), now.Day())
+	assert.Equal(t, sessionSnapshot.data[2].Close.Day(), now.Day())
+	assert.Equal(t, sessionSnapshot.data[3].Open.Day(), now.Day())
+	assert.Equal(t, sessionSnapshot.data[3].Close.Day(), tomorrow.Day())
+	assert.Equal(t, sessionSnapshot.data[4].Open.Day(), tomorrow.Day())
+	assert.Equal(t, sessionSnapshot.data[4].Close.Day(), tomorrow.Day())
+	assert.Equal(t, sessionSnapshot.data[5].Open.Day(), tomorrow.Day())
+	assert.Equal(t, sessionSnapshot.data[5].Close.Day(), tomorrow.Day())
+	assert.Equal(t, sessionSnapshot.data[6].Open.Day(), tomorrow.Day())
+	assert.Equal(t, sessionSnapshot.data[6].Close.Day(), tomorrowNext.Day())
 }

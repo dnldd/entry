@@ -58,17 +58,6 @@ func NewSession(name string, open string, close string, now time.Time) (*Session
 		sClose = sClose.Add(time.Hour * 24)
 	}
 
-	if now.Before(sOpen) {
-		// Shift session window to yesterday.
-		prev := now.AddDate(0, 0, -1)
-		sOpen = time.Date(prev.Year(), prev.Month(), prev.Day(), sessionOpen.Hour(), sessionOpen.Minute(), 0, 0, loc)
-		sClose = time.Date(prev.Year(), prev.Month(), prev.Day(), sessionClose.Hour(), sessionClose.Minute(), 0, 0, loc)
-
-		if sClose.Before(sOpen) {
-			sClose = sClose.Add(24 * time.Hour)
-		}
-	}
-
 	session := &Session{
 		Name:  name,
 		Open:  sOpen,

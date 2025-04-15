@@ -73,7 +73,7 @@ func (s *SessionSnapshot) Exists(name string, open time.Time) bool {
 
 // GenerateNewSessions generate a new set of sessions for the snapshot.
 func (s *SessionSnapshot) GenerateNewSessions(now time.Time) error {
-	tomorrow := now.Add(24 * time.Hour)
+	yesterday := now.AddDate(0, 0, -1)
 
 	sessions := []struct {
 		name  string
@@ -81,10 +81,10 @@ func (s *SessionSnapshot) GenerateNewSessions(now time.Time) error {
 		close string
 		time  time.Time
 	}{
-		{shared.Asia, shared.AsiaOpen, shared.AsiaClose, now},
+		{shared.Asia, shared.AsiaOpen, shared.AsiaClose, yesterday},
 		{shared.London, shared.LondonOpen, shared.LondonClose, now},
 		{shared.NewYork, shared.NewYorkOpen, shared.NewYorkClose, now},
-		{shared.Asia, shared.AsiaOpen, shared.AsiaClose, tomorrow},
+		{shared.Asia, shared.AsiaOpen, shared.AsiaClose, now},
 	}
 
 	for _, sess := range sessions {
