@@ -72,6 +72,12 @@ func (m *Manager) SendExitSignal(signal shared.ExitSignal) {
 
 // handleEntrySignal processes the provided entry signal.
 func (m *Manager) handleEntrySignal(signal shared.EntrySignal) {
+	defer func() {
+		if signal.Done != nil {
+			close(signal.Done)
+		}
+	}()
+
 	position, err := NewPosition(&signal)
 	if err != nil {
 		m.cfg.Logger.Error().Msgf("creating new position: %v", err)
@@ -96,6 +102,7 @@ func (m *Manager) handleExitSignal(signal shared.ExitSignal) {
 			if pos.Market == signal.Market && pos.Timeframe == signal.Timeframe {
 				pos.UpdatePNLPercent(signal.Price)
 				pos.ClosePosition(&signal)
+				m.cfg.PersistClosedPosition(pos)
 
 				// Notify discord session about the closed position.
 				msg := fmt.Sprintf("Closed %s position (%s) for %s @ %f with stoploss %f",
