@@ -6,6 +6,12 @@ import (
 	"time"
 
 	"github.com/dnldd/entry/shared"
+	"github.com/rs/zerolog"
+)
+
+const (
+	// SessionGenerationTime is the time new sessions are generated to cover the day.
+	SessionGenerationTime = "00:01"
 )
 
 // CandlestickSnapshot represents a snapshot of session data.
@@ -99,6 +105,21 @@ func (s *SessionSnapshot) GenerateNewSessions(now time.Time) error {
 	}
 
 	return nil
+}
+
+// GenerateNewSessionJob is a job used to generate new sessions.
+func (s *SessionSnapshot) GenerateNewSessionsJob(logger *zerolog.Logger) {
+	now, _, err := shared.NewYorkTime()
+	if err != nil {
+		logger.Error().Msgf("fetching new york time: %v", err)
+		return
+	}
+
+	err = s.GenerateNewSessions(now)
+	if err != nil {
+		logger.Error().Msgf("generating new sessions: %v", err)
+		return
+	}
 }
 
 // setCurrentSession sets the current session.

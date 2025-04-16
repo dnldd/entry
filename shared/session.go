@@ -11,11 +11,11 @@ const (
 	London  = "london"
 	NewYork = "newyork"
 
-	// Market session time in new york time (ET).
-	AsiaOpen     = "19:00"
-	AsiaClose    = "04:00"
+	// Market session time (futures) in new york time (ET).
+	AsiaOpen     = "18:00"
+	AsiaClose    = "03:00"
 	LondonOpen   = "03:00"
-	LondonClose  = "12:00"
+	LondonClose  = "11:00"
 	NewYorkOpen  = "08:00"
 	NewYorkClose = "17:00"
 
