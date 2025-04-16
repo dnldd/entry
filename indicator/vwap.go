@@ -7,6 +7,11 @@ import (
 	"github.com/dnldd/entry/shared"
 )
 
+const (
+	// VwapReset is the vwap reset time (in new york time).
+	VwapResetTime = "17:00:10"
+)
+
 // VWAP represents the Volume Weighted Average Price Indicator.
 type VWAP struct {
 	TypicalPriceVolume float64

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dnldd/entry/shared"
+	"github.com/go-co-op/gocron"
 	"github.com/rs/zerolog"
 )
 
@@ -35,6 +36,8 @@ type ManagerConfig struct {
 	CatchUp func(signal *shared.CatchUpSignal)
 	// SignalLevel relays the provided  level signal for  processing.
 	SignalLevel func(signal *shared.LevelSignal)
+	// JobScheduler represents the job scheduler.
+	JobScheduler *gocron.Scheduler
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
 }
@@ -63,8 +66,9 @@ func NewManager(cfg *ManagerConfig, now time.Time) (*Manager, error) {
 		workers[cfg.MarketIDs[idx]] = make(chan struct{}, workerBufferSize)
 
 		mCfg := &MarketConfig{
-			Market:      cfg.MarketIDs[idx],
-			SignalLevel: cfg.SignalLevel,
+			Market:       cfg.MarketIDs[idx],
+			SignalLevel:  cfg.SignalLevel,
+			JobScheduler: cfg.JobScheduler,
 		}
 		market, err := NewMarket(mCfg, now)
 		if err != nil {

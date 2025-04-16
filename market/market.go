@@ -7,6 +7,7 @@ import (
 
 	"github.com/dnldd/entry/indicator"
 	"github.com/dnldd/entry/shared"
+	"github.com/go-co-op/gocron"
 	"github.com/rs/zerolog"
 )
 
@@ -20,6 +21,8 @@ type MarketConfig struct {
 	Market string
 	// SignalLevel relays the provided level signal for processing.
 	SignalLevel func(signal *shared.LevelSignal)
+	// JobScheduler represents the job scheduler.
+	JobScheduler *gocron.Scheduler
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
 }
@@ -52,6 +55,22 @@ func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
 		vwap:            indicator.NewVWAP(cfg.Market, shared.FiveMinute),
 	}
 
+	// Periodically reset the market vwap when the new york session closes.
+	_, err = mkt.cfg.JobScheduler.Every(1).Day().At(indicator.VwapResetTime).WaitForSchedule().
+		Do(mkt.vwap.Reset)
+	if err != nil {
+		return nil, fmt.Errorf("scheduling %s market vwap reset job for %s: %w", mkt.cfg.Market,
+			shared.FiveMinute, err)
+	}
+
+	// Periodically add sessions covering the day to the snapshot.
+	_, err = mkt.cfg.JobScheduler.Every(1).Day().At(SessionGenerationTime).WaitForSchedule().
+		Do(mkt.sessionSnapshot.GenerateNewSessionsJob, cfg.Logger)
+	if err != nil {
+		return nil, fmt.Errorf("scheduling %s market vwap reset job for %s: %w", mkt.cfg.Market,
+			shared.FiveMinute, err)
+	}
+
 	return mkt, nil
 }
 
@@ -67,8 +86,6 @@ func (m *Market) CaughtUp() bool {
 
 // Update processes incoming market data for the provided market.
 func (m *Market) Update(candle *shared.Candlestick) error {
-	// opting to use the 5-minute timeframe for timeframe agnostic session high/low
-	// and vwap calculations.
 	if candle.Timeframe != shared.FiveMinute {
 		// do nothing.
 		m.cfg.Logger.Info().Msgf("encountered %s candle for updates instead of the expected "+
