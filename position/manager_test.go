@@ -22,7 +22,7 @@ func TestManager(t *testing.T) {
 			notifyMsgs <- message
 		},
 		PersistClosedPosition: persistClosedPosition,
-		Logger:                log.Logger,
+		Logger:                &log.Logger,
 	}
 
 	mgr := NewPositionManager(cfg)

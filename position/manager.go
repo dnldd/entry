@@ -24,7 +24,7 @@ type ManagerConfig struct {
 	// PersistClosedPosition persists the provided closed position to the database.
 	PersistClosedPosition func(position *Position) error
 	// Logger represents the application logger.
-	Logger zerolog.Logger
+	Logger *zerolog.Logger
 }
 
 // Manager manages positions through their lifecycles.

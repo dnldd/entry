@@ -38,7 +38,7 @@ type Manager struct {
 	jobScheduler        *gocron.Scheduler
 	catchUpSignals      chan shared.CatchUpSignal
 
-	subscribers []*chan shared.Candlestick
+	subscribers []chan shared.Candlestick
 	workers     chan struct{}
 }
 
@@ -56,7 +56,7 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 		lastUpdatedTimes: make(map[string]time.Time),
 		jobScheduler:     scheduler,
 		catchUpSignals:   make(chan shared.CatchUpSignal, bufferSize),
-		subscribers:      make([]*chan shared.Candlestick, 0, minSubscriberBuffer),
+		subscribers:      make([]chan shared.Candlestick, 0, minSubscriberBuffer),
 		workers:          make(chan struct{}),
 	}
 
@@ -64,14 +64,14 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 }
 
 // Subscriber registers the provided subscriber for market updates.
-func (m *Manager) Subscribe(sub *chan shared.Candlestick) {
+func (m *Manager) Subscribe(sub chan shared.Candlestick) {
 	m.subscribers = append(m.subscribers, sub)
 }
 
 // notifySubscribers notifies subscribers of the new market update.
 func (m *Manager) notifySubscribers(candle *shared.Candlestick) {
 	for k := range m.subscribers {
-		*m.subscribers[k] <- *candle
+		m.subscribers[k] <- *candle
 	}
 }
 

@@ -20,13 +20,13 @@ type ManagerConfig struct {
 	// MarketIDs represents the collection of ids of the markets to manage.
 	MarketIDs []string
 	// Subscribe registers the provided subscriber for market updates.
-	Subscribe func(sub *chan shared.Candlestick)
+	Subscribe func(sub chan shared.Candlestick)
 	// RequestPriceData sends a price data request.
-	RequestPriceData func(request *shared.PriceDataRequest)
+	RequestPriceData func(request shared.PriceDataRequest)
 	// SignalLevelReaction relays a level reaction for processing.
-	SignalLevelReaction func(signal *shared.LevelReaction)
+	SignalLevelReaction func(signal shared.LevelReaction)
 	// Logger represents the application logger.
-	Logger zerolog.Logger
+	Logger *zerolog.Logger
 }
 
 // Manager represents the price action manager.
@@ -71,6 +71,17 @@ func (m *Manager) SendLevelSignal(level shared.LevelSignal) {
 	}
 }
 
+// SendLevel relays the provided level signal for processing.
+func (m *Manager) SendMarketUpdate(candle shared.Candlestick) {
+	select {
+	case m.updateSignals <- candle:
+		// do nothing.
+	default:
+		m.cfg.Logger.Error().Msgf("market update channel at capacity: %d/%d",
+			len(m.updateSignals), bufferSize)
+	}
+}
+
 // SendCandleMetadataRequest relays the provided candle metadata signal for processing.
 func (m *Manager) SendCandleMetadataRequest(req shared.CandleMetadataRequest) {
 	select {
@@ -84,6 +95,12 @@ func (m *Manager) SendCandleMetadataRequest(req shared.CandleMetadataRequest) {
 
 // handleUpdateSignal processes the provided update signal.
 func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
+	defer func() {
+		if candle.Done != nil {
+			close(candle.Done)
+		}
+	}()
+
 	mkt, ok := m.markets[candle.Market]
 	if !ok {
 		m.cfg.Logger.Error().Msgf("no market found with name: %s", candle.Market)
@@ -94,7 +111,7 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
 	mkt.Update(candle)
 	if mkt.RequestingPriceData() {
 		// Request price data and generate price reactions from them.
-		req := &shared.PriceDataRequest{
+		req := shared.PriceDataRequest{
 			Market:   mkt.market,
 			Response: make(chan []*shared.Candlestick),
 		}
@@ -109,7 +126,7 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
 		}
 
 		for idx := range reactions {
-			m.cfg.SignalLevelReaction(reactions[idx])
+			m.cfg.SignalLevelReaction(*reactions[idx])
 		}
 
 		mkt.ResetPriceDataState()
@@ -118,6 +135,12 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
 
 // handleLevelSignal processes the provided level signal.
 func (m *Manager) handleLevelSignal(signal shared.LevelSignal) {
+	defer func() {
+		if signal.Done != nil {
+			close(signal.Done)
+		}
+	}()
+
 	mkt, ok := m.markets[signal.Market]
 	if !ok {
 		m.cfg.Logger.Error().Msgf("no market found with name %s", signal.Market)
@@ -172,7 +195,7 @@ func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest)
 
 // Run manages the lifecycle processes of the price action manager.
 func (m *Manager) Run(ctx context.Context) {
-	m.cfg.Subscribe(&m.updateSignals)
+	m.cfg.Subscribe(m.updateSignals)
 
 	for {
 		select {

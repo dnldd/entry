@@ -18,8 +18,10 @@ func TestMarket(t *testing.T) {
 	signalLevel := func(signal *shared.LevelSignal) {
 		levelSignals <- *signal
 	}
+
+	market := "^GSPC"
 	cfg := &MarketConfig{
-		Market:      "^GSPC",
+		Market:      market,
 		SignalLevel: signalLevel,
 		Logger:      &log.Logger,
 	}
@@ -50,7 +52,7 @@ func TestMarket(t *testing.T) {
 		Volume: float64(2),
 		Date:   now,
 
-		Market:    "^GSPC",
+		Market:    market,
 		Timeframe: shared.OneHour,
 	}
 
@@ -66,7 +68,7 @@ func TestMarket(t *testing.T) {
 		Volume: float64(2),
 		Date:   now,
 
-		Market:    "^GSPC",
+		Market:    market,
 		Timeframe: shared.FiveMinute,
 	}
 
@@ -82,7 +84,7 @@ func TestMarket(t *testing.T) {
 		Volume: float64(3),
 		Date:   nextSessionTime,
 
-		Market:    "^GSPC",
+		Market:    market,
 		Timeframe: shared.FiveMinute,
 	}
 
