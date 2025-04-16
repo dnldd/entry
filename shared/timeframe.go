@@ -44,3 +44,15 @@ func NewYorkTime() (time.Time, *time.Location, error) {
 	now := time.Now().In(loc)
 	return now, loc, nil
 }
+
+// NextInterval calculates the next expected time for the provided timeframe.
+func NextInterval(timeframe Timeframe, currentTime time.Time) (time.Time, error) {
+	switch timeframe {
+	case FiveMinute:
+		return currentTime.Truncate(time.Minute * 5).Add(time.Minute * 5), nil
+	case OneHour:
+		return currentTime.Truncate(time.Hour).Add(time.Hour), nil
+	default:
+		return time.Time{}, fmt.Errorf("unknown timeframe provided for interval: %s", timeframe.String())
+	}
+}

@@ -39,3 +39,15 @@ func TestTimeframeString(t *testing.T) {
 		}
 	}
 }
+
+func TestNextInterval(t *testing.T) {
+	// Ensure the next time interval can be calculated.
+	timeframe := FiveMinute
+	now, _, err := NewYorkTime()
+	assert.NoError(t, err)
+
+	futureTime, err := NextInterval(timeframe, now)
+	assert.NoError(t, err)
+	assert.GreaterThan(t, futureTime.Unix(), now.Unix())
+	assert.LessThanOrEqual(t, futureTime.Unix()-now.Unix(), 300)
+}
