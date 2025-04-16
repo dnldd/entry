@@ -2,7 +2,6 @@ package fetch
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -26,6 +25,8 @@ type ManagerConfig struct {
 	ExchangeClient *FMPClient
 	// SignalCaughtUp signals a market is caught up on market data.
 	SignalCaughtUp func(signal shared.CaughtUpSignal)
+	// JobScheduler represents the job scheduler.
+	JobScheduler *gocron.Scheduler
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
 }
@@ -35,26 +36,16 @@ type Manager struct {
 	cfg                 *ManagerConfig
 	lastUpdatedTimes    map[string]time.Time
 	lastUpdatedTimesMtx sync.RWMutex
-	jobScheduler        *gocron.Scheduler
 	catchUpSignals      chan shared.CatchUpSignal
-
-	subscribers []chan shared.Candlestick
-	workers     chan struct{}
+	subscribers         []chan shared.Candlestick
+	workers             chan struct{}
 }
 
-// NewManager initializes the query manager.
+// NewManager initializes the fetch manager.
 func NewManager(cfg *ManagerConfig) (*Manager, error) {
-	loc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		return nil, fmt.Errorf("loading new york timezone: %w", err)
-	}
-
-	scheduler := gocron.NewScheduler(loc)
-
 	mgr := &Manager{
 		cfg:              cfg,
 		lastUpdatedTimes: make(map[string]time.Time),
-		jobScheduler:     scheduler,
 		catchUpSignals:   make(chan shared.CatchUpSignal, bufferSize),
 		subscribers:      make([]chan shared.Candlestick, 0, minSubscriberBuffer),
 		workers:          make(chan struct{}),
@@ -162,7 +153,24 @@ func (m *Manager) handleCatchUpSignal(signal shared.CatchUpSignal) {
 
 	m.cfg.SignalCaughtUp(sig)
 
-	_, err := m.jobScheduler.Every(5).Minutes().Do(m.fetchMarketDataJob, signal.Market, signal.Timeframe)
+	// Periodically fetch market updates once caught up.
+	now, _, err := shared.NewYorkTime()
+	if err != nil {
+		m.cfg.Logger.Error().Msgf("fetching new york time: %v", err)
+		return
+	}
+
+	startTime, err := shared.NextInterval(shared.FiveMinute, now)
+	if err != nil {
+		m.cfg.Logger.Error().Msgf("fetching next %s interval time: %v", shared.FiveMinute.String(), err)
+		return
+	}
+
+	// Add a few seconds to ensure a market update occurs before the job runs.
+	startTime = startTime.Add(time.Second * 5)
+
+	_, err = m.cfg.JobScheduler.Every(305).Seconds().StartAt(startTime).
+		Do(m.fetchMarketDataJob, signal.Market, signal.Timeframe)
 	if err != nil {
 		m.cfg.Logger.Error().Msgf("scheduling %s market update job for %s: %v", signal.Market,
 			signal.Timeframe.String(), err)
