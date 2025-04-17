@@ -191,6 +191,8 @@ func (e *Engine) handleLevelReaction(reaction *shared.LevelReaction) {
 	case shared.Chop:
 		// Do nothing.
 	}
+
+	reaction.ApplyReaction()
 }
 
 // Run manages the lifecycle processes of the market engine.

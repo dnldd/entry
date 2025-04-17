@@ -2,13 +2,14 @@ package shared
 
 import (
 	"fmt"
+	"sync/atomic"
 )
 
 const (
 	// minPriceDataSize is the minimum size for price data.
 	minPriceDataSize = 4
 	// maxBreaks is the maximum number of breaks that renders a level void.
-	maxBreaks = 2
+	maxBreaks = 3
 )
 
 // LevelKind represents the type of level.
@@ -33,11 +34,13 @@ func (l LevelKind) String() string {
 
 // Level represents a support or resistance level.
 type Level struct {
-	Market    string
-	Price     float64
-	Kind      LevelKind
-	Reversals uint32
-	Breaks    uint32
+	Market      string
+	Price       float64
+	Kind        LevelKind
+	Reversals   uint32
+	Breaks      uint32
+	Breaking    atomic.Bool
+	Invalidated atomic.Bool
 }
 
 // NewLevel initializes a new level.
@@ -57,16 +60,35 @@ func NewLevel(market string, price float64, candle *Candlestick) *Level {
 	return lvl
 }
 
-// Update updates the provided level based on the provided price reaction.
-func (l *Level) Update(reaction Reaction) {
+// ApplyReaction applies the level reaction to the provided level.
+func (l *Level) ApplyReaction(reaction Reaction) {
 	switch reaction {
 	case Chop:
 		// do nothing.
 	case Reversal:
 		l.Reversals++
 	case Break:
+		if !l.Breaking.Load() {
+			l.Breaking.Store(true)
+		}
+	}
+}
+
+// Update updates the level status based on the provided candle's close.
+func (l *Level) Update(candle *Candlestick) {
+	if !l.Breaking.Load() {
+		return
+	}
+
+	// Confirm the break if the candle closes below a support or above a resistance.
+	if (l.Kind == Support && candle.Close < l.Price) ||
+		(l.Kind == Resistance && candle.Close > l.Price) {
 		l.Breaks++
 		l.Reversals = 0
+
+		if l.Breaks >= maxBreaks && !l.Invalidated.Load() {
+			l.Invalidated.Store(true)
+		}
 
 		switch l.Kind {
 		case Support:
@@ -79,7 +101,7 @@ func (l *Level) Update(reaction Reaction) {
 
 // IsInvalidated checks whether the provided level has been invalidated.
 func (l *Level) IsInvalidated() bool {
-	return l.Breaks >= maxBreaks
+	return l.Invalidated.Load()
 }
 
 // LevelReaction describes the reaction of price at a level.
@@ -184,4 +206,9 @@ func NewLevelReaction(market string, level *Level, data []*Candlestick) (*LevelR
 	}
 
 	return plr, nil
+}
+
+// ApplyReaction applies the level reaction to the associated level.
+func (l *LevelReaction) ApplyReaction() {
+	l.Level.ApplyReaction(l.Reaction)
 }

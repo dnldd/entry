@@ -51,6 +51,8 @@ func (m *Market) FetchPreviousCandle() *shared.Candlestick {
 
 // UpdateCurrentCandle market's price action concepts .
 func (m *Market) Update(candle *shared.Candlestick) {
+	m.levelSnapshot.Update(candle)
+
 	m.previousCandle.Store(m.currentCandle.Load())
 	m.currentCandle.Store(candle)
 

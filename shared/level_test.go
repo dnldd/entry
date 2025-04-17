@@ -41,7 +41,7 @@ func TestLevelKindString(t *testing.T) {
 func TestLevel(t *testing.T) {
 	price := float64(12)
 	market := "^GSPC"
-	candle := &Candlestick{
+	firstCandle := &Candlestick{
 		Open:  10,
 		High:  15,
 		Low:   9,
@@ -49,23 +49,44 @@ func TestLevel(t *testing.T) {
 	}
 
 	// Ensure a level can be initialized.
-	lvl := NewLevel(market, price, candle)
+	lvl := NewLevel(market, price, firstCandle)
 	assert.Equal(t, lvl.Kind, Resistance)
 
 	// Ensure a level can be updated.
-	firstReaction := Reversal
-	lvl.Update(firstReaction)
+	reversalReaction := Reversal
+	lvl.ApplyReaction(reversalReaction)
 	assert.Equal(t, lvl.Reversals, uint32(1))
 
-	secondReaction := Break
-	lvl.Update(secondReaction)
-	assert.Equal(t, lvl.Breaks, uint32(1))
+	breakReaction := Break
+	lvl.ApplyReaction(breakReaction)
+	assert.True(t, lvl.Breaking.Load())
 
 	// Ensure a level can be invalidated.
-	thirdReaction := Break
-	lvl.Update(thirdReaction)
+	secondCandle := &Candlestick{
+		Open:  10,
+		High:  15,
+		Low:   9,
+		Close: 13,
+	}
+	lvl.Update(secondCandle)
+	assert.Equal(t, lvl.Breaks, uint32(1))
+	assert.Equal(t, lvl.Kind, Support)
+
+	lvl.ApplyReaction(breakReaction)
+	assert.True(t, lvl.Breaking.Load())
+
+	lvl.Update(firstCandle)
 	assert.Equal(t, lvl.Breaks, uint32(2))
-	assert.Equal(t, lvl.IsInvalidated(), true)
+	assert.Equal(t, lvl.Kind, Resistance)
+
+	lvl.ApplyReaction(breakReaction)
+	assert.True(t, lvl.Breaking.Load())
+
+	lvl.Update(secondCandle)
+	assert.Equal(t, lvl.Breaks, uint32(3))
+	assert.Equal(t, lvl.Kind, Support)
+
+	assert.True(t, lvl.IsInvalidated())
 }
 
 func TestNewLevelReaction(t *testing.T) {

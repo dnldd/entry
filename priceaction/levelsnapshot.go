@@ -2,6 +2,7 @@ package priceaction
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/dnldd/entry/shared"
 )
@@ -13,10 +14,11 @@ const (
 
 // LevelSnapshot represents a snapshot of level data.
 type LevelSnapshot struct {
-	data  []*shared.Level
-	start int
-	count int
-	size  int
+	data    []*shared.Level
+	dataMtx sync.RWMutex
+	start   int
+	count   int
+	size    int
 }
 
 // NewLevelSnapshot initializes a new level snapshot.
@@ -36,6 +38,9 @@ func NewLevelSnapshot(size int) (*LevelSnapshot, error) {
 
 // Adds adds the provided session to the snapshot.
 func (s *LevelSnapshot) Add(level *shared.Level) {
+	s.dataMtx.Lock()
+	defer s.dataMtx.Unlock()
+
 	end := (s.start + s.count) % s.size
 	s.data[end] = level
 
@@ -47,8 +52,19 @@ func (s *LevelSnapshot) Add(level *shared.Level) {
 	}
 }
 
+// Update applies the provided market update to all tracked levels.
+func (s *LevelSnapshot) Update(candle *shared.Candlestick) {
+	for i := range s.count {
+		level := s.data[(s.start+i)%s.size]
+		level.Update(candle)
+	}
+}
+
 // Filter applies the provided function to the snapshot and returns the filtered subset.
 func (s *LevelSnapshot) Filter(candle *shared.Candlestick, fn func(*shared.Level, *shared.Candlestick) bool) []*shared.Level {
+	s.dataMtx.RLock()
+	defer s.dataMtx.RUnlock()
+
 	levels := make([]*shared.Level, 0)
 	for i := range s.count {
 		level := s.data[(s.start+i)%s.size]
