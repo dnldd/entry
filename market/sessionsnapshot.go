@@ -108,6 +108,8 @@ func (s *SessionSnapshot) GenerateNewSessions(now time.Time) error {
 }
 
 // GenerateNewSessionJob is a job used to generate new sessions.
+//
+// This job should be scheduled for periodic execution.
 func (s *SessionSnapshot) GenerateNewSessionsJob(logger *zerolog.Logger) {
 	now, _, err := shared.NewYorkTime()
 	if err != nil {

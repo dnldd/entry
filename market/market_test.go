@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/dnldd/entry/shared"
+	"github.com/go-co-op/gocron"
 	"github.com/peterldowns/testy/assert"
 	"github.com/rs/zerolog/log"
 )
@@ -20,10 +21,14 @@ func TestMarket(t *testing.T) {
 	}
 
 	market := "^GSPC"
+	loc, err := time.LoadLocation(shared.NewYorkLocation)
+	assert.NoError(t, err)
+
 	cfg := &MarketConfig{
-		Market:      market,
-		SignalLevel: signalLevel,
-		Logger:      &log.Logger,
+		Market:       market,
+		SignalLevel:  signalLevel,
+		JobScheduler: gocron.NewScheduler(loc),
+		Logger:       &log.Logger,
 	}
 
 	mkt, err := NewMarket(cfg, now)

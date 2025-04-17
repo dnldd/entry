@@ -3,8 +3,10 @@ package market
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/dnldd/entry/shared"
+	"github.com/go-co-op/gocron"
 	"github.com/peterldowns/testy/assert"
 	"github.com/rs/zerolog/log"
 	"go.uber.org/atomic"
@@ -32,12 +34,16 @@ func TestManager(t *testing.T) {
 
 	market := "^GSPC"
 
+	loc, err := time.LoadLocation(shared.NewYorkLocation)
+	assert.NoError(t, err)
+
 	cfg := &ManagerConfig{
-		MarketIDs:   []string{market},
-		Subscribe:   subscribe,
-		CatchUp:     catchUp,
-		SignalLevel: signalLevel,
-		Logger:      &log.Logger,
+		MarketIDs:    []string{market},
+		Subscribe:    subscribe,
+		CatchUp:      catchUp,
+		SignalLevel:  signalLevel,
+		JobScheduler: gocron.NewScheduler(loc),
+		Logger:       &log.Logger,
 	}
 
 	now, _, err := shared.NewYorkTime()
