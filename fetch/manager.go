@@ -48,7 +48,7 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 		lastUpdatedTimes: make(map[string]time.Time),
 		catchUpSignals:   make(chan shared.CatchUpSignal, bufferSize),
 		subscribers:      make([]chan shared.Candlestick, 0, minSubscriberBuffer),
-		workers:          make(chan struct{}),
+		workers:          make(chan struct{}, maxWorkers),
 	}
 
 	return mgr, nil
