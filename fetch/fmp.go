@@ -14,13 +14,16 @@ import (
 )
 
 const (
-	baseURL = "https://financialmodelingprep.com/stable"
+	// BaseURL is the base url of the fmp service.
+	BaseURL = "https://financialmodelingprep.com/stable"
 )
 
 // FMPConfig represents the configuration for the FMP client.
 type FMPConfig struct {
 	// APIkey is the FMP API Key.
 	APIKey string
+	// BaseURL is the base url of the FMP API.
+	BaseURL string
 }
 
 // FMPClient represents the Financial Modeling Preparation (FMP) API client.
@@ -44,7 +47,7 @@ func NewFMPClient(cfg *FMPConfig) *FMPClient {
 
 // formURL creates full urls including paramters for the api.
 func (c *FMPClient) formURL(path string, params string) string {
-	c.buf.WriteString(baseURL)
+	c.buf.WriteString(c.cfg.BaseURL)
 	c.buf.WriteString(path)
 	c.buf.WriteString("?")
 	c.buf.WriteString(params)
@@ -56,7 +59,7 @@ func (c *FMPClient) formURL(path string, params string) string {
 
 // ParseCandlesticks parses candlesticks from the provided json data.
 func (c *FMPClient) ParseCandlesticks(data []gjson.Result, market string, timeframe shared.Timeframe) ([]shared.Candlestick, error) {
-	candles := make([]shared.Candlestick, 0, len(data))
+	candles := make([]shared.Candlestick, len(data))
 
 	for idx := range data {
 		var candle shared.Candlestick
