@@ -55,7 +55,7 @@ func TestLevel(t *testing.T) {
 	// Ensure a level can be updated.
 	reversalReaction := Reversal
 	lvl.ApplyReaction(reversalReaction)
-	assert.Equal(t, lvl.Reversals, uint32(1))
+	assert.Equal(t, lvl.Reversals.Load(), uint32(1))
 
 	breakReaction := Break
 	lvl.ApplyReaction(breakReaction)
@@ -69,21 +69,21 @@ func TestLevel(t *testing.T) {
 		Close: 13,
 	}
 	lvl.Update(secondCandle)
-	assert.Equal(t, lvl.Breaks, uint32(1))
+	assert.Equal(t, lvl.Breaks.Load(), uint32(1))
 	assert.Equal(t, lvl.Kind, Support)
 
 	lvl.ApplyReaction(breakReaction)
 	assert.True(t, lvl.Breaking.Load())
 
 	lvl.Update(firstCandle)
-	assert.Equal(t, lvl.Breaks, uint32(2))
+	assert.Equal(t, lvl.Breaks.Load(), uint32(2))
 	assert.Equal(t, lvl.Kind, Resistance)
 
 	lvl.ApplyReaction(breakReaction)
 	assert.True(t, lvl.Breaking.Load())
 
 	lvl.Update(secondCandle)
-	assert.Equal(t, lvl.Breaks, uint32(3))
+	assert.Equal(t, lvl.Breaks.Load(), uint32(3))
 	assert.Equal(t, lvl.Kind, Support)
 
 	assert.True(t, lvl.IsInvalidated())
