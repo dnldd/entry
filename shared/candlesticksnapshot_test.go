@@ -1,9 +1,8 @@
-package market
+package shared
 
 import (
 	"testing"
 
-	"github.com/dnldd/entry/shared"
 	"github.com/peterldowns/testy/assert"
 )
 
@@ -22,7 +21,7 @@ func TestCandlestickSnapshot(t *testing.T) {
 
 	// Ensure the snapshot can be updated with candles.
 	for idx := range size {
-		candle := &shared.Candlestick{
+		candle := &Candlestick{
 			Open:   float64(idx + 1),
 			Close:  float64(idx + 2),
 			High:   float64(idx + 3),
@@ -38,7 +37,7 @@ func TestCandlestickSnapshot(t *testing.T) {
 	assert.Equal(t, len(candleSnapshot.data), size)
 
 	// Ensure candle updates at capacity overwrite existing slots.
-	candle := &shared.Candlestick{
+	candle := &Candlestick{
 		Open:   float64(5),
 		Close:  float64(8),
 		High:   float64(9),
@@ -55,7 +54,7 @@ func TestCandlestickSnapshot(t *testing.T) {
 	// Ensure the last n elements can be fetched from the snapshot.
 	nSet := candleSnapshot.LastN(2)
 	assert.Equal(t, nSet[0],
-		&shared.Candlestick{
+		&Candlestick{
 			Open:   4,
 			Close:  5,
 			High:   6,
@@ -69,7 +68,7 @@ func TestCandlestickSnapshot(t *testing.T) {
 	assert.Equal(t, average, 2.5)
 
 	// Ensure candle updates after capacity advances the start index for the next addition.
-	next := &shared.Candlestick{
+	next := &Candlestick{
 		Open:   float64(6),
 		Close:  float64(9),
 		High:   float64(10),

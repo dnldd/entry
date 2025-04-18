@@ -1,9 +1,7 @@
-package market
+package shared
 
 import (
 	"errors"
-
-	"github.com/dnldd/entry/shared"
 )
 
 const (
@@ -13,7 +11,7 @@ const (
 
 // CandlestickSnapshot represents a snapshot of candlestick data.
 type CandlestickSnapshot struct {
-	data  []*shared.Candlestick
+	data  []*Candlestick
 	start int
 	count int
 	size  int
@@ -28,13 +26,13 @@ func NewCandlestickSnapshot(size int) (*CandlestickSnapshot, error) {
 		return nil, errors.New("snapshot size cannot be zero")
 	}
 	return &CandlestickSnapshot{
-		data: make([]*shared.Candlestick, size),
+		data: make([]*Candlestick, size),
 		size: size,
 	}, nil
 }
 
 // Update adds the provided candlestick to the snapshot.
-func (s *CandlestickSnapshot) Update(candle *shared.Candlestick) {
+func (s *CandlestickSnapshot) Update(candle *Candlestick) {
 	end := (s.start + s.count) % s.size
 	s.data[end] = candle
 
@@ -46,8 +44,14 @@ func (s *CandlestickSnapshot) Update(candle *shared.Candlestick) {
 	}
 }
 
+// Last returns the last added entry for the snapshot.
+func (s *CandlestickSnapshot) Last() *Candlestick {
+	end := (s.start + s.count) % s.size
+	return s.data[end]
+}
+
 // LastN fetches the last n number of elements from the snapshot.
-func (s *CandlestickSnapshot) LastN(n int) []*shared.Candlestick {
+func (s *CandlestickSnapshot) LastN(n int) []*Candlestick {
 	if n <= 0 {
 		return nil
 	}
@@ -57,7 +61,7 @@ func (s *CandlestickSnapshot) LastN(n int) []*shared.Candlestick {
 		n = s.count
 	}
 
-	set := make([]*shared.Candlestick, n)
+	set := make([]*Candlestick, n)
 	start := (s.start + s.count - n + s.size) % s.size
 
 	for i := range n {

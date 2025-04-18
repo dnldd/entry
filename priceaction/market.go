@@ -17,6 +17,7 @@ const (
 type Market struct {
 	market              string
 	levelSnapshot       *LevelSnapshot
+	candleSnapshot      *shared.CandlestickSnapshot
 	currentCandle       atomic.Pointer[shared.Candlestick]
 	previousCandle      atomic.Pointer[shared.Candlestick]
 	taggedLevels        atomic.Bool

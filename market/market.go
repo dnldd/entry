@@ -30,7 +30,7 @@ type MarketConfig struct {
 // Market tracks the metadata of a market.
 type Market struct {
 	cfg             *MarketConfig
-	candleSnapshot  *CandlestickSnapshot
+	candleSnapshot  *shared.CandlestickSnapshot
 	sessionSnapshot *SessionSnapshot
 	vwap            *indicator.VWAP
 	caughtUp        atomic.Bool
@@ -38,12 +38,12 @@ type Market struct {
 
 // NewMarket initializes a new market.
 func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
-	sessionsSnapshot, err := NewSessionSnapshot(SnapshotSize, now)
+	sessionsSnapshot, err := NewSessionSnapshot(shared.SnapshotSize, now)
 	if err != nil {
 		return nil, err
 	}
 
-	candleSnapshot, err := NewCandlestickSnapshot(SnapshotSize)
+	candleSnapshot, err := shared.NewCandlestickSnapshot(shared.SnapshotSize)
 	if err != nil {
 		return nil, err
 	}

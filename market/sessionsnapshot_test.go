@@ -64,7 +64,7 @@ func TestGenerateNewSessions(t *testing.T) {
 	tomorrow := now.AddDate(0, 0, 1)
 	tomorrowNext := tomorrow.AddDate(0, 0, 1)
 
-	sessionSnapshot, err := NewSessionSnapshot(SnapshotSize, now)
+	sessionSnapshot, err := NewSessionSnapshot(shared.SnapshotSize, now)
 	assert.NoError(t, err)
 
 	// Asia -> London -> New York -> Asia (today-tomorrow)
