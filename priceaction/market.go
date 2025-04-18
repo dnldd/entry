@@ -87,6 +87,10 @@ func (m *Market) AddLevel(level *shared.Level) {
 
 // tagged checks whether the provided level is tagged by the provided candlestick.
 func (m *Market) tagged(level *shared.Level, candle *shared.Candlestick) bool {
+	if level.Invalidated.Load() {
+		return false
+	}
+
 	switch level.Kind {
 	case shared.Support:
 		if candle.Low <= level.Price {
