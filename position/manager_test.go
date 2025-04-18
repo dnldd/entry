@@ -44,7 +44,7 @@ func TestManager(t *testing.T) {
 		Timeframe: shared.FiveMinute,
 		Direction: shared.Long,
 		Price:     float64(10),
-		Reasons:   []shared.EntryReason{shared.BullishEngulfingEntry, shared.StrongVolumeEntry},
+		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
 		StopLoss:  float64(8),
 		Done:      make(chan struct{}),
 	}
@@ -63,7 +63,7 @@ func TestManager(t *testing.T) {
 		Timeframe: shared.FiveMinute,
 		Direction: shared.Long,
 		Price:     float64(15),
-		Reasons:   []shared.ExitReason{shared.BearishEngulfingExit, shared.StrongVolumeExit},
+		Reasons:   []shared.Reason{shared.BearishEngulfing, shared.StrongVolume},
 		Done:      make(chan struct{}),
 	}
 

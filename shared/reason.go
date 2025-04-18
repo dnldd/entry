@@ -1,60 +1,31 @@
 package shared
 
-// EntryReason represents an entry reason.
-type EntryReason int
+// Reason represents an entry or exit reason.
+type Reason int
 
 const (
-	BullishEngulfingEntry EntryReason = iota
-	BearishEngulfingEntry
-	ReversalAtSupportEntry
-	ReversalAtResistanceEntry
-	StrongVolumeEntry
+	TargetHit Reason = iota
+	BullishEngulfing
+	BearishEngulfing
+	ReversalAtSupport
+	ReversalAtResistance
+	StrongVolume
 )
 
-// String stringifies the provided entry reason.
-func (r EntryReason) String() string {
+// String stringifies the provided reason.
+func (r Reason) String() string {
 	switch r {
-	case BullishEngulfingEntry:
-		return "bullish engulfing"
-	case BearishEngulfingEntry:
-		return "bearish engulfing"
-	case ReversalAtSupportEntry:
-		return "price reversal at support"
-	case ReversalAtResistanceEntry:
-		return "price reversal at resistance"
-	case StrongVolumeEntry:
-		return "strong volume"
-	default:
-		return "unknown"
-	}
-}
-
-// ExitReason represents an exit reason.
-type ExitReason int
-
-const (
-	TargetHitExit ExitReason = iota
-	BullishEngulfingExit
-	BearishEngulfingExit
-	ReversalAtSupportExit
-	ReversalAtResistanceExit
-	StrongVolumeExit
-)
-
-// String stringifies the provided exit reason.
-func (r ExitReason) String() string {
-	switch r {
-	case TargetHitExit:
+	case TargetHit:
 		return "target hit"
-	case BullishEngulfingExit:
+	case BullishEngulfing:
 		return "bullish engulfing"
-	case BearishEngulfingExit:
+	case BearishEngulfing:
 		return "bearish engulfing"
-	case ReversalAtSupportExit:
+	case ReversalAtSupport:
 		return "price reversal at support"
-	case ReversalAtResistanceExit:
+	case ReversalAtResistance:
 		return "price reversal at resistance"
-	case StrongVolumeExit:
+	case StrongVolume:
 		return "strong volume"
 	default:
 		return "unknown"

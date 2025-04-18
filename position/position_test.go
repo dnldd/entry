@@ -45,23 +45,10 @@ func TestPositionStatusString(t *testing.T) {
 }
 
 func TestStringifyEntryReasons(t *testing.T) {
-	entryReasons := []shared.EntryReason{shared.BullishEngulfingEntry, shared.BearishEngulfingEntry,
-		shared.ReversalAtSupportEntry, shared.ReversalAtResistanceEntry, shared.StrongVolumeEntry, shared.EntryReason(999)}
+	reasons := []shared.Reason{shared.TargetHit, shared.BullishEngulfing, shared.BearishEngulfing,
+		shared.ReversalAtSupport, shared.ReversalAtResistance, shared.StrongVolume, shared.Reason(999)}
 
-	str := stringifyEntryReasons(entryReasons)
-	assert.True(t, strings.Contains(str, "bullish engulfing"))
-	assert.True(t, strings.Contains(str, "bearish engulfing"))
-	assert.True(t, strings.Contains(str, "reversal at support"))
-	assert.True(t, strings.Contains(str, "reversal at resistance"))
-	assert.True(t, strings.Contains(str, "strong volume"))
-	assert.True(t, strings.Contains(str, "unknown"))
-}
-
-func TestStringifyExitReasons(t *testing.T) {
-	exitReasons := []shared.ExitReason{shared.TargetHitExit, shared.BullishEngulfingExit, shared.BearishEngulfingExit,
-		shared.ReversalAtSupportExit, shared.ReversalAtResistanceExit, shared.StrongVolumeExit, shared.ExitReason(999)}
-
-	str := stringifyExitReasons(exitReasons)
+	str := stringifyReasons(reasons)
 	assert.True(t, strings.Contains(str, "target hit"))
 	assert.True(t, strings.Contains(str, "bullish engulfing"))
 	assert.True(t, strings.Contains(str, "bearish engulfing"))
@@ -77,7 +64,7 @@ func TestPosition(t *testing.T) {
 		Timeframe: shared.FiveMinute,
 		Direction: shared.Long,
 		Price:     10,
-		Reasons:   []shared.EntryReason{shared.BullishEngulfingEntry, shared.StrongVolumeEntry},
+		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
 		StopLoss:  8,
 	}
 
@@ -100,7 +87,7 @@ func TestPosition(t *testing.T) {
 		Timeframe: shared.FiveMinute,
 		Direction: shared.Long,
 		Price:     18,
-		Reasons:   []shared.ExitReason{shared.TargetHitExit},
+		Reasons:   []shared.Reason{shared.TargetHit},
 	}
 
 	status, err := position.ClosePosition(exitSignal)

@@ -8,7 +8,7 @@ type EntrySignal struct {
 	Timeframe Timeframe
 	Direction Direction
 	Price     float64
-	Reasons   []EntryReason
+	Reasons   []Reason
 	StopLoss  float64
 	Done      chan struct{}
 }
@@ -19,7 +19,7 @@ type ExitSignal struct {
 	Timeframe Timeframe
 	Direction Direction
 	Price     float64
-	Reasons   []ExitReason
+	Reasons   []Reason
 	Done      chan struct{}
 }
 

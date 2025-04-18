@@ -48,21 +48,8 @@ type Position struct {
 	ClosedOn     uint64
 }
 
-// stringifyEntryReasons stringifies the collection of entry reasons provided.
-func stringifyEntryReasons(reasons []shared.EntryReason) string {
-	buf := bytes.NewBuffer([]byte{})
-	for idx := range reasons {
-		buf.WriteString(reasons[idx].String())
-		if idx < len(reasons)-1 {
-			buf.WriteString(",")
-		}
-	}
-
-	return buf.String()
-}
-
-// stringifyExitReasons stringifies the collection of exit reasons provided.
-func stringifyExitReasons(reasons []shared.ExitReason) string {
+// stringifyReasons stringifies the collection of reasons provided.
+func stringifyReasons(reasons []shared.Reason) string {
 	buf := bytes.NewBuffer([]byte{})
 	for idx := range reasons {
 		buf.WriteString(reasons[idx].String())
@@ -92,7 +79,7 @@ func NewPosition(entry *shared.EntrySignal) (*Position, error) {
 		Direction:    entry.Direction,
 		CreatedOn:    uint64(now.Unix()),
 		EntryPrice:   entry.Price,
-		EntryReasons: stringifyEntryReasons(entry.Reasons),
+		EntryReasons: stringifyReasons(entry.Reasons),
 		StopLoss:     entry.StopLoss,
 		Status:       Active,
 	}
@@ -109,7 +96,7 @@ func (p *Position) ClosePosition(exit *shared.ExitSignal) (PositionStatus, error
 
 	p.ClosedOn = uint64(now.Unix())
 	p.ExitPrice = exit.Price
-	p.ExitReasons = stringifyExitReasons(exit.Reasons)
+	p.ExitReasons = stringifyReasons(exit.Reasons)
 
 	switch {
 	case p.ExitPrice > p.StopLoss && p.Direction == shared.Short:
