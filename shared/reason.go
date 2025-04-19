@@ -10,6 +10,7 @@ const (
 	ReversalAtSupport
 	ReversalAtResistance
 	StrongVolume
+	StrongMove
 )
 
 // String stringifies the provided reason.
@@ -27,6 +28,8 @@ func (r Reason) String() string {
 		return "price reversal at resistance"
 	case StrongVolume:
 		return "strong volume"
+	case StrongMove:
+		return "strong move"
 	default:
 		return "unknown"
 	}

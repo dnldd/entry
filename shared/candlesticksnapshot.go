@@ -46,7 +46,11 @@ func (s *CandlestickSnapshot) Update(candle *Candlestick) {
 
 // Last returns the last added entry for the snapshot.
 func (s *CandlestickSnapshot) Last() *Candlestick {
-	end := (s.start + s.count) % s.size
+	if s.count == 0 {
+		return nil
+	}
+
+	end := (s.start + s.count - 1) % s.size
 	return s.data[end]
 }
 

@@ -16,9 +16,6 @@ func TestMarket(t *testing.T) {
 	assert.Equal(t, mkt.taggedLevels.Load(), false)
 	assert.Equal(t, mkt.updateCounter.Load(), uint32(0))
 	assert.Equal(t, mkt.requestingPriceData.Load(), false)
-	assert.Equal(t, mkt.currentCandle.Load(), nil)
-	assert.Equal(t, mkt.previousCandle.Load(), nil)
-
 	// Ensure a market can be updated with price data.
 	firstCandle := &shared.Candlestick{
 		Open:   float64(5),
@@ -32,8 +29,6 @@ func TestMarket(t *testing.T) {
 	assert.Equal(t, mkt.taggedLevels.Load(), false)
 	assert.Equal(t, mkt.updateCounter.Load(), uint32(0))
 	assert.Equal(t, mkt.requestingPriceData.Load(), false)
-	assert.NotEqual(t, mkt.currentCandle.Load(), nil)
-	assert.Equal(t, mkt.previousCandle.Load(), nil)
 
 	// Ensure levels can be added to the market.
 	price := float64(2)
@@ -58,14 +53,7 @@ func TestMarket(t *testing.T) {
 	assert.Equal(t, mkt.updateCounter.Load(), uint32(1))
 
 	// Ensure the market tracks previous and current candle used it updating it.
-	assert.Equal(t, mkt.previousCandle.Load(), firstCandle)
-	assert.Equal(t, mkt.currentCandle.Load(), secondCandle)
-
-	// Ensure the previous and current candle can be fetched from the market.
-	fetchedCandle := mkt.FetchPreviousCandle()
-	assert.Equal(t, fetchedCandle, firstCandle)
-	fetchedCandle = mkt.FetchCurrentCandle()
-	assert.Equal(t, fetchedCandle, secondCandle)
+	assert.Equal(t, mkt.candleSnapshot.Last(), secondCandle)
 
 	// Ensure tagged levels can be filtered from a market.
 	taggedLevels := mkt.FilterTaggedLevels(secondCandle)

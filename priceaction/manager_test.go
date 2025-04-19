@@ -100,7 +100,7 @@ func TestManager(t *testing.T) {
 	// Ensure the price action manager can process candle metadata requests.
 	candleMetaReq := shared.CandleMetadataRequest{
 		Market:   market,
-		Response: make(chan shared.CandleMetadata),
+		Response: make(chan []*shared.CandleMetadata),
 	}
 
 	mgr.SendCandleMetadataRequest(candleMetaReq)

@@ -11,6 +11,8 @@ const (
 	// maxPriceDataRequestInterval is the maximum update intervals to wait before
 	// triggering a price data request.
 	maxPriceDataRequestInterval = 3
+	// smallSnapshotSize is the buffer size for snapshots considered to hold a smaller set.
+	smallSnapshotSize = 8
 )
 
 // Market represents all the the price action data related to a market.
@@ -18,8 +20,6 @@ type Market struct {
 	market              string
 	levelSnapshot       *LevelSnapshot
 	candleSnapshot      *shared.CandlestickSnapshot
-	currentCandle       atomic.Pointer[shared.Candlestick]
-	previousCandle      atomic.Pointer[shared.Candlestick]
 	taggedLevels        atomic.Bool
 	updateCounter       atomic.Uint32
 	requestingPriceData atomic.Bool
@@ -32,9 +32,15 @@ func NewMarket(market string) (*Market, error) {
 		return nil, fmt.Errorf("creating level snapshot: %v", err)
 	}
 
+	candleSnapshot, err := shared.NewCandlestickSnapshot(smallSnapshotSize)
+	if err != nil {
+		return nil, fmt.Errorf("creating candle snapshot: %v", err)
+	}
+
 	mgr := &Market{
-		market:        market,
-		levelSnapshot: levelSnapshot,
+		market:         market,
+		levelSnapshot:  levelSnapshot,
+		candleSnapshot: candleSnapshot,
 	}
 
 	return mgr, nil
@@ -42,20 +48,13 @@ func NewMarket(market string) (*Market, error) {
 
 // FetchCurrentCandle fetches the current market candlestick.
 func (m *Market) FetchCurrentCandle() *shared.Candlestick {
-	return m.currentCandle.Load()
-}
-
-// FetchPreviousCandle fetches the previous market candlestick.
-func (m *Market) FetchPreviousCandle() *shared.Candlestick {
-	return m.previousCandle.Load()
+	return m.candleSnapshot.Last()
 }
 
 // UpdateCurrentCandle market's price action concepts .
 func (m *Market) Update(candle *shared.Candlestick) {
 	m.levelSnapshot.Update(candle)
-
-	m.previousCandle.Store(m.currentCandle.Load())
-	m.currentCandle.Store(candle)
+	m.candleSnapshot.Update(candle)
 
 	filteredLevels := m.FilterTaggedLevels(candle)
 	hasTaggedLevels := m.taggedLevels.Load()

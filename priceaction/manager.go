@@ -13,6 +13,8 @@ const (
 	bufferSize = 64
 	// maxWorkers is the maximum number of concurrent workers.
 	maxWorkers = 8
+	// candleMetadataSize is the required elements for fetching candle metadata.
+	candleMetadataSize = 4
 )
 
 // ManagerConfig represents the price action manager configuration.
@@ -165,32 +167,31 @@ func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest)
 		return
 	}
 
-	currentCandle := mkt.FetchCurrentCandle()
-	if currentCandle == nil {
-		m.cfg.Logger.Error().Msgf("no current candle available for market: %s", mkt.market)
-		return
+	// Generate metadata for all candles in the range being evaluated.
+	candles := mkt.candleSnapshot.LastN(candleMetadataSize + 1)
+	metadataSet := make([]*shared.CandleMetadata, 0, candleMetadataSize)
+
+	for idx := 1; idx < len(candles)-1; idx++ {
+		currentCandle := candles[idx]
+		previousCandle := candles[idx-1]
+
+		kind := currentCandle.FetchKind()
+		sentiment := currentCandle.FetchSentiment()
+		momentum := shared.GenerateMomentum(currentCandle, previousCandle)
+		isEngulfing := shared.IsEngulfing(currentCandle, previousCandle)
+
+		meta := &shared.CandleMetadata{
+			Kind:      kind,
+			Sentiment: sentiment,
+			Momentum:  momentum,
+			Volume:    currentCandle.Volume,
+			Engulfing: isEngulfing,
+		}
+
+		metadataSet = append(metadataSet, meta)
 	}
 
-	previousCandle := mkt.FetchPreviousCandle()
-	if previousCandle == nil {
-		m.cfg.Logger.Error().Msgf("no previous candle available for market: %s", mkt.market)
-		return
-	}
-
-	kind := currentCandle.FetchKind()
-	sentiment := currentCandle.FetchSentiment()
-	momentum := shared.GenerateMomentum(currentCandle, previousCandle)
-	isEngulfing := shared.IsEngulfing(currentCandle, previousCandle)
-
-	meta := shared.CandleMetadata{
-		Kind:      kind,
-		Sentiment: sentiment,
-		Momentum:  momentum,
-		Volume:    currentCandle.Volume,
-		Engulfing: isEngulfing,
-	}
-
-	req.Response <- meta
+	req.Response <- metadataSet
 }
 
 // Run manages the lifecycle processes of the price action manager.
