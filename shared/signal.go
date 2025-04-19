@@ -4,23 +4,25 @@ import "time"
 
 // EntrySignal represents an entry signal for a position.
 type EntrySignal struct {
-	Market    string
-	Timeframe Timeframe
-	Direction Direction
-	Price     float64
-	Reasons   []Reason
-	StopLoss  float64
-	Done      chan struct{}
+	Market     string
+	Timeframe  Timeframe
+	Direction  Direction
+	Price      float64
+	Reasons    []Reason
+	Confluence uint32
+	StopLoss   float64
+	Done       chan struct{}
 }
 
 // ExitSignal represents an exit signal for a position.
 type ExitSignal struct {
-	Market    string
-	Timeframe Timeframe
-	Direction Direction
-	Price     float64
-	Reasons   []Reason
-	Done      chan struct{}
+	Market     string
+	Timeframe  Timeframe
+	Direction  Direction
+	Price      float64
+	Reasons    []Reason
+	Confluence uint32
+	Done       chan struct{}
 }
 
 // LevelSignal represents a level signal to outline a price level.

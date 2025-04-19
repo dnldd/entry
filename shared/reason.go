@@ -9,6 +9,8 @@ const (
 	BearishEngulfing
 	ReversalAtSupport
 	ReversalAtResistance
+	BreakBelowSupport
+	BreakAboveResistance
 	StrongVolume
 	StrongMove
 )
@@ -26,6 +28,10 @@ func (r Reason) String() string {
 		return "price reversal at support"
 	case ReversalAtResistance:
 		return "price reversal at resistance"
+	case BreakBelowSupport:
+		return "price break below support"
+	case BreakAboveResistance:
+		return "price break above resistance"
 	case StrongVolume:
 		return "strong volume"
 	case StrongMove:

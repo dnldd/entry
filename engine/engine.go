@@ -13,9 +13,9 @@ const (
 	// maxWorkers is the maximum number of concurrent workers.
 	maxWorkers = 16
 	// minReversalConfluence is the minumum required confluence to confirm a reversal.
-	minReversalConfluence = 4
+	minReversalConfluence = 7
 	// minBreakConfluence is the minumum required confluence to confirm a break.
-	minBreakConfluence = 5
+	minBreakConfluence = 7
 	// minAverageVolumePercent is the minimum percentage above average volume to be considered
 	// substantive.
 	minAverageVolumePercent = float64(0.2)
@@ -28,6 +28,10 @@ type EngineConfig struct {
 	RequestCandleMetadata func(req shared.CandleMetadataRequest)
 	// RequestAverageVolume relays the provided average volume request for processing.
 	RequestAverageVolume func(request *shared.AverageVolumeRequest)
+	// SendEntrySignal relays the provided entry signal for processing.
+	SendEntrySignal func(signal shared.EntrySignal)
+	// SendExitSignal relays the provided exit signal for processing.
+	SendExitSignal func(signal shared.ExitSignal)
 	// Logger represents the application logger.
 	Logger zerolog.Logger
 }
@@ -59,27 +63,20 @@ func (e *Engine) SignalLevelReaction(signal *shared.LevelReaction) {
 }
 
 // evaluateReversal determines whether an actionable reversal has occured.
-func (e *Engine) evaluateReversal(market string, meta *shared.CandleMetadata, sentiment shared.Sentiment) bool {
+func (e *Engine) evaluateReversal(market string, meta []*shared.CandleMetadata, sentiment shared.Sentiment) (bool, uint32, []shared.Reason) {
 	var confluences uint32
+	reasons := []shared.Reason{}
 
 	// A reversal must confirm the provided level.
-	if meta.Sentiment == sentiment {
+	lastMeta := meta[len(meta)-1]
+	if lastMeta.Sentiment == sentiment {
 		confluences++
-	}
-
-	// A reversal must show stregnth in order to be actionable.
-	if meta.Kind == shared.Marubozu || meta.Kind == shared.Pinbar {
-		confluences++
-	}
-
-	// A high momentum reversal signifies strength.
-	if meta.Momentum == shared.High || meta.Momentum == shared.Medium {
-		confluences++
-	}
-
-	// An engulfing reversal signifies directional strength.
-	if meta.Engulfing && (meta.Momentum == shared.High || meta.Momentum == shared.Medium) {
-		confluences += 2
+		switch sentiment {
+		case shared.Bullish:
+			reasons = append(reasons, shared.ReversalAtSupport)
+		case shared.Bearish:
+			reasons = append(reasons, shared.ReversalAtResistance)
+		}
 	}
 
 	req := &shared.AverageVolumeRequest{
@@ -90,42 +87,66 @@ func (e *Engine) evaluateReversal(market string, meta *shared.CandleMetadata, se
 	e.cfg.RequestAverageVolume(req)
 	averageVolume := <-req.Response
 
-	// A reversal with above average volume signifies strength.
-	volumeDiff := meta.Volume - averageVolume
-	if volumeDiff > 0 {
-		confluences++
+	for idx := 0; idx < len(meta); idx++ {
+		// Only evaluate candle meta that support the sentiment of the reaction.
+		if meta[idx].Sentiment != sentiment {
+			continue
+		}
+
+		// A reversal must show strength (candle structure and momentum) in order to be actionable.
+		if (meta[idx].Kind == shared.Marubozu || meta[idx].Kind == shared.Pinbar) &&
+			(meta[idx].Momentum == shared.High || meta[idx].Momentum == shared.Medium) {
+			confluences++
+			reasons = append(reasons, shared.StrongMove)
+		}
+
+		// An engulfing reversal signifies directional strength.
+		if meta[idx].Engulfing && (meta[idx].Momentum == shared.High || meta[idx].Momentum == shared.Medium) {
+			confluences += 2
+			switch meta[idx].Sentiment {
+			case shared.Bullish:
+				reasons = append(reasons, shared.BullishEngulfing)
+			case shared.Bearish:
+				reasons = append(reasons, shared.BearishEngulfing)
+			}
+		}
+
+		// A reversal with above average volume signifies strength.
+		if averageVolume > 0 {
+			volumeDiff := meta[idx].Volume - averageVolume
+
+			switch {
+			case volumeDiff/averageVolume >= minAverageVolumePercent:
+				// A reversal substantially above average volume is a great indicator of strength.
+				confluences++
+				reasons = append(reasons, shared.StrongVolume)
+			case volumeDiff > 0:
+				confluences++
+				reasons = append(reasons, shared.StrongVolume)
+			}
+		}
 	}
 
-	// A reversal substantially above average volume is a great indicator of strength.
-	if volumeDiff/averageVolume >= minAverageVolumePercent {
-		confluences++
-	}
+	signal := confluences >= minReversalConfluence
 
-	return confluences >= minReversalConfluence
+	return signal, confluences, reasons
 }
 
 // evaluateBreak determines whether an actionable break has occured.
-func (e *Engine) evaluateBreak(market string, meta *shared.CandleMetadata, sentiment shared.Sentiment) bool {
+func (e *Engine) evaluateBreak(market string, meta []*shared.CandleMetadata, sentiment shared.Sentiment) (bool, uint32, []shared.Reason) {
 	var confluences uint32
+	reasons := []shared.Reason{}
 
 	// A break must oppose the provided level.
-	if meta.Sentiment == sentiment {
+	lastMeta := meta[len(meta)-1]
+	if lastMeta.Sentiment != sentiment {
 		confluences++
-	}
-
-	// A break must show stregnth in order to be actionable.
-	if meta.Kind == shared.Marubozu {
-		confluences++
-	}
-
-	// A high momentum break signifies strength.
-	if meta.Momentum == shared.High || meta.Momentum == shared.Medium {
-		confluences++
-	}
-
-	// An engulfing reversal signifies directional strength.
-	if meta.Engulfing && (meta.Momentum == shared.High || meta.Momentum == shared.Medium) {
-		confluences += 2
+		switch sentiment {
+		case shared.Bullish:
+			reasons = append(reasons, shared.BreakAboveResistance)
+		case shared.Bearish:
+			reasons = append(reasons, shared.BreakBelowSupport)
+		}
 	}
 
 	req := &shared.AverageVolumeRequest{
@@ -136,18 +157,49 @@ func (e *Engine) evaluateBreak(market string, meta *shared.CandleMetadata, senti
 	e.cfg.RequestAverageVolume(req)
 	averageVolume := <-req.Response
 
-	// A level break with above average volume signifies strength.
-	volumeDiff := meta.Volume - averageVolume
-	if volumeDiff > 0 {
-		confluences++
+	for idx := 0; idx < len(meta); idx++ {
+		// Only evaluate candle meta that support the sentiment of the reaction.
+		if meta[idx].Sentiment != sentiment {
+			continue
+		}
+
+		// A break must show strength (candle structure and momentum) in order to be actionable.
+		if (meta[idx].Kind == shared.Marubozu || meta[idx].Kind == shared.Pinbar) &&
+			(meta[idx].Momentum == shared.High || meta[idx].Momentum == shared.Medium) {
+			confluences++
+			reasons = append(reasons, shared.StrongMove)
+		}
+
+		// An engulfing break signifies directional strength.
+		if meta[idx].Engulfing && (meta[idx].Momentum == shared.High || meta[idx].Momentum == shared.Medium) {
+			confluences += 2
+			switch meta[idx].Sentiment {
+			case shared.Bullish:
+				reasons = append(reasons, shared.BullishEngulfing)
+			case shared.Bearish:
+				reasons = append(reasons, shared.BearishEngulfing)
+			}
+		}
+
+		// A break with above average volume signifies strength.
+		if averageVolume > 0 {
+			volumeDiff := meta[idx].Volume - averageVolume
+
+			switch {
+			case volumeDiff/averageVolume >= minAverageVolumePercent:
+				// A break substantially above average volume is a great indicator of strength.
+				confluences++
+				reasons = append(reasons, shared.StrongVolume)
+			case volumeDiff > 0:
+				confluences++
+				reasons = append(reasons, shared.StrongVolume)
+			}
+		}
 	}
 
-	// A level break substantially above average volume is a great indicator of strength.
-	if volumeDiff/averageVolume >= minAverageVolumePercent {
-		confluences++
-	}
+	signal := confluences >= minBreakConfluence
 
-	return confluences >= minBreakConfluence
+	return signal, confluences, reasons
 }
 
 // handleLevelReaction processes the provided level reaction.
@@ -155,7 +207,7 @@ func (e *Engine) handleLevelReaction(reaction *shared.LevelReaction) {
 	// Fetch the current candle's metadata.
 	req := shared.CandleMetadataRequest{
 		Market:   reaction.Market,
-		Response: make(chan shared.CandleMetadata),
+		Response: make(chan []*shared.CandleMetadata),
 	}
 
 	e.cfg.RequestCandleMetadata(req)
@@ -166,11 +218,14 @@ func (e *Engine) handleLevelReaction(reaction *shared.LevelReaction) {
 	case shared.Reversal:
 		switch reaction.Level.Kind {
 		case shared.Support:
-			if e.evaluateReversal(reaction.Market, &meta, shared.Bullish) {
+			signal, confluences, reasons := e.evaluateReversal(reaction.Market, meta, shared.Bullish)
+			if signal {
+
 				// todo: signal a bullish reversal setup.
 			}
 		case shared.Resistance:
-			if e.evaluateReversal(reaction.Market, &meta, shared.Bearish) {
+			signal, confluences, reasons := e.evaluateReversal(reaction.Market, meta, shared.Bearish)
+			if signal {
 				// todo: signal a bearish reversal setup.
 			}
 		default:
@@ -179,12 +234,14 @@ func (e *Engine) handleLevelReaction(reaction *shared.LevelReaction) {
 	case shared.Break:
 		switch reaction.Level.Kind {
 		case shared.Support:
-			if e.evaluateBreak(reaction.Market, &meta, shared.Bearish) {
+			signal, confluences, reasons := e.evaluateBreak(reaction.Market, meta, shared.Bearish)
+			if signal {
 				// todo: signal a bearish break setup.
 			}
 
 		case shared.Resistance:
-			if e.evaluateBreak(reaction.Market, &meta, shared.Bullish) {
+			signal, confluences, reasons := e.evaluateBreak(reaction.Market, meta, shared.Bullish)
+			if signal {
 				// todo: signal a bullish break setup.
 			}
 		}
