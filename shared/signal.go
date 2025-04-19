@@ -11,6 +11,7 @@ type EntrySignal struct {
 	Reasons    []Reason
 	Confluence uint32
 	StopLoss   float64
+	CreatedOn  time.Time
 	Done       chan struct{}
 }
 
@@ -22,6 +23,7 @@ type ExitSignal struct {
 	Price      float64
 	Reasons    []Reason
 	Confluence uint32
+	CreatedOn  time.Time
 	Done       chan struct{}
 }
 

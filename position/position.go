@@ -3,6 +3,7 @@ package position
 import (
 	"bytes"
 	"fmt"
+	"time"
 
 	"github.com/dnldd/entry/shared"
 	"github.com/google/uuid"
@@ -44,8 +45,8 @@ type Position struct {
 	ExitPrice    float64
 	ExitReasons  string
 	Status       PositionStatus
-	CreatedOn    uint64
-	ClosedOn     uint64
+	CreatedOn    time.Time
+	ClosedOn     time.Time
 }
 
 // stringifyReasons stringifies the collection of reasons provided.
@@ -67,17 +68,12 @@ func NewPosition(entry *shared.EntrySignal) (*Position, error) {
 		return nil, fmt.Errorf("entry signal cannot be nil")
 	}
 
-	now, _, err := shared.NewYorkTime()
-	if err != nil {
-		return nil, err
-	}
-
 	pos := &Position{
 		ID:           uuid.New().String(),
 		Market:       entry.Market,
 		Timeframe:    entry.Timeframe,
 		Direction:    entry.Direction,
-		CreatedOn:    uint64(now.Unix()),
+		CreatedOn:    entry.CreatedOn,
 		EntryPrice:   entry.Price,
 		EntryReasons: stringifyReasons(entry.Reasons),
 		StopLoss:     entry.StopLoss,
@@ -89,12 +85,7 @@ func NewPosition(entry *shared.EntrySignal) (*Position, error) {
 
 // ClosePosition closes the position using the provided exit details.
 func (p *Position) ClosePosition(exit *shared.ExitSignal) (PositionStatus, error) {
-	now, _, err := shared.NewYorkTime()
-	if err != nil {
-		return Closed, err
-	}
-
-	p.ClosedOn = uint64(now.Unix())
+	p.ClosedOn = exit.CreatedOn
 	p.ExitPrice = exit.Price
 	p.ExitReasons = stringifyReasons(exit.Reasons)
 
