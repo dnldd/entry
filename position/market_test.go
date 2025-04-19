@@ -47,7 +47,7 @@ func TestMarket(t *testing.T) {
 
 	err = mkt.Update(candle)
 	assert.NoError(t, err)
-	assert.Equal(t, MarketStatus(mkt.status.Load()), ManagingLongs)
+	assert.Equal(t, MarketStatus(mkt.status.Load()), LongInclined)
 
 	// Ensure a tracked position can be removed.
 	mkt.RemovePosition(pos.ID)

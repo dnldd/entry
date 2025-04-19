@@ -13,8 +13,8 @@ type MarketStatus int
 
 const (
 	Neutral MarketStatus = iota
-	ManagingLongs
-	ManagingShorts
+	LongInclined
+	ShortInclined
 )
 
 // Market tracks positions for the provided market.
@@ -22,7 +22,7 @@ type Market struct {
 	market      string
 	positions   map[string]*Position
 	positionMtx sync.RWMutex
-	status      atomic.Int32
+	status      atomic.Uint32
 }
 
 // NewMarket initializes a new market.
@@ -30,7 +30,6 @@ func NewMarket(market string) *Market {
 	return &Market{
 		market:    market,
 		positions: make(map[string]*Position),
-		status:    atomic.Int32{},
 	}
 }
 
@@ -52,29 +51,29 @@ func (m *Market) AddPosition(position *Position) error {
 		// new inclination can be set.
 		switch position.Direction {
 		case shared.Long:
-			inclination = ManagingLongs
+			inclination = LongInclined
 		case shared.Short:
-			inclination = ManagingShorts
+			inclination = ShortInclined
 		}
 
-	case ManagingLongs:
+	case LongInclined:
 		// If managing longs the market can only add more long positions, no short positions can be
 		// added until all long positions have been concluded.
 		switch position.Direction {
 		case shared.Short:
 			return fmt.Errorf("short position provided to market currently managing longs: %s", m.market)
 		case shared.Long:
-			inclination = ManagingLongs
+			inclination = LongInclined
 		}
 
-	case ManagingShorts:
+	case ShortInclined:
 		// If managing shorts the market can only add more short positions, no long positions can be
 		// added until all short positions have been concluded.
 		switch position.Direction {
 		case shared.Long:
 			return fmt.Errorf("long position provided to market currently managing shorts: %s", m.market)
 		case shared.Short:
-			inclination = ManagingShorts
+			inclination = ShortInclined
 		}
 	}
 
@@ -93,7 +92,7 @@ func (m *Market) AddPosition(position *Position) error {
 	m.positionMtx.Unlock()
 
 	if inclination != status {
-		m.status.Store(int32(inclination))
+		m.status.Store(uint32(inclination))
 	}
 
 	return nil
@@ -124,6 +123,6 @@ func (m *Market) RemovePosition(id string) {
 	// Reset the market status to neutral if all positions have been removed.
 	if len(m.positions) == 0 {
 		inclination := Neutral
-		m.status.Store(int32(inclination))
+		m.status.Store(uint32(inclination))
 	}
 }
