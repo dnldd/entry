@@ -3,8 +3,6 @@ package position
 import (
 	"context"
 	"fmt"
-	"slices"
-	"sync"
 
 	"github.com/dnldd/entry/shared"
 	"github.com/rs/zerolog"
@@ -19,6 +17,8 @@ const (
 
 // ManagerConfig represents the position manager configuration.
 type ManagerConfig struct {
+	// MarketIDs represents the collection of ids of the markets to manage.
+	MarketIDs []string
 	// Notify sends the provided message.
 	Notify func(message string)
 	// PersistClosedPosition persists the provided closed position to the database.
@@ -30,8 +30,7 @@ type ManagerConfig struct {
 // Manager manages positions through their lifecycles.
 type Manager struct {
 	cfg          *ManagerConfig
-	positions    []*Position
-	positionsMtx sync.RWMutex
+	markets      map[string]*Market
 	entrySignals chan shared.EntrySignal
 	exitSignals  chan shared.ExitSignal
 	workers      chan struct{}
@@ -39,9 +38,16 @@ type Manager struct {
 
 // NewPositionManager initializes a new position manager.
 func NewPositionManager(cfg *ManagerConfig) *Manager {
+	// Create markets for position tracking.
+	markets := make(map[string]*Market)
+	for idx := range cfg.MarketIDs {
+		mkt := NewMarket(cfg.MarketIDs[idx])
+		markets[mkt.market] = mkt
+	}
+
 	return &Manager{
 		cfg:          cfg,
-		positions:    []*Position{},
+		markets:      markets,
 		entrySignals: make(chan shared.EntrySignal, bufferSize),
 		exitSignals:  make(chan shared.ExitSignal, bufferSize),
 		workers:      make(chan struct{}, maxWorkers),
@@ -71,22 +77,30 @@ func (m *Manager) SendExitSignal(signal shared.ExitSignal) {
 }
 
 // handleEntrySignal processes the provided entry signal.
-func (m *Manager) handleEntrySignal(signal shared.EntrySignal) {
+func (m *Manager) handleEntrySignal(signal *shared.EntrySignal) {
 	defer func() {
 		if signal.Done != nil {
 			close(signal.Done)
 		}
 	}()
 
-	position, err := NewPosition(&signal)
+	position, err := NewPosition(signal)
 	if err != nil {
 		m.cfg.Logger.Error().Msgf("creating new position: %v", err)
 		return
 	}
 
-	m.positionsMtx.Lock()
-	m.positions = append(m.positions, position)
-	m.positionsMtx.Unlock()
+	mkt, ok := m.markets[position.Market]
+	if !ok {
+		m.cfg.Logger.Error().Msgf("no position market found with id %s", position.Market)
+		return
+	}
+
+	err = mkt.AddPosition(position)
+	if err != nil {
+		m.cfg.Logger.Error().Msgf("adding %s position: %v", position.Market, err)
+		return
+	}
 
 	// Notify of the newly created position.
 	msg := fmt.Sprintf("Created new %s position (%s) for %s @ %f with stoploss %f",
@@ -95,27 +109,29 @@ func (m *Manager) handleEntrySignal(signal shared.EntrySignal) {
 }
 
 // handleExitSignal processes the provided exit signal.
-func (m *Manager) handleExitSignal(signal shared.ExitSignal) {
-	for idx, pos := range m.positions {
-		switch {
-		case pos.Direction == signal.Direction:
-			if pos.Market == signal.Market && pos.Timeframe == signal.Timeframe {
-				pos.UpdatePNLPercent(signal.Price)
-				pos.ClosePosition(&signal)
-				m.cfg.PersistClosedPosition(pos)
+func (m *Manager) handleExitSignal(signal *shared.ExitSignal) {
+	mkt, ok := m.markets[signal.Market]
+	if !ok {
+		m.cfg.Logger.Error().Msgf("no position market found with id %s", signal.Market)
+		return
+	}
 
-				// Notify discord session about the closed position.
-				msg := fmt.Sprintf("Closed %s position (%s) for %s @ %f with stoploss %f",
-					pos.Direction.String(), pos.ID, pos.Market, pos.ExitPrice, pos.StopLoss)
-				m.cfg.Notify(msg)
+	closedPositions, err := mkt.ClosePositions(signal)
+	if err != nil {
+		m.cfg.Logger.Error().Msgf("closing %s position for %s: %v", signal.Direction.String(),
+			signal.Market, err)
+		return
+	}
 
-				m.positionsMtx.Lock()
-				m.positions = slices.Delete(m.positions, idx, idx+1)
-				m.positionsMtx.Unlock()
-			}
-		default:
-			// do nothing.
-		}
+	for idx := range closedPositions {
+		pos := closedPositions[idx]
+
+		m.cfg.PersistClosedPosition(pos)
+
+		// Notify discord session about the closed position.
+		msg := fmt.Sprintf("Closed %s position (%s) for %s @ %f with stoploss %f",
+			pos.Direction.String(), pos.ID, pos.Market, pos.ExitPrice, pos.StopLoss)
+		m.cfg.Notify(msg)
 	}
 }
 
@@ -128,13 +144,13 @@ func (m *Manager) Run(ctx context.Context) {
 		case signal := <-m.entrySignals:
 			m.workers <- struct{}{}
 			go func(signal *shared.EntrySignal) {
-				m.handleEntrySignal(*signal)
+				m.handleEntrySignal(signal)
 				<-m.workers
 			}(&signal)
 		case signal := <-m.exitSignals:
 			m.workers <- struct{}{}
 			go func(signal *shared.ExitSignal) {
-				m.handleExitSignal(*signal)
+				m.handleExitSignal(signal)
 				<-m.workers
 			}(&signal)
 		default:

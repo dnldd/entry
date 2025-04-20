@@ -113,16 +113,34 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 	return nil
 }
 
-// RemovePosition removes the position associated with the provided id.
-func (m *Market) RemovePosition(id string) {
+// ClosePositions closes
+func (m *Market) ClosePositions(signal *shared.ExitSignal) ([]*Position, error) {
+	if signal.Market != m.market {
+		return nil, fmt.Errorf("unexpected %s exit signal provided for %s market", signal.Market, m.market)
+	}
+
 	m.positionMtx.Lock()
 	defer m.positionMtx.Unlock()
 
-	delete(m.positions, id)
+	set := make([]*Position, 0, len(m.positions))
+	for k := range m.positions {
+		if m.positions[k].Direction != signal.Direction {
+			// do nothing.
+			continue
+		}
+
+		m.positions[k].UpdatePNLPercent(signal.Price)
+		m.positions[k].ClosePosition(signal)
+
+		set = append(set, m.positions[k])
+
+		delete(m.positions, k)
+	}
 
 	// Reset the market status to neutral if all positions have been removed.
 	if len(m.positions) == 0 {
-		inclination := Neutral
-		m.status.Store(uint32(inclination))
+		m.status.Store(uint32(Neutral))
 	}
+
+	return set, nil
 }

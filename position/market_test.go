@@ -49,7 +49,18 @@ func TestMarket(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, MarketStatus(mkt.status.Load()), LongInclined)
 
-	// Ensure a tracked position can be removed.
-	mkt.RemovePosition(pos.ID)
+	// Ensure a tracked position can be closed.
+	exitSignal := &shared.ExitSignal{
+		Market:     market,
+		Timeframe:  shared.FiveMinute,
+		Direction:  shared.Long,
+		Price:      18,
+		Reasons:    []shared.Reason{shared.BearishEngulfing},
+		Confluence: 8,
+		CreatedOn:  now,
+	}
+	closedPos, err := mkt.ClosePositions(exitSignal)
+	assert.NoError(t, err)
 	assert.Equal(t, MarketStatus(mkt.status.Load()), Neutral)
+	assert.Equal(t, len(closedPos), 1)
 }

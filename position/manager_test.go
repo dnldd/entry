@@ -17,7 +17,10 @@ func TestManager(t *testing.T) {
 	persistClosedPosition := func(pos *Position) error {
 		return persistClosedPositionErr
 	}
+
+	market := "^GSPC"
 	cfg := &ManagerConfig{
+		MarketIDs: []string{market},
 		Notify: func(message string) {
 			notifyMsgs <- message
 		},
@@ -38,7 +41,6 @@ func TestManager(t *testing.T) {
 	}()
 
 	// Ensure the position manager can process entry signals.
-	market := "^GSPC"
 	entrySignal := shared.EntrySignal{
 		Market:    market,
 		Timeframe: shared.FiveMinute,
@@ -53,9 +55,12 @@ func TestManager(t *testing.T) {
 	<-entrySignal.Done
 	msg := <-notifyMsgs
 	assert.True(t, strings.Contains(msg, "with stoploss"))
-	mgr.positionsMtx.RLock()
-	assert.Equal(t, len(mgr.positions), 1)
-	mgr.positionsMtx.RUnlock()
+	assert.Equal(t, len(mgr.markets), 1)
+	mkt := mgr.markets[market]
+	assert.Equal(t, MarketStatus(mkt.status.Load()), LongInclined)
+	mkt.positionMtx.RLock()
+	assert.Equal(t, len(mkt.positions), 1)
+	mkt.positionMtx.RUnlock()
 
 	// Ensure the position manager can process exit signals.
 	exitSignal := shared.ExitSignal{
@@ -70,9 +75,11 @@ func TestManager(t *testing.T) {
 	mgr.SendExitSignal(exitSignal)
 	msg = <-notifyMsgs
 	assert.True(t, strings.Contains(msg, "with stoploss"))
-	mgr.positionsMtx.RLock()
-	assert.Equal(t, len(mgr.positions), 0)
-	mgr.positionsMtx.RUnlock()
+	assert.Equal(t, len(mgr.markets), 1)
+	assert.Equal(t, MarketStatus(mkt.status.Load()), Neutral)
+	mkt.positionMtx.RLock()
+	assert.Equal(t, len(mkt.positions), 0)
+	mkt.positionMtx.RUnlock()
 
 	// Ensure the position manager can be gracefully shutdown.
 	cancel()
