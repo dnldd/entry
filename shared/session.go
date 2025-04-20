@@ -88,66 +88,48 @@ func (s *Session) IsCurrentSession(current time.Time) bool {
 	return (current.Equal(s.Open) || current.After(s.Open)) && current.Before(s.Close)
 }
 
-// IsMarketOpen checks whether the markets (only NQ currently) are open by checking if the current
-// time is within one of the market sessions.
-func IsMarketOpen(now time.Time) (bool, string, error) {
-	if now.Location().String() != locality {
-		return false, "", fmt.Errorf("time provided is not new york localized")
-	}
-
-	loc, err := time.LoadLocation(locality)
-	if err != nil {
-		return false, "", fmt.Errorf("loading new york timezone: %w", err)
-	}
+// CurrentSession returns the current active session name.
+func CurrentSession(now time.Time) (string, error) {
+	yesterday := now.AddDate(0, 0, -1)
 
 	sessions := []struct {
-		Name  string
-		Open  string
-		Close string
+		name  string
+		open  string
+		close string
+		time  time.Time
 	}{
-		{Asia, AsiaOpen, AsiaClose},
-		{London, LondonOpen, LondonClose},
-		{NewYork, NewYorkOpen, NewYorkClose},
+		{Asia, AsiaOpen, AsiaClose, yesterday},
+		{London, LondonOpen, LondonClose, now},
+		{NewYork, NewYorkOpen, NewYorkClose, now},
+		{Asia, AsiaOpen, AsiaClose, now},
 	}
 
-	var match bool
-	var name string
-	for idx := range sessions {
-		open, err := time.Parse(SessionTimeLayout, sessions[idx].Open)
+	for _, sess := range sessions {
+		session, err := NewSession(sess.name, sess.open, sess.close, sess.time)
 		if err != nil {
-			return false, "", fmt.Errorf("parsing open: %w", err)
-		}
-		close, err := time.Parse(SessionTimeLayout, sessions[idx].Close)
-		if err != nil {
-			return false, "", fmt.Errorf("parsing close: %w", err)
+			return "", fmt.Errorf("creating %s session: %w", sess.name, err)
 		}
 
-		sOpen := time.Date(now.Year(), now.Month(), now.Day(), open.Hour(), open.Minute(), 0, 0, loc)
-		sClose := time.Date(now.Year(), now.Month(), now.Day(), close.Hour(), close.Minute(), 0, 0, loc)
-		if sClose.Before(sOpen) {
-			sClose = sClose.Add(time.Hour * 24)
-		}
-
-		if now.Before(sOpen) {
-			// Shift session window to yesterday.
-			prev := now.AddDate(0, 0, -1)
-			sOpen = time.Date(prev.Year(), prev.Month(), prev.Day(), open.Hour(), open.Minute(), 0, 0, loc)
-			sClose = time.Date(prev.Year(), prev.Month(), prev.Day(), close.Hour(), close.Minute(), 0, 0, loc)
-
-			if sClose.Before(sOpen) {
-				sClose = sClose.Add(24 * time.Hour)
-			}
-		}
-
-		if (now.Equal(sOpen) || now.After(sOpen)) && now.Before(sClose) {
-			match = true
-			name = sessions[idx].Name
-		}
-
-		if match {
-			break
+		if (now.Equal(session.Open) || now.After(session.Open)) && now.Before(session.Close) {
+			return session.Name, nil
 		}
 	}
 
-	return match, name, nil
+	return "", nil
+}
+
+// IsMarketOpen checks whether the markets (only futures) are open by checking if the current
+// time is within one of the market sessions.
+func IsMarketOpen(now time.Time) (bool, string, error) {
+	name, err := CurrentSession(now)
+	if err != nil {
+		return false, name, fmt.Errorf("fetching current market session: %v", err)
+	}
+
+	var open bool
+	if name != "" {
+		open = true
+	}
+
+	return open, name, nil
 }
