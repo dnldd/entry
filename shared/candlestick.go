@@ -205,6 +205,7 @@ type CandleMetadata struct {
 	Momentum  Momentum
 	Volume    float64
 	Engulfing bool
+	Date      time.Time
 }
 
 // AverageVolumeEntry represents an average volume entry.

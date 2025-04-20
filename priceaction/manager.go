@@ -186,6 +186,7 @@ func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest)
 			Momentum:  momentum,
 			Volume:    currentCandle.Volume,
 			Engulfing: isEngulfing,
+			Date:      currentCandle.Date,
 		}
 
 		metadataSet = append(metadataSet, meta)

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dnldd/entry/shared"
 	"github.com/rs/zerolog"
@@ -13,12 +14,12 @@ const (
 	// maxWorkers is the maximum number of concurrent workers.
 	maxWorkers = 16
 	// minReversalConfluence is the minumum required confluence to confirm a reversal.
-	minReversalConfluence = 7
+	minReversalConfluence = 8
 	// minBreakConfluence is the minumum required confluence to confirm a break.
-	minBreakConfluence = 7
+	minBreakConfluence = 8
 	// minAverageVolumePercent is the minimum percentage above average volume to be considered
 	// substantive.
-	minAverageVolumePercent = float64(0.2)
+	minAverageVolumePercent = float64(0.3)
 )
 
 type EngineConfig struct {
@@ -63,7 +64,11 @@ func (e *Engine) SignalLevelReaction(signal *shared.LevelReaction) {
 }
 
 // evaluateReversal determines whether an actionable reversal has occured.
-func (e *Engine) evaluateReversal(market string, meta []*shared.CandleMetadata, sentiment shared.Sentiment) (bool, uint32, []shared.Reason) {
+func (e *Engine) evaluateReversal(market string, meta []*shared.CandleMetadata, sentiment shared.Sentiment) (bool, uint32, []shared.Reason, error) {
+	if len(meta) == 0 {
+		return false, 0, nil, fmt.Errorf("candle metadata is empty")
+	}
+
 	var confluences uint32
 	reasons := []shared.Reason{}
 
@@ -77,6 +82,17 @@ func (e *Engine) evaluateReversal(market string, meta []*shared.CandleMetadata, 
 		case shared.Bearish:
 			reasons = append(reasons, shared.ReversalAtResistance)
 		}
+	}
+
+	// A reversal occuring during sessions known for high volume indicates strength.
+	sessionName, err := shared.CurrentSession(lastMeta.Date)
+	if err != nil {
+		return false, 0, nil, fmt.Errorf("fetching current session: %v", err)
+	}
+
+	if sessionName == shared.London || sessionName == shared.NewYork {
+		confluences++
+		reasons = append(reasons, shared.HighVolumeSession)
 	}
 
 	req := &shared.AverageVolumeRequest{
@@ -118,7 +134,7 @@ func (e *Engine) evaluateReversal(market string, meta []*shared.CandleMetadata, 
 			switch {
 			case volumeDiff/averageVolume >= minAverageVolumePercent:
 				// A reversal substantially above average volume is a great indicator of strength.
-				confluences++
+				confluences += 2
 				reasons = append(reasons, shared.StrongVolume)
 			case volumeDiff > 0:
 				confluences++
@@ -129,11 +145,15 @@ func (e *Engine) evaluateReversal(market string, meta []*shared.CandleMetadata, 
 
 	signal := confluences >= minReversalConfluence
 
-	return signal, confluences, reasons
+	return signal, confluences, reasons, nil
 }
 
 // evaluateBreak determines whether an actionable break has occured.
-func (e *Engine) evaluateBreak(market string, meta []*shared.CandleMetadata, sentiment shared.Sentiment) (bool, uint32, []shared.Reason) {
+func (e *Engine) evaluateBreak(market string, meta []*shared.CandleMetadata, sentiment shared.Sentiment) (bool, uint32, []shared.Reason, error) {
+	if len(meta) == 0 {
+		return false, 0, nil, fmt.Errorf("candle metadata is empty")
+	}
+
 	var confluences uint32
 	reasons := []shared.Reason{}
 
@@ -147,6 +167,17 @@ func (e *Engine) evaluateBreak(market string, meta []*shared.CandleMetadata, sen
 		case shared.Bearish:
 			reasons = append(reasons, shared.BreakBelowSupport)
 		}
+	}
+
+	// A break occuring during sessions known for high volume indicates strength.
+	sessionName, err := shared.CurrentSession(lastMeta.Date)
+	if err != nil {
+		return false, 0, nil, fmt.Errorf("fetching current session: %v", err)
+	}
+
+	if sessionName == shared.London || sessionName == shared.NewYork {
+		confluences++
+		reasons = append(reasons, shared.HighVolumeSession)
 	}
 
 	req := &shared.AverageVolumeRequest{
@@ -188,7 +219,7 @@ func (e *Engine) evaluateBreak(market string, meta []*shared.CandleMetadata, sen
 			switch {
 			case volumeDiff/averageVolume >= minAverageVolumePercent:
 				// A break substantially above average volume is a great indicator of strength.
-				confluences++
+				confluences += 2
 				reasons = append(reasons, shared.StrongVolume)
 			case volumeDiff > 0:
 				confluences++
@@ -199,7 +230,7 @@ func (e *Engine) evaluateBreak(market string, meta []*shared.CandleMetadata, sen
 
 	signal := confluences >= minBreakConfluence
 
-	return signal, confluences, reasons
+	return signal, confluences, reasons, nil
 }
 
 // handleLevelReaction processes the provided level reaction.

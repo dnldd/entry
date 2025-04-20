@@ -13,6 +13,7 @@ const (
 	BreakAboveResistance
 	StrongVolume
 	StrongMove
+	HighVolumeSession
 )
 
 // String stringifies the provided reason.
@@ -36,6 +37,8 @@ func (r Reason) String() string {
 		return "strong volume"
 	case StrongMove:
 		return "strong move"
+	case HighVolumeSession:
+		return "high volume session"
 	default:
 		return "unknown"
 	}
