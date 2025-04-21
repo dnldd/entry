@@ -8,7 +8,7 @@ import (
 )
 
 func TestSession(t *testing.T) {
-	now, _, err := NewYorkTime()
+	now, loc, err := NewYorkTime()
 	assert.NoError(t, err)
 
 	// Ensure asia, london and new york sessions can be created.
@@ -57,4 +57,22 @@ func TestSession(t *testing.T) {
 	open, _, err := IsMarketOpen(now)
 	assert.NoError(t, err)
 	assert.True(t, open)
+
+	// Ensure an error is returned if the provided time is not new york localized.
+	utcNow := now.UTC()
+	_, err = NewSession("unknown", AsiaOpen, NewYorkClose, utcNow)
+	assert.Error(t, err)
+
+	// Ensure current session returns no session for the hour between new york close and asia open
+	// where the market is closed.
+	noSessionStr := "17:00"
+
+	noSession, err := time.Parse(SessionTimeLayout, noSessionStr)
+	assert.NoError(t, err)
+
+	noSessionTime := time.Date(now.Year(), now.Month(), now.Day(), noSession.Hour(), noSession.Minute(), 0, 0, loc)
+
+	session, err := CurrentSession(noSessionTime)
+	assert.NoError(t, err)
+	assert.Equal(t, session, "")
 }
