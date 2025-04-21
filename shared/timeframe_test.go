@@ -42,12 +42,20 @@ func TestTimeframeString(t *testing.T) {
 
 func TestNextInterval(t *testing.T) {
 	// Ensure the next time interval can be calculated.
-	timeframe := FiveMinute
 	now, _, err := NewYorkTime()
 	assert.NoError(t, err)
 
-	futureTime, err := NextInterval(timeframe, now)
+	futureTimeFiveMinuteInterval, err := NextInterval(FiveMinute, now)
 	assert.NoError(t, err)
-	assert.GreaterThan(t, futureTime.Unix(), now.Unix())
-	assert.LessThanOrEqual(t, futureTime.Unix()-now.Unix(), 300)
+	assert.GreaterThan(t, futureTimeFiveMinuteInterval.Unix(), now.Unix())
+	assert.LessThanOrEqual(t, futureTimeFiveMinuteInterval.Unix()-now.Unix(), 300)
+
+	futureTimeOneHourInterval, err := NextInterval(OneHour, now)
+	assert.NoError(t, err)
+	assert.GreaterThan(t, futureTimeOneHourInterval.Unix(), now.Unix())
+	assert.LessThanOrEqual(t, futureTimeOneHourInterval.Unix()-now.Unix(), 3600)
+
+	// Ensure an error is returned if the timeframe is unknown
+	_, err = NextInterval(Timeframe(999), now)
+	assert.Error(t, err)
 }
