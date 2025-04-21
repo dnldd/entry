@@ -39,6 +39,15 @@ func TestEntryReasonString(t *testing.T) {
 			"strong volume",
 		},
 		{
+			"strong move",
+			StrongMove,
+			"strong move",
+		}, {
+			"high volume session",
+			HighVolumeSession,
+			"high volume session",
+		},
+		{
 			"unknown reason",
 			Reason(999),
 			"unknown",
