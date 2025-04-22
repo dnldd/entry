@@ -1,5 +1,13 @@
 package shared
 
+const (
+	// PriceDataPayloadSize is the number of candles expected as payload for a price data range request.
+	PriceDataPayloadSize = 4
+	// MaxPriceDataRequestInterval is the maximum update intervals to wait before triggering a
+	// price data request.
+	MaxPriceDataRequestInterval = 3
+)
+
 // CandleMetadataRequest represents a request to fetch the current candle's metadata.
 type CandleMetadataRequest struct {
 	Market   string

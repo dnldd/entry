@@ -19,6 +19,11 @@ func TestMovementString(t *testing.T) {
 			"below",
 		},
 		{
+			"equal movement",
+			Equal,
+			"equal",
+		},
+		{
 			"unknown movement",
 			Movement(999),
 			"unknown",

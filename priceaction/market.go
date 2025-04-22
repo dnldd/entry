@@ -8,9 +8,6 @@ import (
 )
 
 const (
-	// maxPriceDataRequestInterval is the maximum update intervals to wait before
-	// triggering a price data request.
-	maxPriceDataRequestInterval = 3
 	// smallSnapshotSize is the buffer size for snapshots considered to hold a smaller set.
 	smallSnapshotSize = 8
 )
@@ -65,11 +62,10 @@ func (m *Market) Update(candle *shared.Candlestick) {
 	case len(filteredLevels) > 0 && !hasTaggedLevels && updateCounter == 0:
 		// Set the tagged levels flag to true if there is no pending price data request.
 		m.taggedLevels.Store(true)
-		m.updateCounter.Add(1)
-	case hasTaggedLevels && updateCounter > 0 && updateCounter < maxPriceDataRequestInterval:
+	case hasTaggedLevels && updateCounter > 0 && updateCounter < shared.MaxPriceDataRequestInterval:
 		// Increment the update counter while its below the price data request interval.
 		m.updateCounter.Add(1)
-	case hasTaggedLevels && updateCounter == maxPriceDataRequestInterval && !requestingPriceData:
+	case hasTaggedLevels && updateCounter == shared.MaxPriceDataRequestInterval && !requestingPriceData:
 		// Set the price data request flag to true once the data request interval is reached.
 		m.requestingPriceData.Store(true)
 	}

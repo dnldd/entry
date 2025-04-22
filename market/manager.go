@@ -18,8 +18,6 @@ const (
 	workerBufferSize = 4
 	// maxWorkers is the maximum number of concurrent workers.
 	maxWorkers = 8
-	// minPriceDataRange is the minimum number of candles sent for a price data range request.
-	minPriceDataRange = 4
 	// averageVolumeRange is the minimum range for average volume calculations.
 	averageVolumeRange = 30
 	// fiveMinutesInSeconds is five minutes in seconds.
@@ -232,7 +230,7 @@ func (m *Manager) handlePriceDataRequest(req *shared.PriceDataRequest) {
 		return
 	}
 
-	data := mkt.candleSnapshot.LastN(minPriceDataRange)
+	data := mkt.candleSnapshot.LastN(shared.PriceDataPayloadSize)
 
 	req.Response <- data
 }

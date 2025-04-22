@@ -6,6 +6,7 @@ type Movement int
 const (
 	Above Movement = iota
 	Below
+	Equal
 )
 
 // String stringifies the provided price movement.
@@ -15,6 +16,8 @@ func (m Movement) String() string {
 		return "above"
 	case Below:
 		return "below"
+	case Equal:
+		return "equal"
 	default:
 		return "unknown"
 	}

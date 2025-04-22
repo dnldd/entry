@@ -34,6 +34,16 @@ func TestEntryReasonString(t *testing.T) {
 			"price reversal at resistance",
 		},
 		{
+			"price break below support",
+			BreakBelowSupport,
+			"price break below support",
+		},
+		{
+			"price break above resistance",
+			BreakAboveResistance,
+			"price break above resistance",
+		},
+		{
 			"strong volume",
 			StrongVolume,
 			"strong volume",
