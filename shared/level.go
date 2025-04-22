@@ -6,8 +6,6 @@ import (
 )
 
 const (
-	// minPriceDataSize is the minimum size for price data.
-	minPriceDataSize = 4
 	// maxBreaks is the maximum number of breaks that renders a level void.
 	maxBreaks = 3
 )
@@ -115,8 +113,9 @@ type LevelReaction struct {
 // NewLevelReaction initializes a new level reaction from the provided level and
 // candlestick data.
 func NewLevelReaction(market string, level *Level, data []*Candlestick) (*LevelReaction, error) {
-	if len(data) < minPriceDataSize {
-		return nil, fmt.Errorf("price data is less than expected minumum: %d < %d", len(data), minPriceDataSize)
+	if len(data) != PriceDataPayloadSize {
+		return nil, fmt.Errorf("price data is not the expected size: %d != expected(%d)",
+			len(data), PriceDataPayloadSize)
 	}
 
 	plr := &LevelReaction{
@@ -132,8 +131,10 @@ func NewLevelReaction(market string, level *Level, data []*Candlestick) (*LevelR
 		switch {
 		case candle.Close > level.Price:
 			plr.PriceMovement = append(plr.PriceMovement, Above)
-		case candle.Close <= level.Price:
+		case candle.Close < level.Price:
 			plr.PriceMovement = append(plr.PriceMovement, Below)
+		case candle.Close == level.Price:
+			plr.PriceMovement = append(plr.PriceMovement, Equal)
 		}
 	}
 
@@ -160,13 +161,12 @@ func NewLevelReaction(market string, level *Level, data []*Candlestick) (*LevelR
 	switch level.Kind {
 	case Support:
 		switch {
+		case above == 0 && below == 0:
+			// If price is not closing above or below the level it is chopping.
+			plr.Reaction = Chop
 		case below == 0:
-			// If price consistently stayed above or below a support level it tagged then it
+			// If price consistently stayed below a support level it tagged then it
 			// it is likely reversing at the level.
-			plr.Reaction = Reversal
-		case first == Below && third == Above && fourth == Above:
-			// If price was below a support level but starts to consistently close above it
-			// then it is likely reversing at the level.
 			plr.Reaction = Reversal
 		case first == Above && third == Below && fourth == Below:
 			// If price was above a support level but starts to consistently close below it
@@ -180,25 +180,20 @@ func NewLevelReaction(market string, level *Level, data []*Candlestick) (*LevelR
 			// If price was above a support level but closed below it briefly and pushed back
 			// above it then it is likely reversing at the level.
 			plr.Reaction = Reversal
-		case (first == Above && second == Below && third == Above && fourth == Below) ||
-			(first == Below && second == Above && third == Below && fourth == Above):
+		case first == Above && second == Below && third == Above && fourth == Below:
 			// If price is consistently closing aimlessly above and below a level it is chopping.
-			plr.Reaction = Chop
-		case above == 0 && below == 0:
-			// If price is not closing above or below the level it is chopping.
 			plr.Reaction = Chop
 		default:
 			plr.Reaction = Chop
 		}
 	case Resistance:
 		switch {
+		case above == 0 && below == 0:
+			// If price is not closing above or below the level it is chopping.
+			plr.Reaction = Chop
 		case above == 0:
 			// If price consistently stayed below a resistance level it tagged then
 			// it is likely reversing at the level.
-			plr.Reaction = Reversal
-		case first == Above && third == Below && fourth == Below:
-			// If price was above a resistance level but starts to consistently close below it
-			// then it is likely reversing at the level.
 			plr.Reaction = Reversal
 		case first == Below && third == Above && fourth == Above:
 			// If price was below a resistance level but starts to consistently close above it
@@ -208,16 +203,12 @@ func NewLevelReaction(market string, level *Level, data []*Candlestick) (*LevelR
 			// If price was below a resistance but turns sharply to close above it then it is
 			// likely breaking the level.
 			plr.Reaction = Break
-		case first == Below && above > 0 && third == Below:
+		case first == Below && above > 0 && fourth == Below:
 			// If price was below a resistance level but closed above it briefly and pushed
 			// back below it then it is likely breaking the level.
 			plr.Reaction = Reversal
-		case (first == Above && second == Below && third == Above && fourth == Below) ||
-			(first == Below && second == Above && third == Below && fourth == Above):
+		case first == Below && second == Above && third == Below && fourth == Above:
 			// If price is consistently closing aimlessly above and below a level it is chopping.
-			plr.Reaction = Chop
-		case above == 0 && below == 0:
-			// If price is not closing above or below the level it is chopping.
 			plr.Reaction = Chop
 		default:
 			plr.Reaction = Chop
