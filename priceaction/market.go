@@ -48,26 +48,27 @@ func (m *Market) FetchCurrentCandle() *shared.Candlestick {
 	return m.candleSnapshot.Last()
 }
 
-// UpdateCurrentCandle market's price action concepts .
+// Update processes the provided market candlestick data.
 func (m *Market) Update(candle *shared.Candlestick) {
 	m.levelSnapshot.Update(candle)
 	m.candleSnapshot.Update(candle)
 
 	filteredLevels := m.FilterTaggedLevels(candle)
-	hasTaggedLevels := m.taggedLevels.Load()
-	updateCounter := m.updateCounter.Load()
-	requestingPriceData := m.requestingPriceData.Load()
 
 	switch {
-	case len(filteredLevels) > 0 && !hasTaggedLevels && updateCounter == 0:
+	case len(filteredLevels) > 0 && !m.taggedLevels.Load() && m.updateCounter.Load() == 0:
 		// Set the tagged levels flag to true if there is no pending price data request.
 		m.taggedLevels.Store(true)
-	case hasTaggedLevels && updateCounter > 0 && updateCounter < shared.MaxPriceDataRequestInterval:
-		// Increment the update counter while its below the price data request interval.
-		m.updateCounter.Add(1)
-	case hasTaggedLevels && updateCounter == shared.MaxPriceDataRequestInterval && !requestingPriceData:
-		// Set the price data request flag to true once the data request interval is reached.
-		m.requestingPriceData.Store(true)
+
+	case m.taggedLevels.Load() && m.updateCounter.Load() < shared.MaxPriceDataRequestInterval:
+		// Increment the update counter while its below the price data request interval and set
+		// the price data request flag to true once the data request interval is reached.
+		counter := m.updateCounter.Add(1)
+		if counter == shared.MaxPriceDataRequestInterval && !m.requestingPriceData.Load() {
+			// NB: once a level is tagged it will take MaxPriceDataRequestInterval worth (3) of
+			// market updates before the market signals requesting for price data.
+			m.requestingPriceData.Store(true)
+		}
 	}
 }
 
