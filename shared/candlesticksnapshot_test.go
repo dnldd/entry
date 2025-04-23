@@ -19,6 +19,18 @@ func TestCandlestickSnapshot(t *testing.T) {
 	candleSnapshot, err = NewCandlestickSnapshot(size)
 	assert.NoError(t, err)
 
+	// Ensure calling last on an empty snapshot returns nothing.
+	last := candleSnapshot.Last()
+	assert.Nil(t, last)
+
+	// Ensure calling LastN on an empty snapshot returns an empty set.
+	lastN := candleSnapshot.LastN(size)
+	assert.Equal(t, len(lastN), 0)
+
+	// Ensure calling LastN with zero or negagive size returns nil.
+	lastN = candleSnapshot.LastN(-1)
+	assert.Nil(t, lastN)
+
 	// Ensure the snapshot can be updated with candles.
 	for idx := range size {
 		candle := &Candlestick{
@@ -35,6 +47,14 @@ func TestCandlestickSnapshot(t *testing.T) {
 	assert.Equal(t, candleSnapshot.size, size)
 	assert.Equal(t, candleSnapshot.start, 0)
 	assert.Equal(t, len(candleSnapshot.data), size)
+
+	// Ensure calling last on an valid snapshot returns the last added entry.
+	last = candleSnapshot.Last()
+	assert.Equal(t, last.Low, float64(3))
+
+	// Ensure calling LastN with a larger size than the snapshot gets clamped to the snapshot's size.
+	lastN = candleSnapshot.LastN(size + 1)
+	assert.Equal(t, len(lastN), size)
 
 	// Ensure candle updates at capacity overwrite existing slots.
 	candle := &Candlestick{
@@ -66,6 +86,10 @@ func TestCandlestickSnapshot(t *testing.T) {
 	// Ensure the average volume n can be fetched from the snapshot.
 	average := candleSnapshot.AverageVolumeN(2)
 	assert.Equal(t, average, 2.5)
+
+	// Ensure calling average volume clamps n to the size of the snapshot if it exceeds it.
+	average = candleSnapshot.AverageVolumeN(6)
+	assert.Equal(t, average, 2)
 
 	// Ensure candle updates after capacity advances the start index for the next addition.
 	next := &Candlestick{
