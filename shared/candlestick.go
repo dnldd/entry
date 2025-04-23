@@ -188,7 +188,7 @@ func IsEngulfing(current *Candlestick, prev *Candlestick) bool {
 	if isBearishEngulf || isBullishEngulf {
 		bodyPercent := math.Abs(current.Close-current.Open) / (current.High - current.Low)
 		if bodyPercent < 0.5 {
-			// Disqualify weaked bodied engulfing setups.
+			// Disqualify weak bodied engulfing setups.
 			return false
 		}
 

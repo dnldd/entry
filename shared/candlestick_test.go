@@ -105,6 +105,16 @@ func TestFetchKind(t *testing.T) {
 			},
 			want: Unknown,
 		},
+		{
+			name: "unknown",
+			candle: Candlestick{
+				Open:  0,
+				Close: 0,
+				High:  0,
+				Low:   0,
+			},
+			want: Unknown,
+		},
 	}
 
 	for _, test := range tests {
@@ -152,6 +162,16 @@ func TestIsVolumeSpike(t *testing.T) {
 				Volume: 5,
 			},
 			want: true,
+		},
+		{
+			name: "no volume spike (no volume)",
+			current: &Candlestick{
+				Volume: 0,
+			},
+			prev: &Candlestick{
+				Volume: 0,
+			},
+			want: false,
 		},
 	}
 
@@ -292,6 +312,22 @@ func TestIsEngulfing(t *testing.T) {
 				High:  9,
 			},
 			want: true,
+		},
+		{
+			name: "not engulfing (weak bullish engulfing with long wick)",
+			current: &Candlestick{
+				Open:  5,
+				Close: 8,
+				Low:   1,
+				High:  9,
+			},
+			prev: &Candlestick{
+				Open:  7,
+				Close: 5,
+				Low:   4,
+				High:  8,
+			},
+			want: false,
 		},
 	}
 
