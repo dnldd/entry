@@ -14,6 +14,11 @@ func TestEntryReasonString(t *testing.T) {
 			"target hit",
 		},
 		{
+			"stop loss hit",
+			StopLossHit,
+			"stop loss hit",
+		},
+		{
 			"bullish engulfing",
 			BullishEngulfing,
 			"bullish engulfing",

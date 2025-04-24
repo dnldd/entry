@@ -5,6 +5,7 @@ type Reason int
 
 const (
 	TargetHit Reason = iota
+	StopLossHit
 	BullishEngulfing
 	BearishEngulfing
 	ReversalAtSupport
@@ -21,6 +22,8 @@ func (r Reason) String() string {
 	switch r {
 	case TargetHit:
 		return "target hit"
+	case StopLossHit:
+		return "stop loss hit"
 	case BullishEngulfing:
 		return "bullish engulfing"
 	case BearishEngulfing:
