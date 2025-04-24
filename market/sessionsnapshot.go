@@ -150,8 +150,12 @@ func (s *SessionSnapshot) SetCurrentSession(now time.Time) (bool, error) {
 		for i := range s.count {
 			idx := (s.start + s.count - 1 - i + s.size) % s.size
 			session := s.data[idx]
-			if session.Name == shared.Asia {
-				s.current = idx
+			if session.Name == shared.Asia && now.Before(session.Open) {
+				if prev != idx {
+					// The changed flag indicates there has been a session change.
+					changed = true
+					s.current = idx
+				}
 				break
 			}
 		}

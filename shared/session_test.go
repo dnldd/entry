@@ -65,7 +65,7 @@ func TestSession(t *testing.T) {
 
 	// Ensure current session returns no session for the hour between new york close and asia open
 	// where the market is closed.
-	noSessionStr := "17:00"
+	noSessionStr := "17:30"
 
 	noSession, err := time.Parse(SessionTimeLayout, noSessionStr)
 	assert.NoError(t, err)

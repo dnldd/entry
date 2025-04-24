@@ -2,13 +2,15 @@ package market
 
 import (
 	"testing"
+	"time"
 
 	"github.com/dnldd/entry/shared"
 	"github.com/peterldowns/testy/assert"
+	"github.com/rs/zerolog"
 )
 
 func TestSessionSnapshot(t *testing.T) {
-	now, _, err := shared.NewYorkTime()
+	now, loc, err := shared.NewYorkTime()
 	assert.NoError(t, err)
 
 	// Ensure session snapshot size cannot be negaitve or zero.
@@ -54,6 +56,35 @@ func TestSessionSnapshot(t *testing.T) {
 	assert.Equal(t, sessionSnapshot.size, size)
 	assert.Equal(t, sessionSnapshot.start, 1)
 	assert.Equal(t, len(sessionSnapshot.data), size)
+
+	// Ensure current session preempts to the next asia session when the time is within the
+	// no session time range which is the hour between new york close and asia open.
+	noSessionStr := "17:30"
+
+	noSession, err := time.Parse(shared.SessionTimeLayout, noSessionStr)
+	assert.NoError(t, err)
+
+	noSessionTime := time.Date(now.Year(), now.Month(), now.Day(), noSession.Hour(), noSession.Minute(), 0, 0, loc)
+
+	_, err = sessionSnapshot.SetCurrentSession(noSessionTime)
+	assert.NoError(t, err)
+	assert.Equal(t, sessionSnapshot.FetchCurrentSession().Name, shared.Asia)
+
+	// Ensure sessions jobs can be executed.
+	sessionSnapshot.GenerateNewSessionsJob(&zerolog.Logger{})
+
+	// Fake the current session being the session beginning the snapshot.
+	sessionSnapshot.current = sessionSnapshot.start
+
+	// Ensure fetching the last session open defaults to the current session open if there are no
+	// past sessions.
+	lastOpen, err = sessionSnapshot.FetchLastSessionOpen()
+	assert.NoError(t, err)
+	assert.Equal(t, lastOpen, sessionSnapshot.FetchCurrentSession().Open)
+
+	// Ensure fetching the last session high and low returns an error if there are no past sessions.
+	_, _, err = sessionSnapshot.FetchLastSessionHighLow()
+	assert.Error(t, err)
 }
 
 func TestGenerateNewSessions(t *testing.T) {
