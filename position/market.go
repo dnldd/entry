@@ -63,7 +63,7 @@ func (m *Market) AddPosition(position *Position) error {
 		case shared.Short:
 			return fmt.Errorf("short position provided to market currently managing longs: %s", m.market)
 		case shared.Long:
-			inclination = LongInclined
+			// do nothing.
 		}
 
 	case ShortInclined:
@@ -73,7 +73,7 @@ func (m *Market) AddPosition(position *Position) error {
 		case shared.Long:
 			return fmt.Errorf("long position provided to market currently managing shorts: %s", m.market)
 		case shared.Short:
-			inclination = ShortInclined
+			// do nothing.
 		}
 	}
 
