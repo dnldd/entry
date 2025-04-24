@@ -57,7 +57,7 @@ func TestManager(t *testing.T) {
 	assert.True(t, strings.Contains(msg, "with stoploss"))
 	assert.Equal(t, len(mgr.markets), 1)
 	mkt := mgr.markets[market]
-	assert.Equal(t, MarketStatus(mkt.status.Load()), LongInclined)
+	assert.Equal(t, shared.MarketStatus(mkt.status.Load()), shared.LongInclined)
 	mkt.positionMtx.RLock()
 	assert.Equal(t, len(mkt.positions), 1)
 	mkt.positionMtx.RUnlock()
@@ -76,7 +76,7 @@ func TestManager(t *testing.T) {
 	msg = <-notifyMsgs
 	assert.True(t, strings.Contains(msg, "with stoploss"))
 	assert.Equal(t, len(mgr.markets), 1)
-	assert.Equal(t, MarketStatus(mkt.status.Load()), Neutral)
+	assert.Equal(t, shared.MarketStatus(mkt.status.Load()), shared.NeutralInclination)
 	mkt.positionMtx.RLock()
 	assert.Equal(t, len(mkt.positions), 0)
 	mkt.positionMtx.RUnlock()

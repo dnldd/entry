@@ -82,7 +82,7 @@ func TestMarket(t *testing.T) {
 
 	err = mkt.Update(candle)
 	assert.NoError(t, err)
-	assert.Equal(t, MarketStatus(mkt.status.Load()), LongInclined)
+	assert.Equal(t, shared.MarketStatus(mkt.status.Load()), shared.LongInclined)
 
 	// Ensure once a markets direction inclination is set, tracking positions of the opposite
 	// direction inclination returns an error.
@@ -131,7 +131,7 @@ func TestMarket(t *testing.T) {
 	assert.Equal(t, len(closedPos), 1)
 
 	// Ensure the market's direction inclination resets once all positions are closed.
-	assert.Equal(t, MarketStatus(mkt.status.Load()), Neutral)
+	assert.Equal(t, shared.MarketStatus(mkt.status.Load()), shared.NeutralInclination)
 
 	// Ensure a market can track short positions.
 	pos, err = NewPosition(shortEntrySignal)
@@ -139,7 +139,7 @@ func TestMarket(t *testing.T) {
 
 	err = mkt.AddPosition(pos)
 	assert.NoError(t, err)
-	assert.Equal(t, MarketStatus(mkt.status.Load()), ShortInclined)
+	assert.Equal(t, shared.MarketStatus(mkt.status.Load()), shared.ShortInclined)
 
 	// Ensure the market does not track duplicate short positions.
 	mkt.positionMtx.RLock()
@@ -176,5 +176,5 @@ func TestMarket(t *testing.T) {
 	assert.Equal(t, len(closedPos), 1)
 
 	// Ensure the market's direction inclination resets once all positions are closed.
-	assert.Equal(t, MarketStatus(mkt.status.Load()), Neutral)
+	assert.Equal(t, shared.MarketStatus(mkt.status.Load()), shared.NeutralInclination)
 }

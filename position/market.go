@@ -8,15 +8,6 @@ import (
 	"github.com/dnldd/entry/shared"
 )
 
-// MarketStatus represents defines the possible market status states.
-type MarketStatus int
-
-const (
-	Neutral MarketStatus = iota
-	LongInclined
-	ShortInclined
-)
-
 // Market tracks positions for the provided market.
 type Market struct {
 	market      string
@@ -42,21 +33,21 @@ func (m *Market) AddPosition(position *Position) error {
 		return fmt.Errorf("unexpected position market provided: %s", position.Market)
 	}
 
-	inclination := Neutral
-	status := MarketStatus(m.status.Load())
+	inclination := shared.NeutralInclination
+	status := shared.MarketStatus(m.status.Load())
 	switch status {
-	case Neutral:
-		// If the state of the market is neutral, the position to be tracked sets the inclination
+	case shared.NeutralInclination:
+		// If the state of the market has neutral inclination, the position to be tracked sets the inclination
 		// of the market. Once set the inclination has to be unwound fully back to neutral before a
 		// new inclination can be set.
 		switch position.Direction {
 		case shared.Long:
-			inclination = LongInclined
+			inclination = shared.LongInclined
 		case shared.Short:
-			inclination = ShortInclined
+			inclination = shared.ShortInclined
 		}
 
-	case LongInclined:
+	case shared.LongInclined:
 		// If managing longs the market can only add more long positions, no short positions can be
 		// added until all long positions have been concluded.
 		switch position.Direction {
@@ -66,7 +57,7 @@ func (m *Market) AddPosition(position *Position) error {
 			// do nothing.
 		}
 
-	case ShortInclined:
+	case shared.ShortInclined:
 		// If managing shorts the market can only add more short positions, no long positions can be
 		// added until all short positions have been concluded.
 		switch position.Direction {
@@ -139,7 +130,7 @@ func (m *Market) ClosePositions(signal *shared.ExitSignal) ([]*Position, error) 
 
 	// Reset the market status to neutral if all positions have been removed.
 	if len(m.positions) == 0 {
-		m.status.Store(uint32(Neutral))
+		m.status.Store(uint32(shared.NeutralInclination))
 	}
 
 	return set, nil
