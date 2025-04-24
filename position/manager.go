@@ -29,11 +29,12 @@ type ManagerConfig struct {
 
 // Manager manages positions through their lifecycles.
 type Manager struct {
-	cfg          *ManagerConfig
-	markets      map[string]*Market
-	entrySignals chan shared.EntrySignal
-	exitSignals  chan shared.ExitSignal
-	workers      chan struct{}
+	cfg                  *ManagerConfig
+	markets              map[string]*Market
+	entrySignals         chan shared.EntrySignal
+	exitSignals          chan shared.ExitSignal
+	marketStatusRequests chan shared.MarketStatusRequest
+	workers              chan struct{}
 }
 
 // NewPositionManager initializes a new position manager.
@@ -46,11 +47,12 @@ func NewPositionManager(cfg *ManagerConfig) *Manager {
 	}
 
 	return &Manager{
-		cfg:          cfg,
-		markets:      markets,
-		entrySignals: make(chan shared.EntrySignal, bufferSize),
-		exitSignals:  make(chan shared.ExitSignal, bufferSize),
-		workers:      make(chan struct{}, maxWorkers),
+		cfg:                  cfg,
+		markets:              markets,
+		entrySignals:         make(chan shared.EntrySignal, bufferSize),
+		exitSignals:          make(chan shared.ExitSignal, bufferSize),
+		marketStatusRequests: make(chan shared.MarketStatusRequest, bufferSize),
+		workers:              make(chan struct{}, maxWorkers),
 	}
 }
 
@@ -73,6 +75,17 @@ func (m *Manager) SendExitSignal(signal shared.ExitSignal) {
 	default:
 		m.cfg.Logger.Error().Msgf("exit signal channel at capacity: %d/%d",
 			len(m.exitSignals), bufferSize)
+	}
+}
+
+// SendMarketStatusRequest relays the provided market status request for processing.
+func (m *Manager) SendMarketStatusRequest(req shared.MarketStatusRequest) {
+	select {
+	case m.marketStatusRequests <- req:
+		// do nothing.
+	default:
+		m.cfg.Logger.Error().Msgf("market status request channel at capacity: %d/%d",
+			len(m.marketStatusRequests), bufferSize)
 	}
 }
 
@@ -135,6 +148,17 @@ func (m *Manager) handleExitSignal(signal *shared.ExitSignal) {
 	}
 }
 
+// handleMarketStatusRequest processes the provided market status request.
+func (m *Manager) handleMarketStatusRequest(req *shared.MarketStatusRequest) {
+	mkt, ok := m.markets[req.Market]
+	if !ok {
+		m.cfg.Logger.Error().Msgf("no position market found with id %s", req.Market)
+		return
+	}
+
+	req.Response <- shared.MarketStatus(mkt.status.Load())
+}
+
 // Run manages the lifecycle processes of the position manager.
 func (m *Manager) Run(ctx context.Context) {
 	for {
@@ -153,6 +177,12 @@ func (m *Manager) Run(ctx context.Context) {
 				m.handleExitSignal(signal)
 				<-m.workers
 			}(&signal)
+		case req := <-m.marketStatusRequests:
+			m.workers <- struct{}{}
+			go func(req *shared.MarketStatusRequest) {
+				m.handleMarketStatusRequest(req)
+				<-m.workers
+			}(req)
 		default:
 			// fallthrough
 		}
