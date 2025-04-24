@@ -205,6 +205,8 @@ type CandleMetadata struct {
 	Momentum  Momentum
 	Volume    float64
 	Engulfing bool
+	High      float64
+	Low       float64
 	Date      time.Time
 }
 

@@ -186,6 +186,8 @@ func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest)
 			Momentum:  momentum,
 			Volume:    currentCandle.Volume,
 			Engulfing: isEngulfing,
+			High:      currentCandle.High,
+			Low:       currentCandle.Low,
 			Date:      currentCandle.Date,
 		}
 

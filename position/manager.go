@@ -182,7 +182,7 @@ func (m *Manager) Run(ctx context.Context) {
 			go func(req *shared.MarketStatusRequest) {
 				m.handleMarketStatusRequest(req)
 				<-m.workers
-			}(req)
+			}(&req)
 		default:
 			// fallthrough
 		}

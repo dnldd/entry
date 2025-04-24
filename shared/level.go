@@ -3,6 +3,7 @@ package shared
 import (
 	"fmt"
 	"sync/atomic"
+	"time"
 )
 
 const (
@@ -106,8 +107,11 @@ func (l *Level) IsInvalidated() bool {
 type LevelReaction struct {
 	Market        string
 	Level         *Level
+	Timeframe     Timeframe
 	PriceMovement []Movement
+	CurrentPrice  float64
 	Reaction      Reaction
+	CreatedOn     time.Time
 }
 
 // NewLevelReaction initializes a new level reaction from the provided level and
@@ -121,7 +125,10 @@ func NewLevelReaction(market string, level *Level, data []*Candlestick) (*LevelR
 	plr := &LevelReaction{
 		Market:        market,
 		Level:         level,
+		Timeframe:     data[len(data)-1].Timeframe,
 		PriceMovement: make([]Movement, 0, len(data)),
+		CurrentPrice:  data[len(data)-1].Close,
+		CreatedOn:     data[len(data)-1].Date,
 	}
 
 	// Generate price movement data from the level and provided price data.
