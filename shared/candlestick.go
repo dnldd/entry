@@ -6,8 +6,10 @@ import (
 )
 
 const (
-	// minimumVolumeSpikePercent is the minimum percentage difference in volume considered substantive.
-	minimumVolumeSpikePercent = 0.35
+	// MinimumVolumeSpikePercent is the minimum percentage difference in volume considered substantive.
+	MinimumVolumeSpikePercent = 0.35
+	// pointsRangeLimit is the number of points from entry reasonable for a stop loss.
+	PointsRangeLimit = 12
 )
 
 // Momentum represents the momentum of a candlestick.
@@ -148,7 +150,7 @@ func IsVolumeSpike(current *Candlestick, prev *Candlestick) bool {
 	}
 
 	diff := current.Volume - prev.Volume
-	return diff > 0 && diff/prev.Volume >= minimumVolumeSpikePercent
+	return diff > 0 && diff/prev.Volume >= MinimumVolumeSpikePercent
 }
 
 // GenerateMomentum returns the current candles momentum.
@@ -208,6 +210,31 @@ type CandleMetadata struct {
 	High      float64
 	Low       float64
 	Date      time.Time
+}
+
+// CandleMetaRangeHighAndLow determines the high and low of the provided range of candle metadata.
+func CandleMetaRangeHighAndLow(meta []*CandleMetadata) (float64, float64) {
+	var high, low float64
+
+	for idx := range meta {
+		candleMeta := meta[idx]
+		if high == 0 {
+			high = candleMeta.High
+		}
+		if low == 0 {
+			low = candleMeta.Low
+		}
+
+		if candleMeta.High > high {
+			high = candleMeta.High
+		}
+
+		if candleMeta.Low < low {
+			low = candleMeta.Low
+		}
+	}
+
+	return high, low
 }
 
 // AverageVolumeEntry represents an average volume entry.
