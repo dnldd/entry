@@ -68,6 +68,10 @@ func NewPosition(entry *shared.EntrySignal) (*Position, error) {
 		return nil, fmt.Errorf("entry signal cannot be nil")
 	}
 
+	if entry.Direction != shared.Long && entry.Direction != shared.Short {
+		return nil, fmt.Errorf("unknown direction provided: %v", entry.Direction)
+	}
+
 	pos := &Position{
 		ID:           uuid.New().String(),
 		Market:       entry.Market,
@@ -90,9 +94,9 @@ func (p *Position) ClosePosition(exit *shared.ExitSignal) (PositionStatus, error
 	p.ExitReasons = stringifyReasons(exit.Reasons)
 
 	switch {
-	case p.ExitPrice > p.StopLoss && p.Direction == shared.Short:
+	case p.ExitPrice >= p.StopLoss && p.Direction == shared.Short:
 		p.Status = StoppedOut
-	case p.ExitPrice < p.StopLoss && p.Direction == shared.Long:
+	case p.ExitPrice <= p.StopLoss && p.Direction == shared.Long:
 		p.Status = StoppedOut
 	default:
 		p.Status = Closed
@@ -108,8 +112,6 @@ func (p *Position) UpdatePNLPercent(currentPrice float64) (float64, error) {
 		p.PNLPercent = ((currentPrice - p.EntryPrice) / p.EntryPrice) * 100
 	case p.Direction == shared.Short:
 		p.PNLPercent = ((p.EntryPrice - currentPrice) / p.EntryPrice) * 100
-	default:
-		return 0, fmt.Errorf("unknown direction for position: %s", p.Direction.String())
 	}
 
 	return p.PNLPercent, nil

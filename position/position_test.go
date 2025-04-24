@@ -59,7 +59,7 @@ func TestStringifyEntryReasons(t *testing.T) {
 }
 
 func TestPosition(t *testing.T) {
-	entrySignal := &shared.EntrySignal{
+	longEntrySignal := &shared.EntrySignal{
 		Market:    "^GSPC",
 		Timeframe: shared.FiveMinute,
 		Direction: shared.Long,
@@ -68,12 +68,25 @@ func TestPosition(t *testing.T) {
 		StopLoss:  8,
 	}
 
+	invalidDirectionEntrySignal := &shared.EntrySignal{
+		Market:    "^GSPC",
+		Timeframe: shared.FiveMinute,
+		Direction: shared.Direction(999),
+		Price:     10,
+		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
+		StopLoss:  8,
+	}
+
+	// Ensure creating a position errors if the direction of the entry is unknown.
+	_, err := NewPosition(invalidDirectionEntrySignal)
+	assert.Error(t, err)
+
 	// Ensure positions cannot be created with nil entry signals.
 	position, err := NewPosition(nil)
 	assert.Error(t, err)
 
 	// Ensure positions can be created with valid entry signals.
-	position, err = NewPosition(entrySignal)
+	position, err = NewPosition(longEntrySignal)
 	assert.NoError(t, err)
 
 	// Ensure position's profit and loss can be updated.
@@ -82,7 +95,7 @@ func TestPosition(t *testing.T) {
 	assert.GreaterThan(t, position.PNLPercent, 0)
 
 	// Ensure a position can be closed.
-	exitSignal := &shared.ExitSignal{
+	longExitSignal := &shared.ExitSignal{
 		Market:    "^GSPC",
 		Timeframe: shared.FiveMinute,
 		Direction: shared.Long,
@@ -90,7 +103,56 @@ func TestPosition(t *testing.T) {
 		Reasons:   []shared.Reason{shared.TargetHit},
 	}
 
-	status, err := position.ClosePosition(exitSignal)
+	status, err := position.ClosePosition(longExitSignal)
 	assert.NoError(t, err)
 	assert.Equal(t, status, Closed)
+
+	// Ensure a short position can be stopped out.
+	shortEntrySignal := &shared.EntrySignal{
+		Market:    "^GSPC",
+		Timeframe: shared.FiveMinute,
+		Direction: shared.Short,
+		Price:     20,
+		Reasons:   []shared.Reason{shared.BearishEngulfing, shared.StrongVolume},
+		StopLoss:  22,
+	}
+
+	position, err = NewPosition(shortEntrySignal)
+	assert.NoError(t, err)
+
+	currentPrice = float64(21)
+	position.UpdatePNLPercent(currentPrice)
+	assert.LessThan(t, position.PNLPercent, 0)
+
+	shortExitSignal := &shared.ExitSignal{
+		Market:    "^GSPC",
+		Timeframe: shared.FiveMinute,
+		Direction: shared.Long,
+		Price:     22,
+		Reasons:   []shared.Reason{shared.StopLossHit},
+	}
+
+	status, err = position.ClosePosition(shortExitSignal)
+	assert.NoError(t, err)
+	assert.Equal(t, status, StoppedOut)
+
+	// Ensure a long position can be stopped out.
+	position, err = NewPosition(longEntrySignal)
+	assert.NoError(t, err)
+
+	currentPrice = float64(9)
+	position.UpdatePNLPercent(currentPrice)
+	assert.LessThan(t, position.PNLPercent, 0)
+
+	exitSignal := &shared.ExitSignal{
+		Market:    "^GSPC",
+		Timeframe: shared.FiveMinute,
+		Direction: shared.Long,
+		Price:     8,
+		Reasons:   []shared.Reason{shared.StopLossHit},
+	}
+
+	status, err = position.ClosePosition(exitSignal)
+	assert.NoError(t, err)
+	assert.Equal(t, status, StoppedOut)
 }
