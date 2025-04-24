@@ -263,6 +263,190 @@ func (e *Engine) estimateStopLoss(high float64, low float64, entry float64, dire
 	return stopLoss, pointsRange
 }
 
+// evaluateLevelReversalStrength determines whether a price reversal at a level has enough confluences to
+// be classified as strong. An associated entry or exit signal is generated and relayed for it based on
+// the state of the associated market.
+func (e *Engine) evaluateLevelReversalStrength(reaction *shared.LevelReaction, meta []*shared.CandleMetadata, high float64, low float64) {
+	switch reaction.Level.Kind {
+	case shared.Support:
+		signal, confluences, reasons, err := e.evaluateReversal(reaction.Market, meta, shared.Bullish)
+		if err != nil {
+			e.cfg.Logger.Error().Msgf("evaluating reversal level reaction: %v", err)
+			return
+		}
+
+		if signal {
+			req := shared.MarketStatusRequest{
+				Market:   reaction.Market,
+				Response: make(chan shared.MarketStatus),
+			}
+
+			e.cfg.RequestMatketStatus(req)
+			status := <-req.Response
+
+			switch status {
+			case shared.NeutralInclination:
+				// Signal a long position on a high confluence support reversal if the market is
+				// neutral directionally.
+				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
+				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
+					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
+				e.cfg.SendEntrySignal(signal)
+
+			case shared.LongInclined:
+				// Add to the long market inclination by signalling a long position on a
+				// high confluence support reversal.
+				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
+				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
+					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
+				e.cfg.SendEntrySignal(signal)
+
+			case shared.ShortInclined:
+				// A high confluence support reversal for a short inclined market indicates a
+				// good exit condition.
+				signal := shared.NewExitSignal(reaction.Market, reaction.Timeframe, shared.Short,
+					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn)
+				e.cfg.SendExitSignal(signal)
+			}
+		}
+	case shared.Resistance:
+		signal, confluences, reasons, err := e.evaluateReversal(reaction.Market, meta, shared.Bearish)
+		if err != nil {
+			e.cfg.Logger.Error().Msgf("evaluating reversal level reaction: %v", err)
+			return
+		}
+
+		if signal {
+			req := shared.MarketStatusRequest{
+				Market:   reaction.Market,
+				Response: make(chan shared.MarketStatus),
+			}
+
+			e.cfg.RequestMatketStatus(req)
+			status := <-req.Response
+
+			switch status {
+			case shared.NeutralInclination:
+				// Signal a short position on a high confluence resistance reversal if the
+				// market is neutral directionally.
+				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
+				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
+					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
+				e.cfg.SendEntrySignal(signal)
+
+			case shared.ShortInclined:
+				// Add to the short market inclination by signalling a short position on a
+				// high confluence resistance reversal.
+				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
+				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
+					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
+				e.cfg.SendEntrySignal(signal)
+
+			case shared.LongInclined:
+				// A high confluence resistance reversal for a long inclined market indicates a
+				// good exit condition.
+				signal := shared.NewExitSignal(reaction.Market, reaction.Timeframe, shared.Long,
+					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn)
+				e.cfg.SendExitSignal(signal)
+			}
+		}
+	default:
+		// do nothing.
+	}
+}
+
+// evaluateLevelBreakStrength determines whether a level break has enough confluences to be
+// classified as strong. An associated entry or exit signal is generated and relayed for it based on
+// the state of the associated market.
+func (e *Engine) evaluateLevelBreakStrength(reaction *shared.LevelReaction, meta []*shared.CandleMetadata, high float64, low float64) {
+	switch reaction.Level.Kind {
+	case shared.Support:
+		signal, confluences, reasons, err := e.evaluateBreak(reaction.Market, meta, shared.Bearish)
+		if err != nil {
+			e.cfg.Logger.Error().Msgf("evaluating break level reaction: %v", err)
+			return
+		}
+
+		if signal {
+			req := shared.MarketStatusRequest{
+				Market:   reaction.Market,
+				Response: make(chan shared.MarketStatus),
+			}
+
+			e.cfg.RequestMatketStatus(req)
+			status := <-req.Response
+
+			switch status {
+			case shared.NeutralInclination:
+				// Signal a short position on a high confluence support break if the market is
+				// neutral directionally.
+				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
+				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
+					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
+				e.cfg.SendEntrySignal(signal)
+
+			case shared.ShortInclined:
+				// Add to the short market inclination by signalling a short position on a
+				// high confluence support break.
+				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
+				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
+					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
+				e.cfg.SendEntrySignal(signal)
+
+			case shared.LongInclined:
+				// A high confluence support break for a long inclined market indicates a
+				// good exit condition.
+				signal := shared.NewExitSignal(reaction.Market, reaction.Timeframe, shared.Long,
+					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn)
+				e.cfg.SendExitSignal(signal)
+			}
+		}
+	case shared.Resistance:
+		signal, confluences, reasons, err := e.evaluateBreak(reaction.Market, meta, shared.Bullish)
+		if err != nil {
+			e.cfg.Logger.Error().Msgf("evaluating break level reaction: %v", err)
+			return
+		}
+
+		if signal {
+			req := shared.MarketStatusRequest{
+				Market:   reaction.Market,
+				Response: make(chan shared.MarketStatus),
+			}
+
+			e.cfg.RequestMatketStatus(req)
+			status := <-req.Response
+
+			switch status {
+			case shared.NeutralInclination:
+				// Signal a long position on a high confluence resistance break if the market is
+				// neutral directionally.
+				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
+				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
+					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
+				e.cfg.SendEntrySignal(signal)
+
+			case shared.LongInclined:
+				// Add to the long market inclination by signalling a long position on a
+				// high confluence resistance break.
+				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
+				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
+					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
+				e.cfg.SendEntrySignal(signal)
+
+			case shared.ShortInclined:
+				// A high confluence resistance break for a short inclined market indicates a
+				// good exit condition.
+				signal := shared.NewExitSignal(reaction.Market, reaction.Timeframe, shared.Short,
+					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn)
+				e.cfg.SendExitSignal(signal)
+			}
+		}
+	default:
+		// do nothing.
+	}
+}
+
 // handleLevelReaction processes the provided level reaction.
 func (e *Engine) handleLevelReaction(reaction *shared.LevelReaction) {
 	// Fetch the current candle's metadata.
@@ -279,177 +463,9 @@ func (e *Engine) handleLevelReaction(reaction *shared.LevelReaction) {
 
 	switch reaction.Reaction {
 	case shared.Reversal:
-		switch reaction.Level.Kind {
-		case shared.Support:
-			signal, confluences, reasons, err := e.evaluateReversal(reaction.Market, meta, shared.Bullish)
-			if err != nil {
-				e.cfg.Logger.Error().Msgf("evaluating reversal level reaction: %v", err)
-				return
-			}
-
-			if signal {
-				req := shared.MarketStatusRequest{
-					Market:   reaction.Market,
-					Response: make(chan shared.MarketStatus),
-				}
-
-				e.cfg.RequestMatketStatus(req)
-				status := <-req.Response
-
-				switch status {
-				case shared.NeutralInclination:
-					// Signal a long position on a high confluence support reversal if the market is
-					// neutral directionally.
-					stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
-					signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
-						reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
-					e.cfg.SendEntrySignal(signal)
-
-				case shared.LongInclined:
-					// Add to the long market inclination by signalling a long position on a
-					// high confluence support reversal.
-					stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
-					signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
-						reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
-					e.cfg.SendEntrySignal(signal)
-
-				case shared.ShortInclined:
-					// A high confluence support reversal for a short inclined market indicates a
-					// good exit condition.
-					signal := shared.NewExitSignal(reaction.Market, reaction.Timeframe, shared.Short,
-						reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn)
-					e.cfg.SendExitSignal(signal)
-				}
-			}
-		case shared.Resistance:
-			signal, confluences, reasons, err := e.evaluateReversal(reaction.Market, meta, shared.Bearish)
-			if err != nil {
-				e.cfg.Logger.Error().Msgf("evaluating reversal level reaction: %v", err)
-				return
-			}
-
-			if signal {
-				req := shared.MarketStatusRequest{
-					Market:   reaction.Market,
-					Response: make(chan shared.MarketStatus),
-				}
-
-				e.cfg.RequestMatketStatus(req)
-				status := <-req.Response
-
-				switch status {
-				case shared.NeutralInclination:
-					// Signal a short position on a high confluence resistance reversal if the
-					// market is neutral directionally.
-					stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
-					signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
-						reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
-					e.cfg.SendEntrySignal(signal)
-
-				case shared.ShortInclined:
-					// Add to the short market inclination by signalling a short position on a
-					// high confluence resistance reversal.
-					stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
-					signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
-						reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
-					e.cfg.SendEntrySignal(signal)
-
-				case shared.LongInclined:
-					// A high confluence resistance reversal for a long inclined market indicates a
-					// good exit condition.
-					signal := shared.NewExitSignal(reaction.Market, reaction.Timeframe, shared.Long,
-						reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn)
-					e.cfg.SendExitSignal(signal)
-				}
-			}
-		default:
-			// do nothing.
-		}
+		e.evaluateLevelReversalStrength(reaction, meta, high, low)
 	case shared.Break:
-		switch reaction.Level.Kind {
-		case shared.Support:
-			signal, confluences, reasons, err := e.evaluateBreak(reaction.Market, meta, shared.Bearish)
-			if err != nil {
-				e.cfg.Logger.Error().Msgf("evaluating break level reaction: %v", err)
-				return
-			}
-
-			if signal {
-				req := shared.MarketStatusRequest{
-					Market:   reaction.Market,
-					Response: make(chan shared.MarketStatus),
-				}
-
-				e.cfg.RequestMatketStatus(req)
-				status := <-req.Response
-
-				switch status {
-				case shared.NeutralInclination:
-					// Signal a short position on a high confluence support break if the market is
-					// neutral directionally.
-					stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
-					signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
-						reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
-					e.cfg.SendEntrySignal(signal)
-
-				case shared.ShortInclined:
-					// Add to the short market inclination by signalling a short position on a
-					// high confluence support break.
-					stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
-					signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
-						reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
-					e.cfg.SendEntrySignal(signal)
-
-				case shared.LongInclined:
-					// A high confluence support break for a long inclined market indicates a
-					// good exit condition.
-					signal := shared.NewExitSignal(reaction.Market, reaction.Timeframe, shared.Long,
-						reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn)
-					e.cfg.SendExitSignal(signal)
-				}
-			}
-		case shared.Resistance:
-			signal, confluences, reasons, err := e.evaluateBreak(reaction.Market, meta, shared.Bullish)
-			if err != nil {
-				e.cfg.Logger.Error().Msgf("evaluating break level reaction: %v", err)
-				return
-			}
-
-			if signal {
-				req := shared.MarketStatusRequest{
-					Market:   reaction.Market,
-					Response: make(chan shared.MarketStatus),
-				}
-
-				e.cfg.RequestMatketStatus(req)
-				status := <-req.Response
-
-				switch status {
-				case shared.NeutralInclination:
-					// Signal a long position on a high confluence resistance break if the market is
-					// neutral directionally.
-					stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
-					signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
-						reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
-					e.cfg.SendEntrySignal(signal)
-
-				case shared.LongInclined:
-					// Add to the long market inclination by signalling a long position on a
-					// high confluence resistance break.
-					stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
-					signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
-						reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
-					e.cfg.SendEntrySignal(signal)
-
-				case shared.ShortInclined:
-					// A high confluence resistance break for a short inclined market indicates a
-					// good exit condition.
-					signal := shared.NewExitSignal(reaction.Market, reaction.Timeframe, shared.Short,
-						reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn)
-					e.cfg.SendExitSignal(signal)
-				}
-			}
-		}
+		e.evaluateLevelBreakStrength(reaction, meta, high, low)
 	case shared.Chop:
 		e.cfg.Logger.Info().Msgf("chop level reaction encountered for market %s", reaction.Market)
 		// Do nothing.
