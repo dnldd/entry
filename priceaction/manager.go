@@ -19,8 +19,8 @@ const (
 
 // ManagerConfig represents the price action manager configuration.
 type ManagerConfig struct {
-	// MarketIDs represents the collection of ids of the markets to manage.
-	MarketIDs []string
+	// Markets represents the collection of ids of the markets to manage.
+	Markets []string
 	// Subscribe registers the provided subscriber for market updates.
 	Subscribe func(sub chan shared.Candlestick)
 	// RequestPriceData sends a price data request.
@@ -44,13 +44,13 @@ type Manager struct {
 // NewManager initializes a new price action manager.
 func NewManager(cfg *ManagerConfig) (*Manager, error) {
 	markets := make(map[string]*Market)
-	for idx := range cfg.MarketIDs {
-		mkt, err := NewMarket(cfg.MarketIDs[idx])
+	for idx := range cfg.Markets {
+		mkt, err := NewMarket(cfg.Markets[idx])
 		if err != nil {
-			return nil, fmt.Errorf("creating %s market: %v", cfg.MarketIDs[idx], err)
+			return nil, fmt.Errorf("creating %s market: %v", cfg.Markets[idx], err)
 		}
 
-		markets[cfg.MarketIDs[idx]] = mkt
+		markets[cfg.Markets[idx]] = mkt
 	}
 	return &Manager{
 		cfg:           cfg,
@@ -96,17 +96,10 @@ func (m *Manager) SendCandleMetadataRequest(req shared.CandleMetadataRequest) {
 }
 
 // handleUpdateSignal processes the provided update signal.
-func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
-	defer func() {
-		if candle.Done != nil {
-			close(candle.Done)
-		}
-	}()
-
+func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) error {
 	mkt, ok := m.markets[candle.Market]
 	if !ok {
-		m.cfg.Logger.Error().Msgf("no market found with name: %s", candle.Market)
-		return
+		return fmt.Errorf("no market found with name: %s", candle.Market)
 	}
 
 	// Update price action concepts related to the market.
@@ -123,8 +116,7 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
 
 		reactions, err := mkt.GenerateLevelReactions(data)
 		if err != nil {
-			m.cfg.Logger.Error().Msgf("generating level reactions: %v", err)
-			return
+			return fmt.Errorf("generating level reactions: %v", err)
 		}
 
 		for idx := range reactions {
@@ -133,38 +125,33 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) {
 
 		mkt.ResetPriceDataState()
 	}
+
+	return nil
 }
 
 // handleLevelSignal processes the provided level signal.
-func (m *Manager) handleLevelSignal(signal shared.LevelSignal) {
-	defer func() {
-		if signal.Done != nil {
-			close(signal.Done)
-		}
-	}()
-
+func (m *Manager) handleLevelSignal(signal shared.LevelSignal) error {
 	mkt, ok := m.markets[signal.Market]
 	if !ok {
-		m.cfg.Logger.Error().Msgf("no market found with name %s", signal.Market)
-		return
+		return fmt.Errorf("no market found with name %s", signal.Market)
 	}
 
 	currentCandle := mkt.FetchCurrentCandle()
 	if currentCandle == nil {
-		m.cfg.Logger.Error().Msgf("no current candle available for market: %s", mkt.market)
-		return
+		return fmt.Errorf("no current candle available for market: %s", mkt.market)
 	}
 
 	level := shared.NewLevel(signal.Market, signal.Price, currentCandle)
 	mkt.levelSnapshot.Add(level)
+
+	return nil
 }
 
 // handleCandleMetadataRequest processes the provided candle metadata request.
-func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest) {
+func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest) error {
 	mkt, ok := m.markets[req.Market]
 	if !ok {
-		m.cfg.Logger.Error().Msgf("no market found with name: %s", req.Market)
-		return
+		return fmt.Errorf("no market found with name: %s", req.Market)
 	}
 
 	// Generate metadata for all candles in the range being evaluated.
@@ -195,6 +182,8 @@ func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest)
 	}
 
 	req.Response <- metadataSet
+
+	return nil
 }
 
 // Run manages the lifecycle processes of the price action manager.
@@ -208,19 +197,28 @@ func (m *Manager) Run(ctx context.Context) {
 		case signal := <-m.levelSignals:
 			m.workers <- struct{}{}
 			go func(signal *shared.LevelSignal) {
-				m.handleLevelSignal(*signal)
+				err := m.handleLevelSignal(*signal)
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+				}
 				<-m.workers
 			}(&signal)
 		case candle := <-m.updateSignals:
 			m.workers <- struct{}{}
 			go func(candle *shared.Candlestick) {
-				m.handleUpdateSignal(candle)
+				err := m.handleUpdateSignal(candle)
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+				}
 				<-m.workers
 			}(&candle)
 		case req := <-m.metaSignals:
 			m.workers <- struct{}{}
 			go func(req *shared.CandleMetadataRequest) {
-				m.handleCandleMetadataRequest(req)
+				err := m.handleCandleMetadataRequest(req)
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+				}
 				<-m.workers
 			}(&req)
 

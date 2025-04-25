@@ -15,7 +15,7 @@ func (s MarketStatus) String() string {
 	case NeutralInclination:
 		return "neutral inclination"
 	case LongInclined:
-		return "long inclinded"
+		return "long inclined"
 	case ShortInclined:
 		return "short inclined"
 	default:
