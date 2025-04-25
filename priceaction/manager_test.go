@@ -108,15 +108,6 @@ func TestManagerHandleUpdateSignal(t *testing.T) {
 	market := "^GSPC"
 	mgr := setupManager(t, market)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	done := make(chan struct{})
-	go func() {
-		mgr.Run(ctx)
-		close(done)
-	}()
-
 	// Ensure handling update signals for an unknown market errors.
 	wrongMarketCandle := shared.Candlestick{
 		Open:   float64(5),
@@ -176,9 +167,6 @@ func TestManagerHandleUpdateSignal(t *testing.T) {
 
 	// Ensure price request flag is reset after the request is processed.
 	assert.False(t, mgr.markets[market].requestingPriceData.Load())
-
-	cancel()
-	<-done
 }
 
 func TestFillManagerChannels(t *testing.T) {
@@ -224,15 +212,6 @@ func TestManagerHandleLevelSignal(t *testing.T) {
 	market := "^GSPC"
 	mgr := setupManager(t, market)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	done := make(chan struct{})
-	go func() {
-		mgr.Run(ctx)
-		close(done)
-	}()
-
 	// Add some market data.
 	firstCandle := shared.Candlestick{
 		Open:   float64(5),
@@ -263,24 +242,12 @@ func TestManagerHandleLevelSignal(t *testing.T) {
 	}
 	err = mgr.handleLevelSignal(levelSignal)
 	assert.NoError(t, err)
-
-	cancel()
-	<-done
 }
 
 func TestManagerHandleCandleMetadataSignal(t *testing.T) {
 	// Ensure the price action manager can be created.
 	market := "^GSPC"
 	mgr := setupManager(t, market)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	done := make(chan struct{})
-	go func() {
-		mgr.Run(ctx)
-		close(done)
-	}()
 
 	// Ensure requesting candle metadate for an unknown market errors.
 	req := shared.CandleMetadataRequest{
@@ -321,7 +288,4 @@ func TestManagerHandleCandleMetadataSignal(t *testing.T) {
 
 	err = mgr.handleCandleMetadataRequest(&req)
 	assert.NoError(t, err)
-
-	cancel()
-	<-done
 }

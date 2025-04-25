@@ -17,8 +17,8 @@ const (
 
 // ManagerConfig represents the position manager configuration.
 type ManagerConfig struct {
-	// MarketIDs represents the collection of ids of the markets to manage.
-	MarketIDs []string
+	// Markets represents the collection of ids of the markets to manage.
+	Markets []string
 	// Notify sends the provided message.
 	Notify func(message string)
 	// PersistClosedPosition persists the provided closed position to the database.
@@ -41,8 +41,8 @@ type Manager struct {
 func NewPositionManager(cfg *ManagerConfig) *Manager {
 	// Create markets for position tracking.
 	markets := make(map[string]*Market)
-	for idx := range cfg.MarketIDs {
-		mkt := NewMarket(cfg.MarketIDs[idx])
+	for idx := range cfg.Markets {
+		mkt := NewMarket(cfg.Markets[idx])
 		markets[mkt.market] = mkt
 	}
 
@@ -90,50 +90,42 @@ func (m *Manager) SendMarketStatusRequest(req shared.MarketStatusRequest) {
 }
 
 // handleEntrySignal processes the provided entry signal.
-func (m *Manager) handleEntrySignal(signal *shared.EntrySignal) {
-	defer func() {
-		if signal.Done != nil {
-			close(signal.Done)
-		}
-	}()
-
+func (m *Manager) handleEntrySignal(signal *shared.EntrySignal) error {
 	position, err := NewPosition(signal)
 	if err != nil {
-		m.cfg.Logger.Error().Msgf("creating new position: %v", err)
-		return
+		return fmt.Errorf("creating new position: %v", err)
 	}
 
 	mkt, ok := m.markets[position.Market]
 	if !ok {
-		m.cfg.Logger.Error().Msgf("no position market found with id %s", position.Market)
-		return
+		return fmt.Errorf("no position market found with id %s", position.Market)
 	}
 
 	err = mkt.AddPosition(position)
 	if err != nil {
-		m.cfg.Logger.Error().Msgf("adding %s position: %v", position.Market, err)
-		return
+		return fmt.Errorf("adding %s position: %v", position.Market, err)
 	}
 
 	// Notify of the newly created position.
-	msg := fmt.Sprintf("Created new %s position (%s) for %s @ %f with stoploss %f",
-		position.Direction.String(), position.ID, position.Market, position.EntryPrice, position.StopLoss)
+	msg := fmt.Sprintf("Created new %s position (%s) for %s @ %.2f with stoploss %.2f (%.2f points)",
+		position.Direction.String(), position.ID, position.Market, position.EntryPrice,
+		position.StopLoss, signal.StopLossPointsRange)
 	m.cfg.Notify(msg)
+
+	return nil
 }
 
 // handleExitSignal processes the provided exit signal.
-func (m *Manager) handleExitSignal(signal *shared.ExitSignal) {
+func (m *Manager) handleExitSignal(signal *shared.ExitSignal) error {
 	mkt, ok := m.markets[signal.Market]
 	if !ok {
-		m.cfg.Logger.Error().Msgf("no position market found with id %s", signal.Market)
-		return
+		return fmt.Errorf("no position market found with id %s", signal.Market)
 	}
 
 	closedPositions, err := mkt.ClosePositions(signal)
 	if err != nil {
-		m.cfg.Logger.Error().Msgf("closing %s position for %s: %v", signal.Direction.String(),
+		return fmt.Errorf("closing %s position for %s: %v", signal.Direction.String(),
 			signal.Market, err)
-		return
 	}
 
 	for idx := range closedPositions {
@@ -142,21 +134,25 @@ func (m *Manager) handleExitSignal(signal *shared.ExitSignal) {
 		m.cfg.PersistClosedPosition(pos)
 
 		// Notify discord session about the closed position.
-		msg := fmt.Sprintf("Closed %s position (%s) for %s @ %f with stoploss %f",
-			pos.Direction.String(), pos.ID, pos.Market, pos.ExitPrice, pos.StopLoss)
+		msg := fmt.Sprintf("Closed %s position (%s) for %s @ %.2f with stoploss %.2f (%.2f points), PNL %.2f",
+			pos.Direction.String(), pos.ID, pos.Market, pos.ExitPrice, pos.StopLoss,
+			pos.StopLossPointsRange, pos.PNLPercent)
 		m.cfg.Notify(msg)
 	}
+
+	return nil
 }
 
 // handleMarketStatusRequest processes the provided market status request.
-func (m *Manager) handleMarketStatusRequest(req *shared.MarketStatusRequest) {
+func (m *Manager) handleMarketStatusRequest(req *shared.MarketStatusRequest) error {
 	mkt, ok := m.markets[req.Market]
 	if !ok {
-		m.cfg.Logger.Error().Msgf("no position market found with id %s", req.Market)
-		return
+		return fmt.Errorf("no position market found with id %s", req.Market)
 	}
 
 	req.Response <- shared.MarketStatus(mkt.status.Load())
+
+	return nil
 }
 
 // Run manages the lifecycle processes of the position manager.
@@ -168,19 +164,28 @@ func (m *Manager) Run(ctx context.Context) {
 		case signal := <-m.entrySignals:
 			m.workers <- struct{}{}
 			go func(signal *shared.EntrySignal) {
-				m.handleEntrySignal(signal)
+				err := m.handleEntrySignal(signal)
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+				}
 				<-m.workers
 			}(&signal)
 		case signal := <-m.exitSignals:
 			m.workers <- struct{}{}
 			go func(signal *shared.ExitSignal) {
-				m.handleExitSignal(signal)
+				err := m.handleExitSignal(signal)
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+				}
 				<-m.workers
 			}(&signal)
 		case req := <-m.marketStatusRequests:
 			m.workers <- struct{}{}
 			go func(req *shared.MarketStatusRequest) {
-				m.handleMarketStatusRequest(req)
+				err := m.handleMarketStatusRequest(req)
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+				}
 				<-m.workers
 			}(&req)
 		default:

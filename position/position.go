@@ -34,19 +34,20 @@ func (s PositionStatus) String() string {
 
 // Position represents valid market position started by the given entry criteria.
 type Position struct {
-	ID           string
-	Market       string
-	Timeframe    shared.Timeframe
-	Direction    shared.Direction
-	StopLoss     float64
-	PNLPercent   float64
-	EntryPrice   float64
-	EntryReasons string
-	ExitPrice    float64
-	ExitReasons  string
-	Status       PositionStatus
-	CreatedOn    time.Time
-	ClosedOn     time.Time
+	ID                  string
+	Market              string
+	Timeframe           shared.Timeframe
+	Direction           shared.Direction
+	StopLoss            float64
+	StopLossPointsRange float64
+	PNLPercent          float64
+	EntryPrice          float64
+	EntryReasons        string
+	ExitPrice           float64
+	ExitReasons         string
+	Status              PositionStatus
+	CreatedOn           time.Time
+	ClosedOn            time.Time
 }
 
 // stringifyReasons stringifies the collection of reasons provided.
@@ -73,15 +74,16 @@ func NewPosition(entry *shared.EntrySignal) (*Position, error) {
 	}
 
 	pos := &Position{
-		ID:           uuid.New().String(),
-		Market:       entry.Market,
-		Timeframe:    entry.Timeframe,
-		Direction:    entry.Direction,
-		CreatedOn:    entry.CreatedOn,
-		EntryPrice:   entry.Price,
-		EntryReasons: stringifyReasons(entry.Reasons),
-		StopLoss:     entry.StopLoss,
-		Status:       Active,
+		ID:                  uuid.New().String(),
+		Market:              entry.Market,
+		Timeframe:           entry.Timeframe,
+		Direction:           entry.Direction,
+		CreatedOn:           entry.CreatedOn,
+		EntryPrice:          entry.Price,
+		EntryReasons:        stringifyReasons(entry.Reasons),
+		StopLoss:            entry.StopLoss,
+		StopLossPointsRange: entry.StopLossPointsRange,
+		Status:              Active,
 	}
 
 	return pos, nil

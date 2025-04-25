@@ -4,16 +4,16 @@ import "time"
 
 // EntrySignal represents an entry signal for a position.
 type EntrySignal struct {
-	Market      string
-	Timeframe   Timeframe
-	Direction   Direction
-	Price       float64
-	Reasons     []Reason
-	Confluence  uint32
-	StopLoss    float64
-	PointsRange float64
-	CreatedOn   time.Time
-	Done        chan struct{}
+	Market              string
+	Timeframe           Timeframe
+	Direction           Direction
+	Price               float64
+	Reasons             []Reason
+	Confluence          uint32
+	StopLoss            float64
+	StopLossPointsRange float64
+	CreatedOn           time.Time
+	Done                chan struct{}
 }
 
 // ExitSignal represents an exit signal for a position.
@@ -51,17 +51,17 @@ type CaughtUpSignal struct {
 
 // NewEntrySignal initializes a new entry signal.
 func NewEntrySignal(market string, timeframe Timeframe, direction Direction, price float64,
-	reasons []Reason, confluence uint32, created time.Time, stopLoss float64, pointsRange float64) EntrySignal {
+	reasons []Reason, confluence uint32, created time.Time, stopLoss float64, stopLossPointsRange float64) EntrySignal {
 	return EntrySignal{
-		Market:      market,
-		Timeframe:   timeframe,
-		Direction:   direction,
-		Price:       price,
-		Reasons:     reasons,
-		Confluence:  confluence,
-		CreatedOn:   created,
-		StopLoss:    stopLoss,
-		PointsRange: pointsRange,
+		Market:              market,
+		Timeframe:           timeframe,
+		Direction:           direction,
+		Price:               price,
+		Reasons:             reasons,
+		Confluence:          confluence,
+		CreatedOn:           created,
+		StopLoss:            stopLoss,
+		StopLossPointsRange: stopLossPointsRange,
 	}
 }
 
