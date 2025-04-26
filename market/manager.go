@@ -29,11 +29,11 @@ type ManagerConfig struct {
 	// MarketIDs represents the collection of ids of the markets to manage.
 	MarketIDs []string
 	// Subscribe registers the provided subscriber for market updates.
-	Subscribe func(sub *chan shared.Candlestick)
+	Subscribe func(sub chan shared.Candlestick)
 	// CatchUp signals a catchup process for a market.
-	CatchUp func(signal *shared.CatchUpSignal)
+	CatchUp func(signal shared.CatchUpSignal)
 	// SignalLevel relays the provided  level signal for  processing.
-	SignalLevel func(signal *shared.LevelSignal)
+	SignalLevel func(signal shared.LevelSignal)
 	// JobScheduler represents the job scheduler.
 	JobScheduler *gocron.Scheduler
 	// Logger represents the application logger.
@@ -134,58 +134,53 @@ func (m *Manager) SendAverageVolumeRequest(request shared.AverageVolumeRequest) 
 }
 
 // handleUpdateSignal processes the provided market update candle.
-func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) {
+func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) error {
 	m.marketsMtx.RLock()
 	mkt, ok := m.markets[candle.Market]
 	m.marketsMtx.RUnlock()
 
 	if !ok {
-		m.cfg.Logger.Error().Msgf("no market found with name %s for update", candle.Market)
-		return
+		return fmt.Errorf("no market found with name %s for update", candle.Market)
 	}
 
 	err := mkt.Update(candle)
 	if err != nil {
-		m.cfg.Logger.Error().Msgf("updating %s market: %v", candle.Market, err)
-		return
+		return fmt.Errorf("updating %s market: %v", candle.Market, err)
 	}
+
+	return nil
 }
 
 // handleCaughtUpSignal processes the provided caught up signal.
-func (m *Manager) handleCaughtUpSignal(signal *shared.CaughtUpSignal) {
-	defer func() {
-		if signal.Done != nil {
-			close(signal.Done)
-		}
-	}()
-
+func (m *Manager) handleCaughtUpSignal(signal *shared.CaughtUpSignal) error {
 	m.marketsMtx.RLock()
 	mkt, ok := m.markets[signal.Market]
 	m.marketsMtx.RUnlock()
 
 	if !ok {
-		m.cfg.Logger.Error().Msgf("no market found with name %s for update", signal.Market)
-		return
+		return fmt.Errorf("no market found with name %s for update", signal.Market)
 	}
 
 	mkt.SetCaughtUpStatus(true)
+
+	return nil
 }
 
 // handleAverageVolumeRequest processes the provided average volume request.
-func (m *Manager) handleAverageVolumeRequest(req *shared.AverageVolumeRequest) {
-
-	now, _, err := shared.NewYorkTime()
-	if err != nil {
-		m.cfg.Logger.Error().Msgf("fetching new york time: %v", err)
-	}
-
+func (m *Manager) handleAverageVolumeRequest(req *shared.AverageVolumeRequest) error {
 	m.averageVolumeMtx.RLock()
 	avgVolume, ok := m.averageVolume[req.Market]
 	m.averageVolumeMtx.RUnlock()
 
+	now, _, err := shared.NewYorkTime()
+	if err != nil {
+		return fmt.Errorf("fetching new york time: %v", err)
+	}
+
 	if ok && now.Unix()-avgVolume.CreatedAt < fiveMinutesInSeconds {
 		req.Response <- avgVolume.Average
-		return
+
+		return nil
 	}
 
 	if now.Unix()-avgVolume.CreatedAt > fiveMinutesInSeconds {
@@ -195,8 +190,7 @@ func (m *Manager) handleAverageVolumeRequest(req *shared.AverageVolumeRequest) {
 		m.marketsMtx.RUnlock()
 
 		if !ok {
-			m.cfg.Logger.Error().Msgf("no market found with name %s", req.Market)
-			return
+			return fmt.Errorf("no market found with name %s", req.Market)
 		}
 
 		avg := mkt.candleSnapshot.AverageVolumeN(averageVolumeRange)
@@ -212,31 +206,33 @@ func (m *Manager) handleAverageVolumeRequest(req *shared.AverageVolumeRequest) {
 	}
 
 	req.Response <- avgVolume.Average
+
+	return nil
 }
 
 // handlePriceDateRequest process the requested price data.
-func (m *Manager) handlePriceDataRequest(req *shared.PriceDataRequest) {
+func (m *Manager) handlePriceDataRequest(req *shared.PriceDataRequest) error {
 	m.marketsMtx.RLock()
 	mkt, ok := m.markets[req.Market]
 	m.marketsMtx.RUnlock()
 
 	if !ok {
-		m.cfg.Logger.Error().Msgf("no market found with name %s", req.Market)
-		return
+		return fmt.Errorf("no market found with name %s", req.Market)
 	}
 
 	if !mkt.CaughtUp() {
-		m.cfg.Logger.Error().Msgf("%s is not caught up to current market data", req.Market)
-		return
+		return fmt.Errorf("%s is not caught up to current market data", req.Market)
 	}
 
 	data := mkt.candleSnapshot.LastN(shared.PriceDataPayloadSize)
 
 	req.Response <- data
+
+	return nil
 }
 
 // catchup signals a catch up for all tracked markets.
-func (m *Manager) catchUp() {
+func (m *Manager) catchUp() error {
 	m.marketsMtx.RLock()
 	defer m.marketsMtx.RUnlock()
 
@@ -245,10 +241,10 @@ func (m *Manager) catchUp() {
 
 		start, err := market.sessionSnapshot.FetchLastSessionOpen()
 		if err != nil {
-			m.cfg.Logger.Error().Msgf("fetching last session open: %v", err)
+			return fmt.Errorf("fetching last session open: %v", err)
 		}
 
-		signal := &shared.CatchUpSignal{
+		signal := shared.CatchUpSignal{
 			Market:    market.cfg.Market,
 			Timeframe: shared.FiveMinute,
 			Start:     start,
@@ -257,12 +253,18 @@ func (m *Manager) catchUp() {
 
 		m.cfg.CatchUp(signal)
 	}
+
+	return nil
 }
 
 // Run manages the lifecycle processes of the position manager.
 func (m *Manager) Run(ctx context.Context) {
-	m.cfg.Subscribe(&m.updateSignals)
-	m.catchUp()
+	m.cfg.Subscribe(m.updateSignals)
+	err := m.catchUp()
+	if err != nil {
+		m.cfg.Logger.Error().Err(err).Send()
+		return
+	}
 
 	for {
 		select {
@@ -272,28 +274,44 @@ func (m *Manager) Run(ctx context.Context) {
 			// use the dedicated market worker to handle the update signal.
 			m.workers[candle.Market] <- struct{}{}
 			go func(candle shared.Candlestick) {
-				m.handleUpdateCandle(&candle)
+				err := m.handleUpdateCandle(&candle)
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+					return
+				}
 				<-m.workers[candle.Market]
 			}(candle)
 		case signal := <-m.caughtUpSignals:
 			// use the dedicated market worker to handle the caught up signal.
 			m.workers[signal.Market] <- struct{}{}
 			go func(signal shared.CaughtUpSignal) {
-				m.handleCaughtUpSignal(&signal)
+				err := m.handleCaughtUpSignal(&signal)
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+					return
+				}
 				<-m.workers[signal.Market]
 			}(signal)
 		case req := <-m.priceDataRequests:
 			// handle price data requests concurrently.
 			m.requestWorkers <- struct{}{}
 			go func(req shared.PriceDataRequest) {
-				m.handlePriceDataRequest(&req)
+				err := m.handlePriceDataRequest(&req)
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+					return
+				}
 				<-m.requestWorkers
 			}(req)
 		case req := <-m.averageVolumeRequests:
 			// handle average volume data requests concurrently.
 			m.requestWorkers <- struct{}{}
 			go func(req shared.AverageVolumeRequest) {
-				m.handleAverageVolumeRequest(&req)
+				err := m.handleAverageVolumeRequest(&req)
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+					return
+				}
 				<-m.requestWorkers
 			}(req)
 		default:

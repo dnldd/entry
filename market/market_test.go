@@ -16,8 +16,8 @@ func TestMarket(t *testing.T) {
 
 	// Ensure a market can be created.
 	levelSignals := make(chan shared.LevelSignal, 2)
-	signalLevel := func(signal *shared.LevelSignal) {
-		levelSignals <- *signal
+	signalLevel := func(signal shared.LevelSignal) {
+		levelSignals <- signal
 	}
 
 	market := "^GSPC"

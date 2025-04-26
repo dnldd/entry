@@ -20,7 +20,7 @@ type MarketConfig struct {
 	// Market is the name of the tracked market.
 	Market string
 	// SignalLevel relays the provided level signal for processing.
-	SignalLevel func(signal *shared.LevelSignal)
+	SignalLevel func(signal shared.LevelSignal)
 	// JobScheduler represents the job scheduler.
 	JobScheduler *gocron.Scheduler
 	// Logger represents the application logger.
@@ -112,13 +112,13 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 			return fmt.Errorf("fetching new levels: %w", err)
 		}
 
-		sessionHigh := &shared.LevelSignal{
+		sessionHigh := shared.LevelSignal{
 			Market: candle.Market,
 			Price:  high,
 		}
 		m.cfg.SignalLevel(sessionHigh)
 
-		sessionLow := &shared.LevelSignal{
+		sessionLow := shared.LevelSignal{
 			Market: candle.Market,
 			Price:  low,
 		}
