@@ -1,6 +1,11 @@
 package shared
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/peterldowns/testy/assert"
+	"github.com/tidwall/gjson"
+)
 
 func TestFetchSentiment(t *testing.T) {
 	tests := []struct {
@@ -445,4 +450,24 @@ func TestSentimentString(t *testing.T) {
 			t.Errorf("%s: expected %v, got %v", test.name, test.want, str)
 		}
 	}
+}
+
+func TestParseCandlesticks(t *testing.T) {
+	market := "^GSPC"
+	timeframe := FiveMinute
+	data := `[{"open":10,"close":12,"high":15,"low":8, "volume":5,"date":"2025-02-04 15:05:00"}]`
+	gjd := gjson.Parse(data).Array()
+
+	// Ensure candlesticks data can be parsed.
+	candles, err := ParseCandlesticks(gjd, market, timeframe)
+	assert.NoError(t, err)
+	assert.Equal(t, len(candles), 1)
+	assert.Equal(t, candles[0].Open, float64(10))
+	assert.Equal(t, candles[0].Close, float64(12))
+	assert.Equal(t, candles[0].High, float64(15))
+	assert.Equal(t, candles[0].Low, float64(8))
+	assert.Equal(t, candles[0].Volume, float64(5))
+	assert.Equal(t, candles[0].Date.Year(), 2025)
+	assert.Equal(t, candles[0].Date.Month(), 2)
+	assert.Equal(t, candles[0].Date.Day(), 4)
 }

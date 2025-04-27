@@ -1,8 +1,11 @@
 package shared
 
 import (
+	"fmt"
 	"math"
 	"time"
+
+	"github.com/tidwall/gjson"
 )
 
 const (
@@ -140,6 +143,34 @@ func (c *Candlestick) FetchKind() Kind {
 	default:
 		return Unknown
 	}
+}
+
+// ParseCandlesticks parses candlesticks from the provided json data.
+func ParseCandlesticks(data []gjson.Result, market string, timeframe Timeframe) ([]Candlestick, error) {
+	candles := make([]Candlestick, len(data))
+
+	for idx := range data {
+		var candle Candlestick
+
+		candle.Open = data[idx].Get("open").Float()
+		candle.Low = data[idx].Get("low").Float()
+		candle.High = data[idx].Get("high").Float()
+		candle.Close = data[idx].Get("close").Float()
+		candle.Volume = data[idx].Get("volume").Float()
+
+		candle.Market = market
+		candle.Timeframe = timeframe
+
+		dt, err := time.Parse(DateLayout, data[idx].Get("date").String())
+		if err != nil {
+			return nil, fmt.Errorf("parsing candlestick date: %w", err)
+		}
+
+		candle.Date = dt
+		candles[idx] = candle
+	}
+
+	return candles, nil
 }
 
 // IsVolumeSpike checks whether there was a surge in volume for the current candle compared to
