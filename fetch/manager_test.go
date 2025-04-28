@@ -136,7 +136,7 @@ func TestHandleCatchUpSignal(t *testing.T) {
 		Market:    "^AAPL",
 		Timeframe: shared.FiveMinute,
 		Start:     time.Time{},
-		Status:    make(chan shared.StatusCode),
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err := mgr.handleCatchUpSignal(unknownMarketCatchUp)
@@ -148,7 +148,7 @@ func TestHandleCatchUpSignal(t *testing.T) {
 		Market:    market,
 		Timeframe: shared.FiveMinute,
 		Start:     time.Time{},
-		Status:    make(chan shared.StatusCode),
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err = mgr.handleCatchUpSignal(catchUp)
