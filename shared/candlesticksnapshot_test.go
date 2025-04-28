@@ -15,7 +15,7 @@ func TestCandlestickSnapshot(t *testing.T) {
 	assert.Error(t, err)
 
 	// Ensure a candlestick snapshot can be created.
-	size := 4
+	size := int32(4)
 	candleSnapshot, err = NewCandlestickSnapshot(size)
 	assert.NoError(t, err)
 
@@ -43,10 +43,10 @@ func TestCandlestickSnapshot(t *testing.T) {
 		candleSnapshot.Update(candle)
 	}
 
-	assert.Equal(t, candleSnapshot.count, size)
-	assert.Equal(t, candleSnapshot.size, size)
-	assert.Equal(t, candleSnapshot.start, 0)
-	assert.Equal(t, len(candleSnapshot.data), size)
+	assert.Equal(t, candleSnapshot.count.Load(), size)
+	assert.Equal(t, candleSnapshot.size.Load(), size)
+	assert.Equal(t, candleSnapshot.start.Load(), 0)
+	assert.Equal(t, len(candleSnapshot.data), int(size))
 
 	// Ensure calling last on an valid snapshot returns the last added entry.
 	last = candleSnapshot.Last()
@@ -54,7 +54,7 @@ func TestCandlestickSnapshot(t *testing.T) {
 
 	// Ensure calling LastN with a larger size than the snapshot gets clamped to the snapshot's size.
 	lastN = candleSnapshot.LastN(size + 1)
-	assert.Equal(t, len(lastN), size)
+	assert.Equal(t, len(lastN), int(size))
 
 	// Ensure candle updates at capacity overwrite existing slots.
 	candle := &Candlestick{
@@ -66,10 +66,10 @@ func TestCandlestickSnapshot(t *testing.T) {
 	}
 
 	candleSnapshot.Update(candle)
-	assert.Equal(t, candleSnapshot.count, size)
-	assert.Equal(t, candleSnapshot.size, size)
-	assert.Equal(t, candleSnapshot.start, 1)
-	assert.Equal(t, len(candleSnapshot.data), size)
+	assert.Equal(t, candleSnapshot.count.Load(), size)
+	assert.Equal(t, candleSnapshot.size.Load(), size)
+	assert.Equal(t, candleSnapshot.start.Load(), 1)
+	assert.Equal(t, len(candleSnapshot.data), int(size))
 
 	// Ensure the last n elements can be fetched from the snapshot.
 	nSet := candleSnapshot.LastN(2)
@@ -101,9 +101,9 @@ func TestCandlestickSnapshot(t *testing.T) {
 	}
 
 	candleSnapshot.Update(next)
-	assert.Equal(t, candleSnapshot.count, size)
-	assert.Equal(t, candleSnapshot.size, size)
-	assert.Equal(t, candleSnapshot.start, 2)
-	assert.Equal(t, len(candleSnapshot.data), size)
+	assert.Equal(t, candleSnapshot.count.Load(), size)
+	assert.Equal(t, candleSnapshot.size.Load(), size)
+	assert.Equal(t, candleSnapshot.start.Load(), 2)
+	assert.Equal(t, len(candleSnapshot.data), int(size))
 
 }
