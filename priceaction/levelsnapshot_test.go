@@ -16,7 +16,7 @@ func TestLevelSnapshot(t *testing.T) {
 	assert.Error(t, err)
 
 	// Ensure a candlestick snapshot can be created.
-	size := 4
+	size := int32(4)
 	levelSnapshot, err = NewLevelSnapshot(size)
 	assert.NoError(t, err)
 
@@ -46,19 +46,19 @@ func TestLevelSnapshot(t *testing.T) {
 		levelSnapshot.Add(level)
 	}
 
-	assert.Equal(t, levelSnapshot.count, size)
-	assert.Equal(t, levelSnapshot.size, size)
-	assert.Equal(t, levelSnapshot.start, 0)
-	assert.Equal(t, len(levelSnapshot.data), size)
+	assert.Equal(t, levelSnapshot.count.Load(), size)
+	assert.Equal(t, levelSnapshot.size.Load(), size)
+	assert.Equal(t, levelSnapshot.start.Load(), 0)
+	assert.Equal(t, len(levelSnapshot.data), int(size))
 
 	// Ensure level updates at capacity overwrite existing slots.
 	level := shared.NewLevel(market, price, resistanceCandle)
 	levelSnapshot.Add(level)
 
-	assert.Equal(t, levelSnapshot.count, size)
-	assert.Equal(t, levelSnapshot.size, size)
-	assert.Equal(t, levelSnapshot.start, 1)
-	assert.Equal(t, len(levelSnapshot.data), size)
+	assert.Equal(t, levelSnapshot.count.Load(), size)
+	assert.Equal(t, levelSnapshot.size.Load(), size)
+	assert.Equal(t, levelSnapshot.start.Load(), 1)
+	assert.Equal(t, len(levelSnapshot.data), int(size))
 
 	// Ensure the snapshot can be filtered.
 	filter := func(level *shared.Level, candle *shared.Candlestick) bool {
