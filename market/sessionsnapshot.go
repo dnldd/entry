@@ -3,6 +3,7 @@ package market
 import (
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/dnldd/entry/shared"
@@ -17,14 +18,14 @@ const (
 // CandlestickSnapshot represents a snapshot of session data.
 type SessionSnapshot struct {
 	data    []*shared.Session
-	start   int
-	current int
-	count   int
-	size    int
+	start   atomic.Int32
+	current atomic.Int32
+	count   atomic.Int32
+	size    atomic.Int32
 }
 
 // NewSessionSnapshot initializes a new session snapshot.
-func NewSessionSnapshot(size int, now time.Time) (*SessionSnapshot, error) {
+func NewSessionSnapshot(size int32, now time.Time) (*SessionSnapshot, error) {
 	if size < 0 {
 		return nil, errors.New("snapshot size cannot be negative")
 	}
@@ -34,8 +35,9 @@ func NewSessionSnapshot(size int, now time.Time) (*SessionSnapshot, error) {
 
 	snapshot := &SessionSnapshot{
 		data: make([]*shared.Session, size),
-		size: size,
 	}
+
+	snapshot.size.Store(size)
 
 	err := snapshot.GenerateNewSessions(now)
 	if err != nil {
@@ -52,22 +54,22 @@ func NewSessionSnapshot(size int, now time.Time) (*SessionSnapshot, error) {
 
 // Adds adds the provided session to the snapshot.
 func (s *SessionSnapshot) Add(session *shared.Session) {
-	end := (s.start + s.count) % s.size
+	end := (s.start.Load() + s.count.Load()) % s.size.Load()
 	s.data[end] = session
 
-	if s.count == s.size {
+	if s.count.Load() == s.size.Load() {
 		// Overwrite the oldest entry when the snapshot is at capacity.
-		s.start = (s.start + 1) % s.size
+		s.start.Store((s.start.Load() + 1) % s.size.Load())
 	} else {
-		s.count++
+		s.count.Add(1)
 	}
 }
 
 // Exists checks whether the snapshot has an existing session corresponding to
 // the provided name and opening day.
 func (s *SessionSnapshot) Exists(name string, open time.Time) bool {
-	for i := s.count - 1; i >= 0; i-- {
-		idx := (s.start + i) % s.size
+	for i := s.count.Load() - 1; i >= 0; i-- {
+		idx := (s.start.Load() + i) % s.size.Load()
 		session := s.data[idx]
 		if session.Name == name && session.Open.Equal(open) {
 			return true
@@ -129,16 +131,16 @@ func (s *SessionSnapshot) SetCurrentSession(now time.Time) (bool, error) {
 	// Set the current session.
 	var set bool
 	var changed bool
-	prev := s.current
-	for i := range s.count {
-		idx := (s.start + i) % s.size
+	prev := s.current.Load()
+	for i := range s.count.Load() {
+		idx := (s.start.Load() + i) % s.size.Load()
 		session := s.data[idx]
 		if session.IsCurrentSession(now) {
 			set = true
 			if prev != idx {
 				// The changed flag indicates there has been a session change.
 				changed = true
-				s.current = idx
+				s.current.Store(idx)
 			}
 			break
 		}
@@ -147,14 +149,14 @@ func (s *SessionSnapshot) SetCurrentSession(now time.Time) (bool, error) {
 	// If the current session is not set then the market is closed and current time is
 	// approaching the asian session. Preemptively set the asian session.
 	if !set {
-		for i := range s.count {
-			idx := (s.start + s.count - 1 - i + s.size) % s.size
+		for i := range s.count.Load() {
+			idx := (s.start.Load() + s.count.Load() - 1 - i + s.size.Load()) % s.size.Load()
 			session := s.data[idx]
 			if session.Name == shared.Asia && now.Before(session.Open) {
 				if prev != idx {
 					// The changed flag indicates there has been a session change.
 					changed = true
-					s.current = idx
+					s.current.Store(idx)
 				}
 				break
 			}
@@ -166,20 +168,20 @@ func (s *SessionSnapshot) SetCurrentSession(now time.Time) (bool, error) {
 
 // FetchCurrentSession returns the current market session.
 func (s *SessionSnapshot) FetchCurrentSession() *shared.Session {
-	return s.data[s.current]
+	return s.data[s.current.Load()]
 }
 
 // FetchLastSessionOpen returns the last session open.
 func (s *SessionSnapshot) FetchLastSessionOpen() (time.Time, error) {
 	var open time.Time
-	if s.count > 0 {
-		if s.current == s.start {
+	if s.count.Load() > 0 {
+		if s.current.Load() == s.start.Load() {
 			// There is no last session, set the open to the current one.
-			open = s.data[s.current].Open
+			open = s.data[s.current.Load()].Open
 			return open, nil
 		}
 
-		previous := (s.current - 1 + s.size) % s.size
+		previous := (s.current.Load() - 1 + s.size.Load()) % s.size.Load()
 		open = s.data[previous].Open
 		return open, nil
 	}
@@ -190,13 +192,13 @@ func (s *SessionSnapshot) FetchLastSessionOpen() (time.Time, error) {
 // fetchLastSessionHighLow fetches newly generated levels from the previously completed session.
 func (s *SessionSnapshot) FetchLastSessionHighLow() (float64, float64, error) {
 	var high, low float64
-	if s.count > 0 {
-		if s.current == s.start {
+	if s.count.Load() > 0 {
+		if s.current.Load() == s.start.Load() {
 			// There is no previous completed session.
 			return 0, 0, fmt.Errorf("no completed previous session available")
 		}
 
-		previous := (s.current - 1 + s.size) % s.size
+		previous := (s.current.Load() - 1 + s.size.Load()) % s.size.Load()
 		high = s.data[previous].High
 		low = s.data[previous].Low
 		return high, low, nil

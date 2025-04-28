@@ -21,14 +21,14 @@ func TestSessionSnapshot(t *testing.T) {
 	assert.Error(t, err)
 
 	// Ensure a session snapshot can be created.
-	size := 4
+	size := int32(4)
 	sessionSnapshot, err = NewSessionSnapshot(size, now)
 	assert.NoError(t, err)
 
-	assert.Equal(t, sessionSnapshot.count, size)
-	assert.Equal(t, sessionSnapshot.size, size)
-	assert.Equal(t, sessionSnapshot.start, 0)
-	assert.Equal(t, len(sessionSnapshot.data), size)
+	assert.Equal(t, sessionSnapshot.count.Load(), size)
+	assert.Equal(t, sessionSnapshot.size.Load(), size)
+	assert.Equal(t, sessionSnapshot.start.Load(), 0)
+	assert.Equal(t, len(sessionSnapshot.data), int(size))
 
 	// Ensure the current session can be fetched.
 	current := sessionSnapshot.FetchCurrentSession()
@@ -52,10 +52,10 @@ func TestSessionSnapshot(t *testing.T) {
 	assert.NoError(t, err)
 
 	sessionSnapshot.Add(londonSession)
-	assert.Equal(t, sessionSnapshot.count, size)
-	assert.Equal(t, sessionSnapshot.size, size)
-	assert.Equal(t, sessionSnapshot.start, 1)
-	assert.Equal(t, len(sessionSnapshot.data), size)
+	assert.Equal(t, sessionSnapshot.count.Load(), size)
+	assert.Equal(t, sessionSnapshot.size.Load(), size)
+	assert.Equal(t, sessionSnapshot.start.Load(), 1)
+	assert.Equal(t, len(sessionSnapshot.data), int(size))
 
 	// Ensure current session preempts to the next asia session when the time is within the
 	// no session time range which is the hour between new york close and asia open.
@@ -74,7 +74,7 @@ func TestSessionSnapshot(t *testing.T) {
 	sessionSnapshot.GenerateNewSessionsJob(&zerolog.Logger{})
 
 	// Fake the current session being the session beginning the snapshot.
-	sessionSnapshot.current = sessionSnapshot.start
+	sessionSnapshot.current.Store(sessionSnapshot.start.Load())
 
 	// Ensure fetching the last session open defaults to the current session open if there are no
 	// past sessions.
@@ -99,7 +99,7 @@ func TestGenerateNewSessions(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Asia -> London -> New York -> Asia (today-tomorrow)
-	assert.Equal(t, sessionSnapshot.count, 4)
+	assert.Equal(t, sessionSnapshot.count.Load(), 4)
 	assert.Equal(t, sessionSnapshot.data[0].Open.Day(), yesterday.Day())
 	assert.Equal(t, sessionSnapshot.data[0].Close.Day(), now.Day())
 	assert.Equal(t, sessionSnapshot.data[1].Open.Day(), now.Day())
@@ -113,7 +113,7 @@ func TestGenerateNewSessions(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Asia -> London -> New York -> Asia (today-tomorrow) -> London (tomorrow) -> New York (tomorrow) -> Asia (tomorrow-nextday)
-	assert.Equal(t, sessionSnapshot.count, 7)
+	assert.Equal(t, sessionSnapshot.count.Load(), 7)
 	assert.Equal(t, sessionSnapshot.data[0].Open.Day(), yesterday.Day())
 	assert.Equal(t, sessionSnapshot.data[0].Close.Day(), now.Day())
 	assert.Equal(t, sessionSnapshot.data[1].Open.Day(), now.Day())
