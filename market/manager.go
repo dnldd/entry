@@ -248,7 +248,7 @@ func (m *Manager) catchUp() error {
 			Market:    market.cfg.Market,
 			Timeframe: shared.FiveMinute,
 			Start:     start,
-			Done:      make(chan struct{}),
+			Status:    make(chan shared.StatusCode),
 		}
 
 		m.cfg.CatchUp(signal)

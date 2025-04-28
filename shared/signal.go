@@ -40,7 +40,7 @@ type CatchUpSignal struct {
 	Market    string
 	Timeframe Timeframe
 	Start     time.Time
-	Done      chan struct{}
+	Status    chan StatusCode
 }
 
 // CaughtUpSignal represents a signal to conclude a catch up on market data.

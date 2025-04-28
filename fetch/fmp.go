@@ -57,34 +57,6 @@ func (c *FMPClient) formURL(path string, params string) string {
 	return url
 }
 
-// ParseCandlesticks parses candlesticks from the provided json data.
-func (c *FMPClient) ParseCandlesticks(data []gjson.Result, market string, timeframe shared.Timeframe) ([]shared.Candlestick, error) {
-	candles := make([]shared.Candlestick, len(data))
-
-	for idx := range data {
-		var candle shared.Candlestick
-
-		candle.Open = data[idx].Get("open").Float()
-		candle.Low = data[idx].Get("low").Float()
-		candle.High = data[idx].Get("high").Float()
-		candle.Close = data[idx].Get("close").Float()
-		candle.Volume = data[idx].Get("volume").Float()
-
-		candle.Market = market
-		candle.Timeframe = timeframe
-
-		dt, err := time.Parse(shared.DateLayout, data[idx].Get("date").String())
-		if err != nil {
-			return nil, fmt.Errorf("parsing candlestick date: %w", err)
-		}
-
-		candle.Date = dt
-		candles[idx] = candle
-	}
-
-	return candles, nil
-}
-
 // FetchIndexIntradayHistorical fetches intraday historical market data.
 func (c *FMPClient) FetchIndexIntradayHistorical(ctx context.Context, market string, timeframe shared.Timeframe, start time.Time, end time.Time) ([]gjson.Result, error) {
 	const fiveMinuteHistoricalPath = "/historical-chart/5min"
