@@ -15,9 +15,9 @@ const (
 	// maxWorkers is the maximum number of concurrent workers.
 	maxWorkers = 16
 	// minReversalConfluence is the minumum required confluence to confirm a reversal.
-	minReversalConfluence = 8
+	minReversalConfluence = 7
 	// minBreakConfluence is the minumum required confluence to confirm a break.
-	minBreakConfluence = 8
+	minBreakConfluence = 7
 	// minAverageVolumePercent is the minimum percentage above average volume to be considered
 	// substantive.
 	minAverageVolumePercent = float64(0.3)
@@ -56,9 +56,9 @@ func NewEngine(cfg *EngineConfig) *Engine {
 }
 
 // SignalLevelReaction relays the provided level reaction for processing.
-func (e *Engine) SignalLevelReaction(signal *shared.LevelReaction) {
+func (e *Engine) SignalLevelReaction(reaction *shared.LevelReaction) {
 	select {
-	case e.levelReactionSignals <- signal:
+	case e.levelReactionSignals <- reaction:
 		// do nothing.
 	default:
 		e.cfg.Logger.Error().Msgf("price level reactions channel at capacity: %d/%d",
@@ -248,7 +248,18 @@ func (e *Engine) evaluateBreak(market string, meta []*shared.CandleMetadata, sen
 
 // calculateStopLoss calculates the stoploss and the point range from entry for a position using
 // the provided high, low and position direction.
-func (e *Engine) estimateStopLoss(high float64, low float64, entry float64, direction shared.Direction) (float64, float64) {
+func (e *Engine) estimateStopLoss(high float64, low float64, entry float64, direction shared.Direction) (float64, float64, error) {
+	// some sanity checks.
+	if low > high {
+		return 0, 0, fmt.Errorf("low (%.2f) cannot be greater than high (%.2f)", low, high)
+	}
+	if entry > high {
+		return 0, 0, fmt.Errorf("entry (%.2f) cannot be greater than high (%.2f)", entry, high)
+	}
+	if entry < low {
+		return 0, 0, fmt.Errorf("entry (%.2f) cannot be less than low (%.2f)", entry, low)
+	}
+
 	var stopLoss, pointsRange float64
 
 	switch direction {
@@ -260,19 +271,22 @@ func (e *Engine) estimateStopLoss(high float64, low float64, entry float64, dire
 
 	pointsRange = math.Abs(entry - stopLoss)
 
-	return stopLoss, pointsRange
+	if stopLoss < 0 {
+		return 0, 0, fmt.Errorf("stop loss cannot be zero")
+	}
+
+	return stopLoss, pointsRange, nil
 }
 
 // evaluateLevelReversalStrength determines whether a price reversal at a level has enough confluences to
 // be classified as strong. An associated entry or exit signal is generated and relayed for it based on
 // the state of the associated market.
-func (e *Engine) evaluateLevelReversalStrength(reaction *shared.LevelReaction, meta []*shared.CandleMetadata, high float64, low float64) {
+func (e *Engine) evaluateLevelReversalStrength(reaction *shared.LevelReaction, meta []*shared.CandleMetadata, high float64, low float64) error {
 	switch reaction.Level.Kind {
 	case shared.Support:
 		signal, confluences, reasons, err := e.evaluateReversal(reaction.Market, meta, shared.Bullish)
 		if err != nil {
-			e.cfg.Logger.Error().Msgf("evaluating reversal level reaction: %v", err)
-			return
+			return fmt.Errorf("evaluating reversal level reaction: %v", err)
 		}
 
 		if signal {
@@ -288,7 +302,11 @@ func (e *Engine) evaluateLevelReversalStrength(reaction *shared.LevelReaction, m
 			case shared.NeutralInclination:
 				// Signal a long position on a high confluence support reversal if the market is
 				// neutral directionally.
-				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
+				stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
+				if err != nil {
+					return err
+				}
+
 				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
 					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
 				e.cfg.SendEntrySignal(signal)
@@ -296,7 +314,11 @@ func (e *Engine) evaluateLevelReversalStrength(reaction *shared.LevelReaction, m
 			case shared.LongInclined:
 				// Add to the long market inclination by signalling a long position on a
 				// high confluence support reversal.
-				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
+				stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
+				if err != nil {
+					return err
+				}
+
 				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
 					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
 				e.cfg.SendEntrySignal(signal)
@@ -312,8 +334,7 @@ func (e *Engine) evaluateLevelReversalStrength(reaction *shared.LevelReaction, m
 	case shared.Resistance:
 		signal, confluences, reasons, err := e.evaluateReversal(reaction.Market, meta, shared.Bearish)
 		if err != nil {
-			e.cfg.Logger.Error().Msgf("evaluating reversal level reaction: %v", err)
-			return
+			return fmt.Errorf("evaluating reversal level reaction: %v", err)
 		}
 
 		if signal {
@@ -329,7 +350,11 @@ func (e *Engine) evaluateLevelReversalStrength(reaction *shared.LevelReaction, m
 			case shared.NeutralInclination:
 				// Signal a short position on a high confluence resistance reversal if the
 				// market is neutral directionally.
-				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
+				stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
+				if err != nil {
+					return err
+				}
+
 				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
 					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
 				e.cfg.SendEntrySignal(signal)
@@ -337,7 +362,11 @@ func (e *Engine) evaluateLevelReversalStrength(reaction *shared.LevelReaction, m
 			case shared.ShortInclined:
 				// Add to the short market inclination by signalling a short position on a
 				// high confluence resistance reversal.
-				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
+				stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
+				if err != nil {
+					return err
+				}
+
 				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
 					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
 				e.cfg.SendEntrySignal(signal)
@@ -353,18 +382,19 @@ func (e *Engine) evaluateLevelReversalStrength(reaction *shared.LevelReaction, m
 	default:
 		// do nothing.
 	}
+
+	return nil
 }
 
 // evaluateLevelBreakStrength determines whether a level break has enough confluences to be
 // classified as strong. An associated entry or exit signal is generated and relayed for it based on
 // the state of the associated market.
-func (e *Engine) evaluateLevelBreakStrength(reaction *shared.LevelReaction, meta []*shared.CandleMetadata, high float64, low float64) {
+func (e *Engine) evaluateLevelBreakStrength(reaction *shared.LevelReaction, meta []*shared.CandleMetadata, high float64, low float64) error {
 	switch reaction.Level.Kind {
 	case shared.Support:
 		signal, confluences, reasons, err := e.evaluateBreak(reaction.Market, meta, shared.Bearish)
 		if err != nil {
-			e.cfg.Logger.Error().Msgf("evaluating break level reaction: %v", err)
-			return
+			return fmt.Errorf("evaluating break level reaction: %v", err)
 		}
 
 		if signal {
@@ -380,7 +410,11 @@ func (e *Engine) evaluateLevelBreakStrength(reaction *shared.LevelReaction, meta
 			case shared.NeutralInclination:
 				// Signal a short position on a high confluence support break if the market is
 				// neutral directionally.
-				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
+				stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
+				if err != nil {
+					return err
+				}
+
 				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
 					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
 				e.cfg.SendEntrySignal(signal)
@@ -388,7 +422,11 @@ func (e *Engine) evaluateLevelBreakStrength(reaction *shared.LevelReaction, meta
 			case shared.ShortInclined:
 				// Add to the short market inclination by signalling a short position on a
 				// high confluence support break.
-				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
+				stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
+				if err != nil {
+					return err
+				}
+
 				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
 					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
 				e.cfg.SendEntrySignal(signal)
@@ -404,8 +442,7 @@ func (e *Engine) evaluateLevelBreakStrength(reaction *shared.LevelReaction, meta
 	case shared.Resistance:
 		signal, confluences, reasons, err := e.evaluateBreak(reaction.Market, meta, shared.Bullish)
 		if err != nil {
-			e.cfg.Logger.Error().Msgf("evaluating break level reaction: %v", err)
-			return
+			return fmt.Errorf("evaluating break level reaction: %v", err)
 		}
 
 		if signal {
@@ -421,7 +458,11 @@ func (e *Engine) evaluateLevelBreakStrength(reaction *shared.LevelReaction, meta
 			case shared.NeutralInclination:
 				// Signal a long position on a high confluence resistance break if the market is
 				// neutral directionally.
-				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
+				stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
+				if err != nil {
+					return err
+				}
+
 				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
 					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
 				e.cfg.SendEntrySignal(signal)
@@ -429,7 +470,11 @@ func (e *Engine) evaluateLevelBreakStrength(reaction *shared.LevelReaction, meta
 			case shared.LongInclined:
 				// Add to the long market inclination by signalling a long position on a
 				// high confluence resistance break.
-				stopLoss, pointsRange := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
+				stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
+				if err != nil {
+					return err
+				}
+
 				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
 					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
 				e.cfg.SendEntrySignal(signal)
@@ -445,10 +490,12 @@ func (e *Engine) evaluateLevelBreakStrength(reaction *shared.LevelReaction, meta
 	default:
 		// do nothing.
 	}
+
+	return nil
 }
 
 // handleLevelReaction processes the provided level reaction.
-func (e *Engine) handleLevelReaction(reaction *shared.LevelReaction) {
+func (e *Engine) handleLevelReaction(reaction *shared.LevelReaction) error {
 	// Fetch the current candle's metadata.
 	req := shared.CandleMetadataRequest{
 		Market:   reaction.Market,
@@ -463,15 +510,23 @@ func (e *Engine) handleLevelReaction(reaction *shared.LevelReaction) {
 
 	switch reaction.Reaction {
 	case shared.Reversal:
-		e.evaluateLevelReversalStrength(reaction, meta, high, low)
+		err := e.evaluateLevelReversalStrength(reaction, meta, high, low)
+		if err != nil {
+			return fmt.Errorf("evaluating level reversal strength: %v", err)
+		}
 	case shared.Break:
-		e.evaluateLevelBreakStrength(reaction, meta, high, low)
+		err := e.evaluateLevelBreakStrength(reaction, meta, high, low)
+		if err != nil {
+			return fmt.Errorf("evaluating level break strength: %v", err)
+		}
 	case shared.Chop:
-		e.cfg.Logger.Info().Msgf("chop level reaction encountered for market %s", reaction.Market)
 		// Do nothing.
+		e.cfg.Logger.Info().Msgf("chop level reaction encountered for market %s", reaction.Market)
 	}
 
 	reaction.ApplyReaction()
+
+	return nil
 }
 
 // Run manages the lifecycle processes of the market engine.
@@ -484,7 +539,10 @@ func (e *Engine) Run(ctx context.Context) {
 			// use workers to process level reactions concurrently.
 			e.workers <- struct{}{}
 			go func(signal *shared.LevelReaction) {
-				e.handleLevelReaction(signal)
+				err := e.handleLevelReaction(signal)
+				if err != nil {
+					e.cfg.Logger.Error().Err(err).Send()
+				}
 				<-e.workers
 			}(signal)
 		default:
