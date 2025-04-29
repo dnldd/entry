@@ -13,6 +13,14 @@ const (
 	MinimumVolumeSpikePercent = 0.35
 	// pointsRangeLimit is the number of points from entry reasonable for a stop loss.
 	PointsRangeLimit = 12
+	// MinimumPinbarLongestWickPercent is the minimum percentage the longest wick of a pinbar can be.
+	MinimumPinbarLongestWickPercent = 0.5
+	// MaximumDojiBodyPercent is the maximum body percentage for a doji.
+	MaximumDojiBodyPercent = 0.3
+	// MinimumDojiWickPercent is the minimum wick percent for a doji.
+	MinimumDojiWickPercent = 0.3
+	// MinimumMarubozuBodyPercent is the minimum body percentage for a marubozu.
+	MinimumMarubozuBodyPercent = 0.7
 )
 
 // Momentum represents the momentum of a candlestick.
@@ -111,16 +119,19 @@ func (c *Candlestick) FetchSentiment() Sentiment {
 }
 
 // FetchKind returns the candlestick type.
+//
+// Classifies the candle based on the closest match to the expected candle type
+// not a perfect textbook definition.
 func (c *Candlestick) FetchKind() Kind {
 	if c.High == 0 || c.Low == 0 {
 		return Unknown
 	}
 
-	candleRange := c.High - c.Low
-	if candleRange == 0 {
+	if c.High <= c.Low {
 		return Unknown
 	}
 
+	candleRange := c.High - c.Low
 	candleBody := math.Abs(c.Close - c.Open)
 	upperWickRange := c.High - math.Max(c.Open, c.Close)
 	lowerWickRange := math.Min(c.Open, c.Close) - c.Low
@@ -130,14 +141,16 @@ func (c *Candlestick) FetchKind() Kind {
 	lowerWickPercent := lowerWickRange / candleRange
 
 	switch {
-	case (upperWickPercent >= 0.5 && lowerWickPercent <= 0.2) || (lowerWickPercent >= 0.5 && upperWickPercent <= 0.2):
-		// If the candle body has one of its wicks being at least 50 percent of the candle, it's a pin bar.
+	case (upperWickPercent >= MinimumPinbarLongestWickPercent && upperWickPercent >= 2*lowerWickPercent) ||
+		(lowerWickPercent >= MinimumPinbarLongestWickPercent && lowerWickPercent >= 2*upperWickPercent):
+		// If the candle body has one of its wicks being at least 50 percent of the candle and it is
+		// at least twice the length of the opposite wick, it's a pin bar.
 		return Pinbar
-	case bodyPercent <= 0.3 && upperWickPercent >= 0.3 && lowerWickPercent >= 0.3:
+	case bodyPercent <= MaximumDojiBodyPercent && upperWickPercent >= MinimumDojiWickPercent && lowerWickPercent >= MinimumDojiWickPercent:
 		// If the candle body is not more than 30 percent of the candle and has almost
 		// identical wicks on both sides of it, it's a doji candle.
 		return Doji
-	case bodyPercent >= 0.7:
+	case bodyPercent >= MinimumMarubozuBodyPercent:
 		// If the candle body accounts for over 70 percent of the candle, It is a marubozu candle.
 		return Marubozu
 	default:
@@ -176,7 +189,7 @@ func ParseCandlesticks(data []gjson.Result, market string, timeframe Timeframe) 
 // IsVolumeSpike checks whether there was a surge in volume for the current candle compared to
 // the prevous candle.
 func IsVolumeSpike(current *Candlestick, prev *Candlestick) bool {
-	if prev.Volume == 0 || current.Volume == 0 {
+	if current.Volume < 0 || prev.Volume < 0 || prev.Volume == 0 || current.Volume == 0 {
 		return false
 	}
 
@@ -186,7 +199,7 @@ func IsVolumeSpike(current *Candlestick, prev *Candlestick) bool {
 
 // GenerateMomentum returns the current candles momentum.
 func GenerateMomentum(current *Candlestick, prev *Candlestick) Momentum {
-	if prev.Volume == 0 || current.Volume == 0 {
+	if current.Volume < 0 || prev.Volume < 0 || prev.Volume == 0 || current.Volume == 0 {
 		return Low
 	}
 
@@ -245,6 +258,9 @@ type CandleMetadata struct {
 
 // CandleMetaRangeHighAndLow determines the high and low of the provided range of candle metadata.
 func CandleMetaRangeHighAndLow(meta []*CandleMetadata) (float64, float64) {
+	if len(meta) == 0 {
+		return 0, 0
+	}
 	var high, low float64
 
 	for idx := range meta {

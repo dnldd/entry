@@ -120,6 +120,16 @@ func TestFetchKind(t *testing.T) {
 			},
 			want: Unknown,
 		},
+		{
+			name: "pinbar (bullish)",
+			candle: Candlestick{
+				Open:  100,
+				Close: 110,
+				High:  140,
+				Low:   95,
+			},
+			want: Pinbar,
+		},
 	}
 
 	for _, test := range tests {
