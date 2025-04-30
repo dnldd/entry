@@ -37,7 +37,7 @@ func setupEngine(avgVolume *float64, candleMeta []*shared.CandleMetadata, market
 		RequestAverageVolume:  requestAvgVolume,
 		SendEntrySignal:       signalEntry,
 		SendExitSignal:        signalExit,
-		RequestMatketSkew:     requestMarketSkew,
+		RequestMarketSkew:     requestMarketSkew,
 		Logger:                log.Logger,
 	}
 
@@ -451,10 +451,10 @@ func TestEvaluateCandleVolumeStrength(t *testing.T) {
 
 	confluence = uint32(0)
 	reactionSentiment = shared.Bullish
-	// Ensure two confluence points are awarded for a strong engulfing candle structure with high momemtum.
+	// Ensure a confluence point is awarded for a strong engulfing candle structure with high momemtum.
 	err = eng.evaluateCandleMetadataStrength(highStrengthCandleMeta, reactionSentiment, &confluence, reasons)
 	assert.NoError(t, err)
-	assert.Equal(t, confluence, uint32(3))
+	assert.Equal(t, confluence, uint32(2))
 	assert.Equal(t, len(reasons), 2)
 
 	keys := make([]shared.Reason, 0, len(reasons))
@@ -510,7 +510,7 @@ func TestEvaluatePriceReversalConfirmation(t *testing.T) {
 	assert.Equal(t, confluence, uint32(1))
 	assert.Equal(t, sentiment, shared.Bullish)
 
-	slice := reasonKeys(reasons)
+	slice := extractReasons(reasons)
 
 	assert.Equal(t, slice[0], shared.ReversalAtSupport)
 
@@ -523,7 +523,7 @@ func TestEvaluatePriceReversalConfirmation(t *testing.T) {
 	assert.Equal(t, confluence, uint32(1))
 	assert.Equal(t, sentiment, shared.Bearish)
 
-	slice = reasonKeys(reasons)
+	slice = extractReasons(reasons)
 
 	assert.Equal(t, slice[0], shared.ReversalAtResistance)
 
@@ -546,13 +546,13 @@ func TestEvaluatePriceReversalConfirmation(t *testing.T) {
 
 }
 
-func TestReasonKeys(t *testing.T) {
+func TestExtractReasons(t *testing.T) {
 	reasons := map[shared.Reason]struct{}{}
 	reasons[shared.BearishEngulfing] = struct{}{}
 	reasons[shared.BreakAboveResistance] = struct{}{}
 
 	// Ensure reasons are sliced as epxected from the provided map.
-	slice := reasonKeys(reasons)
+	slice := extractReasons(reasons)
 	assert.Equal(t, len(slice), 2)
 	assert.In(t, shared.BearishEngulfing, slice)
 	assert.In(t, shared.BreakAboveResistance, slice)
@@ -811,7 +811,7 @@ func TestEvaluatePriceReversalStrength(t *testing.T) {
 			Volume:    float64(4),
 			Engulfing: false,
 			High:      6,
-			Low:       2,
+			Low:       4,
 			Date:      asiaSessionTime,
 		},
 		{
@@ -820,8 +820,8 @@ func TestEvaluatePriceReversalStrength(t *testing.T) {
 			Momentum:  shared.Medium,
 			Volume:    float64(5),
 			Engulfing: false,
-			High:      6,
-			Low:       2,
+			High:      9,
+			Low:       6,
 			Date:      asiaSessionTime,
 		},
 		{
@@ -831,7 +831,7 @@ func TestEvaluatePriceReversalStrength(t *testing.T) {
 			Volume:    float64(8),
 			Engulfing: false,
 			High:      14,
-			Low:       6,
+			Low:       9,
 			Date:      asiaSessionTime,
 		},
 	}
@@ -889,7 +889,7 @@ func TestEvaluatePriceReversalStrength(t *testing.T) {
 		Market: market,
 		Level: &shared.Level{
 			Market: market,
-			Price:  float64(2),
+			Price:  float64(3),
 			Kind:   shared.Support,
 		},
 		CurrentPrice:  float64(14),
@@ -915,7 +915,7 @@ func TestEvaluatePriceReversalStrength(t *testing.T) {
 
 	// Ensure a support price reversal triggers a long entry signal for a market long or neutral skewed.
 	high := float64(14)
-	low := float64(2)
+	low := float64(3)
 	err := eng.evaluatePriceReversalStrength(supportLevelReaction, candleMeta, high, low)
 	assert.NoError(t, err)
 	entrySignal := <-entrySignals

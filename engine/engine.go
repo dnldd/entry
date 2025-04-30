@@ -36,7 +36,7 @@ type EngineConfig struct {
 	// SendExitSignal relays the provided exit signal for processing.
 	SendExitSignal func(signal shared.ExitSignal)
 	// RequestMarketSkew relays the provided market skew request for processing.
-	RequestMatketSkew func(request shared.MarketSkewRequest)
+	RequestMarketSkew func(request shared.MarketSkewRequest)
 	// Logger represents the application logger.
 	Logger zerolog.Logger
 }
@@ -76,7 +76,7 @@ func (e *Engine) evaluateHighVolumeSession(levelReaction *shared.LevelReaction, 
 	}
 
 	if sessionName == shared.London || sessionName == shared.NewYork {
-		*confluence++
+		(*confluence)++
 		reasons[shared.HighVolumeSession] = struct{}{}
 	}
 
@@ -90,10 +90,10 @@ func (e *Engine) evaluateVolumeStrength(averageVolume float64, volumeDifference 
 		switch {
 		case volumeDifference/averageVolume >= minAverageVolumePercent:
 			// A break substantially above average volume is a great indicator of strength.
-			*confluence += 2
+			(*confluence) += 2
 			reasons[shared.StrongVolume] = struct{}{}
 		case volumeDifference > 0:
-			*confluence++
+			(*confluence)++
 			reasons[shared.StrongVolume] = struct{}{}
 		}
 	}
@@ -112,13 +112,13 @@ func (e *Engine) evaluateCandleMetadataStrength(candleMeta shared.CandleMetadata
 	// A reversal must show strength (candle structure and momentum) in order to be actionable.
 	if (candleMeta.Kind == shared.Marubozu || candleMeta.Kind == shared.Pinbar) &&
 		(candleMeta.Momentum == shared.High || candleMeta.Momentum == shared.Medium) {
-		*confluence++
+		(*confluence)++
 		reasons[shared.StrongMove] = struct{}{}
 	}
 
 	// An engulfing reversal signifies directional strength.
 	if candleMeta.Engulfing && (candleMeta.Momentum == shared.High || candleMeta.Momentum == shared.Medium) {
-		*confluence += 2
+		(*confluence)++
 		switch candleMeta.Sentiment {
 		case shared.Bullish:
 			reasons[shared.BullishEngulfing] = struct{}{}
@@ -146,13 +146,15 @@ func (e *Engine) evaluatePriceReversalConfirmation(levelReaction *shared.LevelRe
 		*confluence++
 		*reactionSentiment = shared.Bullish
 		reasons[shared.ReversalAtSupport] = struct{}{}
+	default:
+		return fmt.Errorf("unknown level kind provided: %s", levelReaction.Level.Kind.String())
 	}
 
 	return nil
 }
 
-// reasonKeys generates a reasons key slice from the provided map.
-func reasonKeys(reasons map[shared.Reason]struct{}) []shared.Reason {
+// extractReasons generates a reasons key slice from the provided map.
+func extractReasons(reasons map[shared.Reason]struct{}) []shared.Reason {
 	data := make([]shared.Reason, 0, len(reasons))
 	for k := range reasons {
 		data = append(data, k)
@@ -185,7 +187,7 @@ func (e *Engine) fetchMarketSkew(market string) (shared.MarketSkew, error) {
 		Response: make(chan shared.MarketSkew, 1),
 	}
 
-	e.cfg.RequestMatketSkew(req)
+	e.cfg.RequestMarketSkew(req)
 
 	select {
 	case skew := <-req.Response:
@@ -208,7 +210,7 @@ func (e *Engine) fetchCandleMetadata(market string) ([]*shared.CandleMetadata, e
 	case meta := <-req.Response:
 		return meta, nil
 	case <-time.After(time.Second * 5):
-		return nil, fmt.Errorf("timed out fetching candle metadata %s", market)
+		return nil, fmt.Errorf("timed out fetching candle metadata for %s", market)
 	}
 }
 
@@ -248,19 +250,16 @@ func (e *Engine) evaluatePriceReversal(levelReaction *shared.LevelReaction, meta
 		}
 
 		// A reversal with above average volume signifies strength.
-		if averageVolume > 0 {
-			volumeDiff := candleMeta.Volume - averageVolume
-
-			err = e.evaluateVolumeStrength(averageVolume, volumeDiff, &confluence, reasonsKV)
-			if err != nil {
-				return false, 0, nil, fmt.Errorf("evaluating volume strength: %v", err)
-			}
+		volumeDiff := candleMeta.Volume - averageVolume
+		err = e.evaluateVolumeStrength(averageVolume, volumeDiff, &confluence, reasonsKV)
+		if err != nil {
+			return false, 0, nil, fmt.Errorf("evaluating volume strength: %v", err)
 		}
 	}
 
 	signal := confluence >= minReversalConfluence
 
-	reasons := reasonKeys(reasonsKV)
+	reasons := extractReasons(reasonsKV)
 
 	return signal, confluence, reasons, nil
 }
@@ -286,7 +285,7 @@ func (e *Engine) evaluateLevelBreakConfirmation(levelReaction *shared.LevelReact
 	return nil
 }
 
-// evaluateBreak determines whether an actionable break has occured.
+// evaluateLevelBreak determines whether an actionable level break has occured.
 func (e *Engine) evaluateLevelBreak(levelReaction *shared.LevelReaction, meta []*shared.CandleMetadata) (bool, uint32, []shared.Reason, error) {
 	if len(meta) == 0 {
 		return false, 0, nil, fmt.Errorf("candle metadata is empty")
@@ -322,19 +321,16 @@ func (e *Engine) evaluateLevelBreak(levelReaction *shared.LevelReaction, meta []
 		}
 
 		// A break with above average volume signifies strength.
-		if averageVolume > 0 {
-			volumeDiff := meta[idx].Volume - averageVolume
-
-			err = e.evaluateVolumeStrength(averageVolume, volumeDiff, &confluence, reasonsKV)
-			if err != nil {
-				return false, 0, nil, fmt.Errorf("evaluating volume strength: %v", err)
-			}
+		volumeDiff := meta[idx].Volume - averageVolume
+		err = e.evaluateVolumeStrength(averageVolume, volumeDiff, &confluence, reasonsKV)
+		if err != nil {
+			return false, 0, nil, fmt.Errorf("evaluating volume strength: %v", err)
 		}
 	}
 
 	signal := confluence >= minBreakConfluence
 
-	reasons := reasonKeys(reasonsKV)
+	reasons := extractReasons(reasonsKV)
 
 	return signal, confluence, reasons, nil
 }
@@ -360,12 +356,14 @@ func (e *Engine) estimateStopLoss(high float64, low float64, entry float64, dire
 		stopLoss = low - stopLossBuffer
 	case shared.Short:
 		stopLoss = high + stopLossBuffer
+	default:
+		return 0, 0, fmt.Errorf("unknown market direction provided: %v", direction.String())
 	}
 
 	pointsRange = math.Abs(entry - stopLoss)
 
-	if stopLoss < 0 {
-		return 0, 0, fmt.Errorf("stop loss cannot be zero")
+	if stopLoss <= 0 {
+		return 0, 0, fmt.Errorf("stop loss cannot less than or equal to zero")
 	}
 
 	return stopLoss, pointsRange, nil
