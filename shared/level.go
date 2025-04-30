@@ -111,6 +111,7 @@ type LevelReaction struct {
 	PriceMovement []Movement
 	CurrentPrice  float64
 	Reaction      Reaction
+	Status        chan StatusCode
 	CreatedOn     time.Time
 }
 
@@ -127,6 +128,7 @@ func NewLevelReaction(market string, level *Level, data []*Candlestick) (*LevelR
 		Level:         level,
 		Timeframe:     data[len(data)-1].Timeframe,
 		PriceMovement: make([]Movement, 0, len(data)),
+		Status:        make(chan StatusCode, 1),
 		CurrentPrice:  data[len(data)-1].Close,
 		CreatedOn:     data[len(data)-1].Date,
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/dnldd/entry/shared"
 	"github.com/rs/zerolog"
@@ -130,20 +131,20 @@ func (e *Engine) evaluateCandleMetadataStrength(candleMeta shared.CandleMetadata
 }
 
 // evaluatePriceReversalConfirmation awards confluence points based on confirmation of the level reaction being a reversal.
-func (e *Engine) evaluatePriceReversalConfirmation(levelReaction *shared.LevelReaction, confluence *uint32, sentiment *shared.Sentiment, reasons map[shared.Reason]struct{}) error {
+func (e *Engine) evaluatePriceReversalConfirmation(levelReaction *shared.LevelReaction, confluence *uint32, reactionSentiment *shared.Sentiment, reasons map[shared.Reason]struct{}) error {
 	if levelReaction.Reaction != shared.Reversal {
 		return fmt.Errorf("level reaction is not a reversal, got %s", levelReaction.Reaction.String())
 	}
 
-	// Confirmed price reactions at key levels indicate strength.
+	// Confirmed price reversals at key levels indicate strength.
 	switch levelReaction.Level.Kind {
 	case shared.Resistance:
 		*confluence++
-		*sentiment = shared.Bearish
+		*reactionSentiment = shared.Bearish
 		reasons[shared.ReversalAtResistance] = struct{}{}
 	case shared.Support:
 		*confluence++
-		*sentiment = shared.Bullish
+		*reactionSentiment = shared.Bullish
 		reasons[shared.ReversalAtSupport] = struct{}{}
 	}
 
@@ -194,8 +195,25 @@ func (e *Engine) fetchMarketSkew(market string) (shared.MarketSkew, error) {
 	}
 }
 
+// fetchCandleMetadata fetches the candle metadata for the provided market.
+func (e *Engine) fetchCandleMetadata(market string) ([]*shared.CandleMetadata, error) {
+	req := shared.CandleMetadataRequest{
+		Market:   market,
+		Response: make(chan []*shared.CandleMetadata, 1),
+	}
+
+	e.cfg.RequestCandleMetadata(req)
+
+	select {
+	case meta := <-req.Response:
+		return meta, nil
+	case <-time.After(time.Second * 5):
+		return nil, fmt.Errorf("timed out fetching candle metadata %s", market)
+	}
+}
+
 // evaluatePriceReversal determines whether an actionable price reversal has occured.
-func (e *Engine) evaluatePriceReversal(market string, meta []*shared.CandleMetadata, levelReaction *shared.LevelReaction) (bool, uint32, []shared.Reason, error) {
+func (e *Engine) evaluatePriceReversal(levelReaction *shared.LevelReaction, meta []*shared.CandleMetadata) (bool, uint32, []shared.Reason, error) {
 	if len(meta) == 0 {
 		return false, 0, nil, fmt.Errorf("candle metadata is empty")
 	}
@@ -216,7 +234,7 @@ func (e *Engine) evaluatePriceReversal(market string, meta []*shared.CandleMetad
 		return false, 0, nil, fmt.Errorf("evaluating high volume session: %v", err)
 	}
 
-	averageVolume, err := e.fetchAverageVolume(market)
+	averageVolume, err := e.fetchAverageVolume(levelReaction.Market)
 	if err != nil {
 		return false, 0, nil, fmt.Errorf("fetching average volume: %v", err)
 	}
@@ -247,94 +265,78 @@ func (e *Engine) evaluatePriceReversal(market string, meta []*shared.CandleMetad
 	return signal, confluence, reasons, nil
 }
 
+// evaluateLevelBreakConfirmation awards confluence points based on confirmation of the level reaction being a break.
+func (e *Engine) evaluateLevelBreakConfirmation(levelReaction *shared.LevelReaction, confluence *uint32, reactionSentiment *shared.Sentiment, reasons map[shared.Reason]struct{}) error {
+	if levelReaction.Reaction != shared.Break {
+		return fmt.Errorf("level reaction is not a break, got %s", levelReaction.Reaction.String())
+	}
+
+	// Confirmed breaks at key levels indicate strength.
+	switch levelReaction.Level.Kind {
+	case shared.Resistance:
+		*confluence++
+		*reactionSentiment = shared.Bullish
+		reasons[shared.BreakAboveResistance] = struct{}{}
+	case shared.Support:
+		*confluence++
+		*reactionSentiment = shared.Bearish
+		reasons[shared.BreakBelowSupport] = struct{}{}
+	}
+
+	return nil
+}
+
 // evaluateBreak determines whether an actionable break has occured.
-func (e *Engine) evaluateBreak(market string, meta []*shared.CandleMetadata, sentiment shared.Sentiment) (bool, uint32, []shared.Reason, error) {
+func (e *Engine) evaluateLevelBreak(levelReaction *shared.LevelReaction, meta []*shared.CandleMetadata) (bool, uint32, []shared.Reason, error) {
 	if len(meta) == 0 {
 		return false, 0, nil, fmt.Errorf("candle metadata is empty")
 	}
 
-	var confluences uint32
-	reasons := make(map[shared.Reason]struct{})
+	var confluence uint32
+	var reactionSentiment shared.Sentiment
+	reasonsKV := make(map[shared.Reason]struct{})
 
-	// A break must oppose the provided level.
-	lastMeta := meta[len(meta)-1]
-	if lastMeta.Sentiment != sentiment {
-		confluences++
-		switch sentiment {
-		case shared.Bullish:
-			reasons[shared.BreakAboveResistance] = struct{}{}
-		case shared.Bearish:
-			reasons[shared.BreakBelowSupport] = struct{}{}
-		}
-	}
-
-	// A break occuring during sessions known for high volume indicates strength.
-	sessionName, err := shared.CurrentSession(lastMeta.Date)
+	// Confirmed breaks at key levels indicate strength.
+	err := e.evaluateLevelBreakConfirmation(levelReaction, &confluence, &reactionSentiment, reasonsKV)
 	if err != nil {
-		return false, 0, nil, fmt.Errorf("fetching current session: %v", err)
+		return false, 0, nil, fmt.Errorf("evaluating level break confirmation: %v", err)
 	}
 
-	if sessionName == shared.London || sessionName == shared.NewYork {
-		confluences++
-		reasons[shared.HighVolumeSession] = struct{}{}
+	// A reversal occuring during sessions known for high volume indicates strength.
+	err = e.evaluateHighVolumeSession(levelReaction, &confluence, reasonsKV)
+	if err != nil {
+		return false, 0, nil, fmt.Errorf("evaluating high volume session: %v", err)
 	}
 
-	req := shared.AverageVolumeRequest{
-		Market:   market,
-		Response: make(chan float64),
+	averageVolume, err := e.fetchAverageVolume(levelReaction.Market)
+	if err != nil {
+		return false, 0, nil, fmt.Errorf("fetching average volume: %v", err)
 	}
 
-	e.cfg.RequestAverageVolume(req)
-	averageVolume := <-req.Response
+	for idx := range meta {
+		candleMeta := meta[idx]
 
-	for idx := 0; idx < len(meta); idx++ {
-		// Only evaluate candle meta that support the sentiment of the reaction.
-		if meta[idx].Sentiment != sentiment {
-			continue
-		}
-
-		// A break must show strength (candle structure and momentum) in order to be actionable.
-		if (meta[idx].Kind == shared.Marubozu || meta[idx].Kind == shared.Pinbar) &&
-			(meta[idx].Momentum == shared.High || meta[idx].Momentum == shared.Medium) {
-			confluences++
-			reasons[shared.StrongMove] = struct{}{}
-		}
-
-		// An engulfing break signifies directional strength.
-		if meta[idx].Engulfing && (meta[idx].Momentum == shared.High || meta[idx].Momentum == shared.Medium) {
-			confluences += 2
-			switch meta[idx].Sentiment {
-			case shared.Bullish:
-				reasons[shared.BullishEngulfing] = struct{}{}
-			case shared.Bearish:
-				reasons[shared.BearishEngulfing] = struct{}{}
-			}
+		err = e.evaluateCandleMetadataStrength(*candleMeta, reactionSentiment, &confluence, reasonsKV)
+		if err != nil {
+			return false, 0, nil, fmt.Errorf("evaluating candle metadata strength: %v", err)
 		}
 
 		// A break with above average volume signifies strength.
 		if averageVolume > 0 {
 			volumeDiff := meta[idx].Volume - averageVolume
 
-			switch {
-			case volumeDiff/averageVolume >= minAverageVolumePercent:
-				// A break substantially above average volume is a great indicator of strength.
-				confluences += 2
-				reasons[shared.StrongVolume] = struct{}{}
-			case volumeDiff > 0:
-				confluences++
-				reasons[shared.StrongVolume] = struct{}{}
+			err = e.evaluateVolumeStrength(averageVolume, volumeDiff, &confluence, reasonsKV)
+			if err != nil {
+				return false, 0, nil, fmt.Errorf("evaluating volume strength: %v", err)
 			}
 		}
 	}
 
-	signal := confluences >= minBreakConfluence
+	signal := confluence >= minBreakConfluence
 
-	reasonSet := make([]shared.Reason, 0, len(reasons))
-	for k := range reasons {
-		reasonSet = append(reasonSet, k)
-	}
+	reasons := reasonKeys(reasonsKV)
 
-	return signal, confluences, reasonSet, nil
+	return signal, confluence, reasons, nil
 }
 
 // estimateStopLoss calculates the stoploss and the point range from entry for a position using
@@ -371,58 +373,58 @@ func (e *Engine) estimateStopLoss(high float64, low float64, entry float64, dire
 
 // evaluatePriceReversalStrength determines whether a price reversal at a level has enough confluences to
 // be classified as strong. An associated entry or exit signal is generated and relayed for it based on
-// the state of the associated market.
-func (e *Engine) evaluatePriceReversalStrength(reaction *shared.LevelReaction, meta []*shared.CandleMetadata, high float64, low float64) error {
-	signal, confluences, reasons, err := e.evaluatePriceReversal(reaction.Market, meta, reaction)
+// the skew of the associated market.
+func (e *Engine) evaluatePriceReversalStrength(levelReaction *shared.LevelReaction, meta []*shared.CandleMetadata, high float64, low float64) error {
+	signal, confluences, reasons, err := e.evaluatePriceReversal(levelReaction, meta)
 	if err != nil {
-		return fmt.Errorf("evaluating reversal level reaction: %v", err)
+		return fmt.Errorf("evaluating price reversal reaction: %v", err)
 	}
 
 	if signal {
-		skew, err := e.fetchMarketSkew(reaction.Market)
+		skew, err := e.fetchMarketSkew(levelReaction.Market)
 		if err != nil {
-			return fmt.Errorf("fetching market skew : %v", err)
+			return fmt.Errorf("fetching market skew: %v", err)
 		}
 
 		switch {
-		case (skew == shared.NeutralSkew || skew == shared.LongSkewed) && reaction.Level.Kind == shared.Support:
-			// Signal a long position on a confirmed support reversal if the market is
+		case (skew == shared.NeutralSkew || skew == shared.LongSkewed) && levelReaction.Level.Kind == shared.Support:
+			// Signal a long position on a confirmed support level reversal if the market is
 			// neutral skewed or already long skewed.
 			direction := shared.Long
-			stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, direction)
+			stopLoss, pointsRange, err := e.estimateStopLoss(high, low, levelReaction.CurrentPrice, direction)
 			if err != nil {
 				return fmt.Errorf("estimating stop loss: %v", err)
 			}
 
-			signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, direction,
-				reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
+			signal := shared.NewEntrySignal(levelReaction.Market, levelReaction.Timeframe, direction,
+				levelReaction.CurrentPrice, reasons, confluences, levelReaction.CreatedOn, stopLoss, pointsRange)
 			e.cfg.SendEntrySignal(signal)
 
-		case skew == shared.LongSkewed && reaction.Level.Kind == shared.Resistance:
-			// A confirmed resistance reversal for a long skewed market acts as an exit condition.
+		case skew == shared.LongSkewed && levelReaction.Level.Kind == shared.Resistance:
+			// A confirmed resistance level reversal for a long skewed market acts as an exit condition.
 			direction := shared.Long
-			signal := shared.NewExitSignal(reaction.Market, reaction.Timeframe, direction,
-				reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn)
+			signal := shared.NewExitSignal(levelReaction.Market, levelReaction.Timeframe, direction,
+				levelReaction.CurrentPrice, reasons, confluences, levelReaction.CreatedOn)
 			e.cfg.SendExitSignal(signal)
 
-		case (skew == shared.NeutralSkew || skew == shared.ShortSkewed) && reaction.Level.Kind == shared.Resistance:
+		case (skew == shared.NeutralSkew || skew == shared.ShortSkewed) && levelReaction.Level.Kind == shared.Resistance:
 			// Signal a short position on a confirmed resistance reversal if the market is
 			// neutral skewed or already short skewed.
 			direction := shared.Short
-			stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, direction)
+			stopLoss, pointsRange, err := e.estimateStopLoss(high, low, levelReaction.CurrentPrice, direction)
 			if err != nil {
 				return fmt.Errorf("estimating stop loss: %v", err)
 			}
 
-			signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, direction,
-				reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
+			signal := shared.NewEntrySignal(levelReaction.Market, levelReaction.Timeframe, direction,
+				levelReaction.CurrentPrice, reasons, confluences, levelReaction.CreatedOn, stopLoss, pointsRange)
 			e.cfg.SendEntrySignal(signal)
 
-		case skew == shared.LongSkewed && reaction.Level.Kind == shared.Resistance:
+		case skew == shared.ShortSkewed && levelReaction.Level.Kind == shared.Support:
 			// A confirmed support reversal for a short skewed market acts as an exit condition.
 			direction := shared.Short
-			signal := shared.NewExitSignal(reaction.Market, reaction.Timeframe, direction,
-				reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn)
+			signal := shared.NewExitSignal(levelReaction.Market, levelReaction.Timeframe, direction,
+				levelReaction.CurrentPrice, reasons, confluences, levelReaction.CreatedOn)
 			e.cfg.SendExitSignal(signal)
 		}
 	}
@@ -432,143 +434,93 @@ func (e *Engine) evaluatePriceReversalStrength(reaction *shared.LevelReaction, m
 
 // evaluateLevelBreakStrength determines whether a level break has enough confluences to be
 // classified as strong. An associated entry or exit signal is generated and relayed for it based on
-// the state of the associated market.
-func (e *Engine) evaluateLevelBreakStrength(reaction *shared.LevelReaction, meta []*shared.CandleMetadata, high float64, low float64) error {
-	switch reaction.Level.Kind {
-	case shared.Support:
-		signal, confluences, reasons, err := e.evaluateBreak(reaction.Market, meta, shared.Bearish)
+// the skew of the associated market.
+func (e *Engine) evaluateLevelBreakStrength(levelReaction *shared.LevelReaction, meta []*shared.CandleMetadata, high float64, low float64) error {
+	signal, confluences, reasons, err := e.evaluateLevelBreak(levelReaction, meta)
+	if err != nil {
+		return fmt.Errorf("evaluating level break reaction: %v", err)
+	}
+
+	if signal {
+		skew, err := e.fetchMarketSkew(levelReaction.Market)
 		if err != nil {
-			return fmt.Errorf("evaluating break level reaction: %v", err)
+			return fmt.Errorf("fetching market skew: %v", err)
 		}
 
-		if signal {
-			req := shared.MarketStatusRequest{
-				Market:   reaction.Market,
-				Response: make(chan shared.MarketStatus),
+		switch {
+		case (skew == shared.NeutralSkew || skew == shared.LongSkewed) && levelReaction.Level.Kind == shared.Resistance:
+			// Signal a long position on a confirmed resistance level break if the market is
+			// neutral skewed or already long skewed.
+			direction := shared.Long
+			stopLoss, pointsRange, err := e.estimateStopLoss(high, low, levelReaction.CurrentPrice, direction)
+			if err != nil {
+				return fmt.Errorf("estimating stop loss: %v", err)
 			}
 
-			e.cfg.RequestMatketStatus(req)
-			status := <-req.Response
-
-			switch status {
-			case shared.NeutralInclination:
-				// Signal a short position on a high confluence support break if the market is
-				// neutral directionally.
-				stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
-				if err != nil {
-					return err
-				}
-
-				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
-					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
-				e.cfg.SendEntrySignal(signal)
-
-			case shared.ShortInclined:
-				// Add to the short market inclination by signalling a short position on a
-				// high confluence support break.
-				stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Short)
-				if err != nil {
-					return err
-				}
-
-				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Short,
-					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
-				e.cfg.SendEntrySignal(signal)
-
-			case shared.LongInclined:
-				// A high confluence support break for a long inclined market indicates a
-				// good exit condition.
-				signal := shared.NewExitSignal(reaction.Market, reaction.Timeframe, shared.Long,
-					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn)
-				e.cfg.SendExitSignal(signal)
+			signal := shared.NewEntrySignal(levelReaction.Market, levelReaction.Timeframe, direction,
+				levelReaction.CurrentPrice, reasons, confluences, levelReaction.CreatedOn, stopLoss, pointsRange)
+			e.cfg.SendEntrySignal(signal)
+		case skew == shared.LongSkewed && levelReaction.Level.Kind == shared.Support:
+			// A confirmed support break for a long skewed market acts as an exit condition.
+			direction := shared.Long
+			signal := shared.NewExitSignal(levelReaction.Market, levelReaction.Timeframe, direction,
+				levelReaction.CurrentPrice, reasons, confluences, levelReaction.CreatedOn)
+			e.cfg.SendExitSignal(signal)
+		case (skew == shared.NeutralSkew || skew == shared.ShortSkewed) && levelReaction.Level.Kind == shared.Support:
+			// Signal a short position on a confirmed support break if the market is
+			// neutral skewed or already short skewed.
+			direction := shared.Short
+			stopLoss, pointsRange, err := e.estimateStopLoss(high, low, levelReaction.CurrentPrice, direction)
+			if err != nil {
+				return fmt.Errorf("estimating stop loss: %v", err)
 			}
+
+			signal := shared.NewEntrySignal(levelReaction.Market, levelReaction.Timeframe, direction,
+				levelReaction.CurrentPrice, reasons, confluences, levelReaction.CreatedOn, stopLoss, pointsRange)
+			e.cfg.SendEntrySignal(signal)
+
+		case skew == shared.ShortSkewed && levelReaction.Level.Kind == shared.Resistance:
+			// A confirmed resistance break for a short skewed market acts as an exit condition.
+			direction := shared.Short
+			signal := shared.NewExitSignal(levelReaction.Market, levelReaction.Timeframe, direction,
+				levelReaction.CurrentPrice, reasons, confluences, levelReaction.CreatedOn)
+			e.cfg.SendExitSignal(signal)
 		}
-	case shared.Resistance:
-		signal, confluences, reasons, err := e.evaluateBreak(reaction.Market, meta, shared.Bullish)
-		if err != nil {
-			return fmt.Errorf("evaluating break level reaction: %v", err)
-		}
-
-		if signal {
-			req := shared.MarketStatusRequest{
-				Market:   reaction.Market,
-				Response: make(chan shared.MarketStatus),
-			}
-
-			e.cfg.RequestMatketStatus(req)
-			status := <-req.Response
-
-			switch status {
-			case shared.NeutralInclination:
-				// Signal a long position on a high confluence resistance break if the market is
-				// neutral directionally.
-				stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
-				if err != nil {
-					return err
-				}
-
-				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
-					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
-				e.cfg.SendEntrySignal(signal)
-
-			case shared.LongInclined:
-				// Add to the long market inclination by signalling a long position on a
-				// high confluence resistance break.
-				stopLoss, pointsRange, err := e.estimateStopLoss(high, low, reaction.CurrentPrice, shared.Long)
-				if err != nil {
-					return err
-				}
-
-				signal := shared.NewEntrySignal(reaction.Market, reaction.Timeframe, shared.Long,
-					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn, stopLoss, pointsRange)
-				e.cfg.SendEntrySignal(signal)
-
-			case shared.ShortInclined:
-				// A high confluence resistance break for a short inclined market indicates a
-				// good exit condition.
-				signal := shared.NewExitSignal(reaction.Market, reaction.Timeframe, shared.Short,
-					reaction.CurrentPrice, reasons, confluences, reaction.CreatedOn)
-				e.cfg.SendExitSignal(signal)
-			}
-		}
-	default:
-		// do nothing.
 	}
 
 	return nil
 }
 
 // handleLevelReaction processes the provided level reaction.
-func (e *Engine) handleLevelReaction(reaction *shared.LevelReaction) error {
-	// Fetch the current candle's metadata.
-	req := shared.CandleMetadataRequest{
-		Market:   reaction.Market,
-		Response: make(chan []*shared.CandleMetadata),
+func (e *Engine) handleLevelReaction(levelReaction *shared.LevelReaction) error {
+	defer func() {
+		levelReaction.Status <- shared.Processing
+	}()
+
+	meta, err := e.fetchCandleMetadata(levelReaction.Market)
+	if err != nil {
+		return fmt.Errorf("fetching candle metadata: %v", err)
 	}
-
-	e.cfg.RequestCandleMetadata(req)
-
-	meta := <-req.Response
 
 	high, low := shared.CandleMetaRangeHighAndLow(meta)
 
-	switch reaction.Reaction {
+	switch levelReaction.Reaction {
 	case shared.Reversal:
-		err := e.evaluateLevelReversalStrength(reaction, meta, high, low)
+		err := e.evaluatePriceReversalStrength(levelReaction, meta, high, low)
 		if err != nil {
 			return fmt.Errorf("evaluating level reversal strength: %v", err)
 		}
 	case shared.Break:
-		err := e.evaluateLevelBreakStrength(reaction, meta, high, low)
+		err := e.evaluateLevelBreakStrength(levelReaction, meta, high, low)
 		if err != nil {
 			return fmt.Errorf("evaluating level break strength: %v", err)
 		}
 	case shared.Chop:
 		// Do nothing.
-		e.cfg.Logger.Info().Msgf("chop level reaction encountered for market %s", reaction.Market)
+		e.cfg.Logger.Info().Msgf("chop level reaction encountered for market %s", levelReaction.Market)
 	}
 
-	reaction.ApplyReaction()
+	levelReaction.ApplyReaction()
 
 	return nil
 }
