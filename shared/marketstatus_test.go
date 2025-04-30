@@ -2,36 +2,36 @@ package shared
 
 import "testing"
 
-func TestMarketStatusString(t *testing.T) {
+func TestMarketSkewString(t *testing.T) {
 	tests := []struct {
-		name   string
-		status MarketStatus
-		want   string
+		name string
+		skew MarketSkew
+		want string
 	}{
 		{
-			"neutral inclination",
-			NeutralInclination,
-			"neutral inclination",
+			"neutral skew",
+			NeutralSkew,
+			"neutral skew",
 		},
 		{
-			"long inclined",
-			LongInclined,
-			"long inclined",
+			"long skewed",
+			LongSkewed,
+			"long skewed",
 		},
 		{
-			"short inclined",
-			ShortInclined,
-			"short inclined",
+			"short skewed",
+			ShortSkewed,
+			"short skewed",
 		},
 		{
 			"unknown",
-			MarketStatus(999),
+			MarketSkew(999),
 			"unknown",
 		},
 	}
 
 	for _, test := range tests {
-		str := test.status.String()
+		str := test.skew.String()
 		if str != test.want {
 			t.Errorf("%s: expected %v, got %v", test.name, test.want, str)
 		}

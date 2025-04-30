@@ -29,12 +29,12 @@ type ManagerConfig struct {
 
 // Manager manages positions through their lifecycles.
 type Manager struct {
-	cfg                  *ManagerConfig
-	markets              map[string]*Market
-	entrySignals         chan shared.EntrySignal
-	exitSignals          chan shared.ExitSignal
-	marketStatusRequests chan shared.MarketStatusRequest
-	workers              chan struct{}
+	cfg                *ManagerConfig
+	markets            map[string]*Market
+	entrySignals       chan shared.EntrySignal
+	exitSignals        chan shared.ExitSignal
+	marketSkewRequests chan shared.MarketSkewRequest
+	workers            chan struct{}
 }
 
 // NewPositionManager initializes a new position manager.
@@ -47,12 +47,12 @@ func NewPositionManager(cfg *ManagerConfig) *Manager {
 	}
 
 	return &Manager{
-		cfg:                  cfg,
-		markets:              markets,
-		entrySignals:         make(chan shared.EntrySignal, bufferSize),
-		exitSignals:          make(chan shared.ExitSignal, bufferSize),
-		marketStatusRequests: make(chan shared.MarketStatusRequest, bufferSize),
-		workers:              make(chan struct{}, maxWorkers),
+		cfg:                cfg,
+		markets:            markets,
+		entrySignals:       make(chan shared.EntrySignal, bufferSize),
+		exitSignals:        make(chan shared.ExitSignal, bufferSize),
+		marketSkewRequests: make(chan shared.MarketSkewRequest, bufferSize),
+		workers:            make(chan struct{}, maxWorkers),
 	}
 }
 
@@ -78,14 +78,14 @@ func (m *Manager) SendExitSignal(signal shared.ExitSignal) {
 	}
 }
 
-// SendMarketStatusRequest relays the provided market status request for processing.
-func (m *Manager) SendMarketStatusRequest(req shared.MarketStatusRequest) {
+// SendMarketSkewRequest relays the provided market skew request for processing.
+func (m *Manager) SendMarketStatusRequest(req shared.MarketSkewRequest) {
 	select {
-	case m.marketStatusRequests <- req:
+	case m.marketSkewRequests <- req:
 		// do nothing.
 	default:
-		m.cfg.Logger.Error().Msgf("market status request channel at capacity: %d/%d",
-			len(m.marketStatusRequests), bufferSize)
+		m.cfg.Logger.Error().Msgf("market skew request channel at capacity: %d/%d",
+			len(m.marketSkewRequests), bufferSize)
 	}
 }
 
@@ -143,14 +143,14 @@ func (m *Manager) handleExitSignal(signal *shared.ExitSignal) error {
 	return nil
 }
 
-// handleMarketStatusRequest processes the provided market status request.
-func (m *Manager) handleMarketStatusRequest(req *shared.MarketStatusRequest) error {
+// handleMarketSkewRequest processes the provided market skew request.
+func (m *Manager) handleMarketSkewRequest(req *shared.MarketSkewRequest) error {
 	mkt, ok := m.markets[req.Market]
 	if !ok {
 		return fmt.Errorf("no position market found with id %s", req.Market)
 	}
 
-	req.Response <- shared.MarketStatus(mkt.status.Load())
+	req.Response <- shared.MarketSkew(mkt.skew.Load())
 
 	return nil
 }
@@ -179,10 +179,10 @@ func (m *Manager) Run(ctx context.Context) {
 				}
 				<-m.workers
 			}(&signal)
-		case req := <-m.marketStatusRequests:
+		case req := <-m.marketSkewRequests:
 			m.workers <- struct{}{}
-			go func(req *shared.MarketStatusRequest) {
-				err := m.handleMarketStatusRequest(req)
+			go func(req *shared.MarketSkewRequest) {
+				err := m.handleMarketSkewRequest(req)
 				if err != nil {
 					m.cfg.Logger.Error().Err(err).Send()
 				}

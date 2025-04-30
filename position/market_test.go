@@ -82,10 +82,10 @@ func TestMarket(t *testing.T) {
 
 	err = mkt.Update(candle)
 	assert.NoError(t, err)
-	assert.Equal(t, shared.MarketStatus(mkt.status.Load()), shared.LongInclined)
+	assert.Equal(t, shared.MarketSkew(mkt.skew.Load()), shared.LongSkewed)
 
-	// Ensure once a markets direction inclination is set, tracking positions of the opposite
-	// direction inclination returns an error.
+	// Ensure once a markets skew  is set, tracking positions of the opposite
+	// skew returns an error.
 	shortEntrySignal := &shared.EntrySignal{
 		Market:    market,
 		Timeframe: shared.FiveMinute,
@@ -130,8 +130,8 @@ func TestMarket(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(closedPos), 1)
 
-	// Ensure the market's direction inclination resets once all positions are closed.
-	assert.Equal(t, shared.MarketStatus(mkt.status.Load()), shared.NeutralInclination)
+	// Ensure the market's skew resets once all positions are closed.
+	assert.Equal(t, shared.MarketSkew(mkt.skew.Load()), shared.NeutralSkew)
 
 	// Ensure a market can track short positions.
 	pos, err = NewPosition(shortEntrySignal)
@@ -139,7 +139,7 @@ func TestMarket(t *testing.T) {
 
 	err = mkt.AddPosition(pos)
 	assert.NoError(t, err)
-	assert.Equal(t, shared.MarketStatus(mkt.status.Load()), shared.ShortInclined)
+	assert.Equal(t, shared.MarketSkew(mkt.skew.Load()), shared.ShortSkewed)
 
 	// Ensure the market does not track duplicate short positions.
 	mkt.positionMtx.RLock()
@@ -153,8 +153,8 @@ func TestMarket(t *testing.T) {
 	sizeAfter = len(mkt.positions)
 	mkt.positionMtx.RUnlock()
 
-	// Ensure once a markets direction inclination is set, tracking positions of the opposite
-	// direction inclination returns an error.
+	// Ensure once a markets skew is set, tracking positions of the opposite
+	// skew returns an error.
 	pos, err = NewPosition(longEntrySignal)
 	assert.NoError(t, err)
 
@@ -175,6 +175,6 @@ func TestMarket(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(closedPos), 1)
 
-	// Ensure the market's direction inclination resets once all positions are closed.
-	assert.Equal(t, shared.MarketStatus(mkt.status.Load()), shared.NeutralInclination)
+	// Ensure the market's skew resets once all positions are closed.
+	assert.Equal(t, shared.MarketSkew(mkt.skew.Load()), shared.NeutralSkew)
 }

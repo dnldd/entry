@@ -72,13 +72,13 @@ func TestManager(t *testing.T) {
 	msg = <-notifyMsgs
 	assert.True(t, strings.Contains(msg, "with stoploss"))
 
-	marketStatusReq := shared.MarketStatusRequest{
+	marketSkewReq := shared.MarketSkewRequest{
 		Market:   market,
-		Response: make(chan shared.MarketStatus, 5),
+		Response: make(chan shared.MarketSkew, 5),
 	}
 
-	mgr.SendMarketStatusRequest(marketStatusReq)
-	<-marketStatusReq.Response
+	mgr.SendMarketStatusRequest(marketSkewReq)
+	<-marketSkewReq.Response
 
 	// Ensure the position manager can be gracefully shutdown.
 	cancel()
@@ -108,21 +108,21 @@ func TestFillManagerChannels(t *testing.T) {
 		Reasons:   []shared.Reason{shared.BearishEngulfing, shared.StrongVolume},
 	}
 
-	marketStatusReq := shared.MarketStatusRequest{
+	marketSkewReq := shared.MarketSkewRequest{
 		Market:   market,
-		Response: make(chan shared.MarketStatus),
+		Response: make(chan shared.MarketSkew),
 	}
 
 	// Fill all the channels used by the manager.
 	for range bufferSize + 1 {
 		mgr.SendEntrySignal(entrySignal)
 		mgr.SendExitSignal(exitSignal)
-		mgr.SendMarketStatusRequest(marketStatusReq)
+		mgr.SendMarketStatusRequest(marketSkewReq)
 	}
 
 	assert.Equal(t, len(mgr.entrySignals), bufferSize)
 	assert.Equal(t, len(mgr.exitSignals), bufferSize)
-	assert.Equal(t, len(mgr.marketStatusRequests), bufferSize)
+	assert.Equal(t, len(mgr.marketSkewRequests), bufferSize)
 }
 
 func TestHandleEntrySignals(t *testing.T) {
@@ -209,23 +209,23 @@ func TestHandleMarketStatusRequest(t *testing.T) {
 	mgr, _, _ := setupManager(market)
 
 	// Ensure handling a request with an unknown market errors.
-	unknownMarketStatusReq := shared.MarketStatusRequest{
+	unknownMarketSkewReq := shared.MarketSkewRequest{
 		Market:   "^AAPL",
-		Response: make(chan shared.MarketStatus),
+		Response: make(chan shared.MarketSkew),
 	}
 
-	err := mgr.handleMarketStatusRequest(&unknownMarketStatusReq)
+	err := mgr.handleMarketSkewRequest(&unknownMarketSkewReq)
 	assert.Error(t, err)
 
 	// Ensure a valid request is processed as expected.
-	marketStatusReq := shared.MarketStatusRequest{
+	skewReq := shared.MarketSkewRequest{
 		Market:   market,
-		Response: make(chan shared.MarketStatus, 5),
+		Response: make(chan shared.MarketSkew, 5),
 	}
 
-	err = mgr.handleMarketStatusRequest(&marketStatusReq)
+	err = mgr.handleMarketSkewRequest(&skewReq)
 	assert.NoError(t, err)
 
-	resp := <-marketStatusReq.Response
-	assert.Equal(t, shared.NeutralInclination, resp)
+	resp := <-skewReq.Response
+	assert.Equal(t, shared.NeutralSkew, resp)
 }

@@ -34,9 +34,9 @@ type AverageVolumeRequest struct {
 	Response chan float64
 }
 
-// MarketStatusRequest represents a market inclination request to fetch the market status request
-// for a market.
-type MarketStatusRequest struct {
+// MarketSkewRequest represents a market skew request to fetch the market
+// skew for a market.
+type MarketSkewRequest struct {
 	Market   string
-	Response chan MarketStatus
+	Response chan MarketSkew
 }

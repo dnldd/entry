@@ -1,23 +1,23 @@
 package shared
 
-// MarketStatus represents defines the possible market status states.
-type MarketStatus int
+// MarketSkew represents defines the possible market skew states.
+type MarketSkew int
 
 const (
-	NeutralInclination MarketStatus = iota
-	LongInclined
-	ShortInclined
+	NeutralSkew MarketSkew = iota
+	LongSkewed
+	ShortSkewed
 )
 
-// String stringifies the provided market status.
-func (s MarketStatus) String() string {
+// String stringifies the provided market skew.
+func (s MarketSkew) String() string {
 	switch s {
-	case NeutralInclination:
-		return "neutral inclination"
-	case LongInclined:
-		return "long inclined"
-	case ShortInclined:
-		return "short inclined"
+	case NeutralSkew:
+		return "neutral skew"
+	case LongSkewed:
+		return "long skewed"
+	case ShortSkewed:
+		return "short skewed"
 	default:
 		return "unknown"
 	}
