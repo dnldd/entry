@@ -1,0 +1,66 @@
+[
+    {
+        "open": 30,
+        "low": 26,
+        "high": 36,
+        "close": 28,
+        "volume": 10,
+        "date": ""
+    },
+    {
+        "open": 28,
+        "low": 24,
+        "high": 29,
+        "close": 25,
+        "volume": 12,
+        "date": ""
+    },
+    {
+        "open": 25,
+        "low": 20,
+        "high": 26,
+        "close": 22,
+        "volume": 10,
+        "date": ""
+    },
+    {
+        "open": 22,
+        "low": 18,
+        "high": 26,
+        "close": 25,
+        "volume": 5,
+        "date": ""
+    },
+    {
+        "open": 25,
+        "low": 24,
+        "high": 30,
+        "close": 27,
+        "volume": 6,
+        "date": ""
+    },
+    {
+        "open": 27,
+        "low": 26,
+        "high": 34,
+        "close": 32,
+        "volume": 8,
+        "date": ""
+    },
+    {
+        "open": 32,
+        "low": 30,
+        "high": 38,
+        "close": 36,
+        "volume": 10,
+        "date": ""
+    },
+    {
+        "open": 36,
+        "low": 34,
+        "high": 42,
+        "close": 40,
+        "volume": 12,
+        "date": ""
+    }
+]
