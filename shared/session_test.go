@@ -72,7 +72,8 @@ func TestSession(t *testing.T) {
 
 	noSessionTime := time.Date(now.Year(), now.Month(), now.Day(), noSession.Hour(), noSession.Minute(), 0, 0, loc)
 
-	session, err := CurrentSession(noSessionTime)
+	name, session, err := CurrentSession(noSessionTime)
 	assert.NoError(t, err)
-	assert.Equal(t, session, "")
+	assert.Nil(t, session)
+	assert.Equal(t, name, "")
 }

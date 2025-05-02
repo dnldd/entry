@@ -89,7 +89,7 @@ func (s *Session) IsCurrentSession(current time.Time) bool {
 }
 
 // CurrentSession returns the current active session name.
-func CurrentSession(now time.Time) (string, error) {
+func CurrentSession(now time.Time) (string, *Session, error) {
 	yesterday := now.AddDate(0, 0, -1)
 
 	sessions := []struct {
@@ -104,24 +104,30 @@ func CurrentSession(now time.Time) (string, error) {
 		{Asia, AsiaOpen, AsiaClose, now},
 	}
 
+	var currentSession *Session
 	for _, sess := range sessions {
 		session, err := NewSession(sess.name, sess.open, sess.close, sess.time)
 		if err != nil {
-			return "", fmt.Errorf("creating %s session: %w", sess.name, err)
+			return "", nil, fmt.Errorf("creating %s session: %w", sess.name, err)
 		}
 
 		if (now.Equal(session.Open) || now.After(session.Open)) && now.Before(session.Close) {
-			return session.Name, nil
+			currentSession = session
+			break
 		}
 	}
 
-	return "", nil
+	if currentSession != nil {
+		return currentSession.Name, currentSession, nil
+	}
+
+	return "", nil, nil
 }
 
 // IsMarketOpen checks whether the markets (only futures) are open by checking if the current
 // time is within one of the market sessions.
 func IsMarketOpen(now time.Time) (bool, string, error) {
-	name, err := CurrentSession(now)
+	name, _, err := CurrentSession(now)
 	if err != nil {
 		return false, name, fmt.Errorf("fetching current market session: %v", err)
 	}
