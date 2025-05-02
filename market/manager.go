@@ -129,7 +129,7 @@ func (m *Manager) SendAverageVolumeRequest(request shared.AverageVolumeRequest) 
 		// do nothing.
 	default:
 		m.cfg.Logger.Error().Msgf("average volume requests channel at capacity: %d/%d",
-			len(m.averageVolume), bufferSize)
+			len(m.averageVolumeRequests), bufferSize)
 	}
 }
 
@@ -153,6 +153,10 @@ func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) error {
 
 // handleCaughtUpSignal processes the provided caught up signal.
 func (m *Manager) handleCaughtUpSignal(signal *shared.CaughtUpSignal) error {
+	defer func() {
+		signal.Status <- shared.Processed
+	}()
+
 	m.marketsMtx.RLock()
 	mkt, ok := m.markets[signal.Market]
 	m.marketsMtx.RUnlock()
@@ -244,13 +248,7 @@ func (m *Manager) catchUp() error {
 			return fmt.Errorf("fetching last session open: %v", err)
 		}
 
-		signal := shared.CatchUpSignal{
-			Market:    market.cfg.Market,
-			Timeframe: shared.FiveMinute,
-			Start:     start,
-			Status:    make(chan shared.StatusCode),
-		}
-
+		signal := shared.NewCatchUpSignal(market.cfg.Market, shared.FiveMinute, start)
 		m.cfg.CatchUp(signal)
 	}
 

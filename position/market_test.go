@@ -28,6 +28,7 @@ func TestMarket(t *testing.T) {
 		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
 		StopLoss:  8,
 		CreatedOn: now,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	pos, err := NewPosition(untrackedMarketEntrySignal)
@@ -45,6 +46,7 @@ func TestMarket(t *testing.T) {
 		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
 		StopLoss:  8,
 		CreatedOn: now,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	pos, err = NewPosition(longEntrySignal)
@@ -78,6 +80,7 @@ func TestMarket(t *testing.T) {
 
 		Market:    market,
 		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err = mkt.Update(candle)
@@ -94,6 +97,7 @@ func TestMarket(t *testing.T) {
 		Reasons:   []shared.Reason{shared.BearishEngulfing, shared.StrongVolume},
 		StopLoss:  12,
 		CreatedOn: now,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	pos, err = NewPosition(shortEntrySignal)
@@ -111,6 +115,7 @@ func TestMarket(t *testing.T) {
 		Reasons:    []shared.Reason{shared.BearishEngulfing},
 		Confluence: 8,
 		CreatedOn:  now,
+		Status:     make(chan shared.StatusCode, 1),
 	}
 
 	closedPos, err := mkt.ClosePositions(wrongMarketExitSignal)
@@ -125,6 +130,7 @@ func TestMarket(t *testing.T) {
 		Reasons:    []shared.Reason{shared.BearishEngulfing},
 		Confluence: 8,
 		CreatedOn:  now,
+		Status:     make(chan shared.StatusCode, 1),
 	}
 	closedPos, err = mkt.ClosePositions(longExitSignal)
 	assert.NoError(t, err)
@@ -170,6 +176,7 @@ func TestMarket(t *testing.T) {
 		Reasons:    []shared.Reason{shared.BullishEngulfing},
 		Confluence: 8,
 		CreatedOn:  now,
+		Status:     make(chan shared.StatusCode, 1),
 	}
 	closedPos, err = mkt.ClosePositions(shortExitSignal)
 	assert.NoError(t, err)

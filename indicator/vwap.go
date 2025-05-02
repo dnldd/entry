@@ -48,10 +48,6 @@ func (v *VWAP) Update(candle *shared.Candlestick) (float64, error) {
 	v.LastUpdateTime = candle.Date
 	candle.VWAP = vwap
 
-	if candle.Done != nil {
-		close(candle.Done)
-	}
-
 	return vwap, nil
 }
 

@@ -492,7 +492,7 @@ func (e *Engine) evaluateLevelBreakStrength(levelReaction *shared.LevelReaction,
 // handleLevelReaction processes the provided level reaction.
 func (e *Engine) handleLevelReaction(levelReaction *shared.LevelReaction) error {
 	defer func() {
-		levelReaction.Status <- shared.Processing
+		levelReaction.Status <- shared.Processed
 	}()
 
 	meta, err := e.fetchCandleMetadata(levelReaction.Market)

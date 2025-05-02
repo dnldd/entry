@@ -73,7 +73,7 @@ func (m *Manager) SendLevelSignal(level shared.LevelSignal) {
 	}
 }
 
-// SendLevel relays the provided level signal for processing.
+// SendLevel relays the provided market update for processing.
 func (m *Manager) SendMarketUpdate(candle shared.Candlestick) {
 	select {
 	case m.updateSignals <- candle:

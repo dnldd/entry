@@ -1,6 +1,16 @@
 package shared
 
-import "time"
+import (
+	"time"
+)
+
+// StatusCode represents a request or signal status code.
+type StatusCode int
+
+const (
+	Processing StatusCode = iota
+	Processed
+)
 
 // EntrySignal represents an entry signal for a position.
 type EntrySignal struct {
@@ -13,40 +23,7 @@ type EntrySignal struct {
 	StopLoss            float64
 	StopLossPointsRange float64
 	CreatedOn           time.Time
-	Done                chan struct{}
-}
-
-// ExitSignal represents an exit signal for a position.
-type ExitSignal struct {
-	Market     string
-	Timeframe  Timeframe
-	Direction  Direction
-	Price      float64
-	Reasons    []Reason
-	Confluence uint32
-	CreatedOn  time.Time
-	Done       chan struct{}
-}
-
-// LevelSignal represents a level signal to outline a price level.
-type LevelSignal struct {
-	Market string
-	Price  float64
-	Done   chan struct{}
-}
-
-// CatchUpSignal represents a signal to catchup on market data.
-type CatchUpSignal struct {
-	Market    string
-	Timeframe Timeframe
-	Start     time.Time
-	Status    chan StatusCode
-}
-
-// CaughtUpSignal represents a signal to conclude a catch up on market data.
-type CaughtUpSignal struct {
-	Market string
-	Done   chan struct{}
+	Status              chan StatusCode
 }
 
 // NewEntrySignal initializes a new entry signal.
@@ -62,7 +39,20 @@ func NewEntrySignal(market string, timeframe Timeframe, direction Direction, pri
 		CreatedOn:           created,
 		StopLoss:            stopLoss,
 		StopLossPointsRange: stopLossPointsRange,
+		Status:              make(chan StatusCode, 1),
 	}
+}
+
+// ExitSignal represents an exit signal for a position.
+type ExitSignal struct {
+	Market     string
+	Timeframe  Timeframe
+	Direction  Direction
+	Price      float64
+	Reasons    []Reason
+	Confluence uint32
+	CreatedOn  time.Time
+	Status     chan StatusCode
 }
 
 // NewExitSignal initializes a new exit signal.
@@ -76,5 +66,54 @@ func NewExitSignal(market string, timeframe Timeframe, direction Direction, pric
 		Reasons:    reasons,
 		Confluence: confluence,
 		CreatedOn:  created,
+		Status:     make(chan StatusCode, 1),
+	}
+}
+
+// LevelSignal represents a level signal to outline a price level.
+type LevelSignal struct {
+	Market string
+	Price  float64
+	Status chan StatusCode
+}
+
+// NewLevelSignal initializes a new level signal.
+func NewLevelSignal(market string, price float64) LevelSignal {
+	return LevelSignal{
+		Market: market,
+		Price:  price,
+		Status: make(chan StatusCode, 1),
+	}
+}
+
+// CatchUpSignal represents a signal to catchup on market data.
+type CatchUpSignal struct {
+	Market    string
+	Timeframe Timeframe
+	Start     time.Time
+	Status    chan StatusCode
+}
+
+// NewCatchUpSignal initializes a new catch up signal.
+func NewCatchUpSignal(market string, timeframe Timeframe, start time.Time) CatchUpSignal {
+	return CatchUpSignal{
+		Market:    market,
+		Timeframe: timeframe,
+		Start:     start,
+		Status:    make(chan StatusCode, 1),
+	}
+}
+
+// CaughtUpSignal represents a signal to conclude a catch up on market data.
+type CaughtUpSignal struct {
+	Market string
+	Status chan StatusCode
+}
+
+// NewCaughtUpSignal initializes a new caught up signal.
+func NewCaughtUpSignal(market string) CaughtUpSignal {
+	return CaughtUpSignal{
+		Market: market,
+		Status: make(chan StatusCode, 1),
 	}
 }

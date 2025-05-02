@@ -86,6 +86,10 @@ func (m *Market) CaughtUp() bool {
 
 // Update processes incoming market data for the provided market.
 func (m *Market) Update(candle *shared.Candlestick) error {
+	defer func() {
+		candle.Status <- shared.Processed
+	}()
+
 	if candle.Timeframe != shared.FiveMinute {
 		// do nothing.
 		m.cfg.Logger.Info().Msgf("encountered %s candle for updates instead of the expected "+
@@ -112,16 +116,10 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 			return fmt.Errorf("fetching new levels: %w", err)
 		}
 
-		sessionHigh := shared.LevelSignal{
-			Market: candle.Market,
-			Price:  high,
-		}
+		sessionHigh := shared.NewLevelSignal(candle.Market, high)
 		m.cfg.SignalLevel(sessionHigh)
 
-		sessionLow := shared.LevelSignal{
-			Market: candle.Market,
-			Price:  low,
-		}
+		sessionLow := shared.NewLevelSignal(candle.Market, low)
 		m.cfg.SignalLevel(sessionLow)
 	}
 

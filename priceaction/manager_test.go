@@ -27,6 +27,7 @@ func setupManager(t *testing.T, market string) *Manager {
 
 				Market:    req.Market,
 				Timeframe: shared.FiveMinute,
+				Status:    make(chan shared.StatusCode, 1),
 			}
 
 			data = append(data, &candle)
@@ -77,6 +78,7 @@ func TestManager(t *testing.T) {
 
 		Market:    market,
 		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	mgr.SendMarketUpdate(firstCandle)
@@ -118,6 +120,7 @@ func TestManagerHandleUpdateSignal(t *testing.T) {
 
 		Market:    "^AAPL",
 		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err := mgr.handleUpdateSignal(&wrongMarketCandle)
@@ -133,6 +136,7 @@ func TestManagerHandleUpdateSignal(t *testing.T) {
 
 		Market:    market,
 		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err = mgr.handleUpdateSignal(&firstCandle)
@@ -143,6 +147,7 @@ func TestManagerHandleUpdateSignal(t *testing.T) {
 	levelSignal := shared.LevelSignal{
 		Market: market,
 		Price:  3,
+		Status: make(chan shared.StatusCode, 1),
 	}
 	err = mgr.handleLevelSignal(levelSignal)
 	assert.NoError(t, err)
@@ -160,6 +165,7 @@ func TestManagerHandleUpdateSignal(t *testing.T) {
 
 		Market:    market,
 		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err = mgr.handleUpdateSignal(&secondCandle)

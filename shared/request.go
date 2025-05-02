@@ -1,12 +1,5 @@
 package shared
 
-// StatusCode represents a request or signal status code.
-type StatusCode int
-
-const (
-	Processing StatusCode = iota
-)
-
 const (
 	// PriceDataPayloadSize is the number of candles expected as payload for a price data range request.
 	PriceDataPayloadSize = 4

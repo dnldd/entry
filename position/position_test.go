@@ -66,6 +66,7 @@ func TestPosition(t *testing.T) {
 		Price:     10,
 		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
 		StopLoss:  8,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	invalidDirectionEntrySignal := &shared.EntrySignal{
@@ -75,6 +76,7 @@ func TestPosition(t *testing.T) {
 		Price:     10,
 		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
 		StopLoss:  8,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	// Ensure creating a position errors if the direction of the entry is unknown.
@@ -101,6 +103,7 @@ func TestPosition(t *testing.T) {
 		Direction: shared.Long,
 		Price:     18,
 		Reasons:   []shared.Reason{shared.TargetHit},
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	status, err := position.ClosePosition(longExitSignal)
@@ -115,6 +118,7 @@ func TestPosition(t *testing.T) {
 		Price:     20,
 		Reasons:   []shared.Reason{shared.BearishEngulfing, shared.StrongVolume},
 		StopLoss:  22,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	position, err = NewPosition(shortEntrySignal)
@@ -130,6 +134,7 @@ func TestPosition(t *testing.T) {
 		Direction: shared.Long,
 		Price:     22,
 		Reasons:   []shared.Reason{shared.StopLossHit},
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	status, err = position.ClosePosition(shortExitSignal)
@@ -150,6 +155,7 @@ func TestPosition(t *testing.T) {
 		Direction: shared.Long,
 		Price:     8,
 		Reasons:   []shared.Reason{shared.StopLossHit},
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	status, err = position.ClosePosition(exitSignal)

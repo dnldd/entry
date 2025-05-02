@@ -24,16 +24,18 @@ func TestLevelSnapshot(t *testing.T) {
 	price := float64(12)
 	market := "^GSPC"
 	resistanceCandle := &shared.Candlestick{
-		Open:  10,
-		High:  15,
-		Low:   9,
-		Close: 5,
+		Open:   10,
+		High:   15,
+		Low:    9,
+		Close:  5,
+		Status: make(chan shared.StatusCode, 1),
 	}
 	supportCandle := &shared.Candlestick{
-		Open:  13,
-		High:  18,
-		Low:   12,
-		Close: 17,
+		Open:   13,
+		High:   18,
+		Low:    12,
+		Close:  17,
+		Status: make(chan shared.StatusCode, 1),
 	}
 	for idx := range size {
 		var level *shared.Level
@@ -63,7 +65,6 @@ func TestLevelSnapshot(t *testing.T) {
 	// Ensure the snapshot can be filtered.
 	filter := func(level *shared.Level, candle *shared.Candlestick) bool {
 		return level.Price > candle.Close
-
 	}
 
 	filteredLevels := levelSnapshot.Filter(resistanceCandle, filter)

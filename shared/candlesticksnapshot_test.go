@@ -39,6 +39,7 @@ func TestCandlestickSnapshot(t *testing.T) {
 			High:   float64(idx + 3),
 			Low:    float64(idx),
 			Volume: float64(idx),
+			Status: make(chan StatusCode, 1),
 		}
 		candleSnapshot.Update(candle)
 	}
@@ -63,6 +64,7 @@ func TestCandlestickSnapshot(t *testing.T) {
 		High:   float64(9),
 		Low:    float64(3),
 		Volume: float64(2),
+		Status: make(chan StatusCode, 1),
 	}
 
 	candleSnapshot.Update(candle)
@@ -73,15 +75,23 @@ func TestCandlestickSnapshot(t *testing.T) {
 
 	// Ensure the last n elements can be fetched from the snapshot.
 	nSet := candleSnapshot.LastN(2)
-	assert.Equal(t, nSet[0],
-		&Candlestick{
-			Open:   4,
-			Close:  5,
-			High:   6,
-			Low:    3,
-			Volume: 3,
-		})
-	assert.Equal(t, nSet[1], candle)
+	expectedCandle := Candlestick{
+		Open:   4,
+		Close:  5,
+		High:   6,
+		Low:    3,
+		Volume: 3,
+	}
+	assert.Equal(t, nSet[0].Open, expectedCandle.Open)
+	assert.Equal(t, nSet[0].High, expectedCandle.High)
+	assert.Equal(t, nSet[0].Low, expectedCandle.Low)
+	assert.Equal(t, nSet[0].Close, expectedCandle.Close)
+	assert.Equal(t, nSet[0].Volume, expectedCandle.Volume)
+	assert.Equal(t, nSet[1].Open, candle.Open)
+	assert.Equal(t, nSet[1].High, candle.High)
+	assert.Equal(t, nSet[1].Low, candle.Low)
+	assert.Equal(t, nSet[1].Close, candle.Close)
+	assert.Equal(t, nSet[1].Volume, candle.Volume)
 
 	// Ensure the average volume n can be fetched from the snapshot.
 	average := candleSnapshot.AverageVolumeN(2)
@@ -98,6 +108,7 @@ func TestCandlestickSnapshot(t *testing.T) {
 		High:   float64(10),
 		Low:    float64(4),
 		Volume: float64(3),
+		Status: make(chan StatusCode, 1),
 	}
 
 	candleSnapshot.Update(next)
@@ -105,5 +116,4 @@ func TestCandlestickSnapshot(t *testing.T) {
 	assert.Equal(t, candleSnapshot.size.Load(), size)
 	assert.Equal(t, candleSnapshot.start.Load(), 2)
 	assert.Equal(t, len(candleSnapshot.data), int(size))
-
 }

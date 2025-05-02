@@ -23,6 +23,7 @@ func TestMarket(t *testing.T) {
 		High:   float64(9),
 		Low:    float64(3),
 		Volume: float64(2),
+		Status: make(chan shared.StatusCode, 1),
 	}
 
 	resistanceCandle := &shared.Candlestick{
@@ -31,6 +32,7 @@ func TestMarket(t *testing.T) {
 		High:   float64(10),
 		Low:    float64(5),
 		Volume: float64(2),
+		Status: make(chan shared.StatusCode, 1),
 	}
 
 	mkt.Update(supportCandle)
@@ -57,6 +59,7 @@ func TestMarket(t *testing.T) {
 		High:   float64(10),
 		Low:    float64(1),
 		Volume: float64(1),
+		Status: make(chan shared.StatusCode, 1),
 	}
 
 	// Ensure the market can check whether a candle tags a level.
@@ -86,6 +89,7 @@ func TestMarket(t *testing.T) {
 			High:   float64(8 + idx),
 			Low:    float64(4 + idx),
 			Volume: float64(2 + idx),
+			Status: make(chan shared.StatusCode, 1),
 		}
 		mkt.Update(candle)
 	}
@@ -100,6 +104,7 @@ func TestMarket(t *testing.T) {
 			High:   float64(4),
 			Low:    float64(1),
 			Volume: float64(1),
+			Status: make(chan shared.StatusCode, 1),
 		},
 		{
 			Open:   float64(4),
@@ -107,6 +112,7 @@ func TestMarket(t *testing.T) {
 			High:   float64(7),
 			Low:    float64(3),
 			Volume: float64(2),
+			Status: make(chan shared.StatusCode, 1),
 		},
 		{
 			Open:   float64(6),
@@ -114,6 +120,7 @@ func TestMarket(t *testing.T) {
 			High:   float64(9),
 			Low:    float64(5),
 			Volume: float64(2),
+			Status: make(chan shared.StatusCode, 1),
 		},
 		{
 			Open:   float64(8),
@@ -121,6 +128,7 @@ func TestMarket(t *testing.T) {
 			High:   float64(11),
 			Low:    float64(7),
 			Volume: float64(2),
+			Status: make(chan shared.StatusCode, 1),
 		},
 	}
 

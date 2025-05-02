@@ -53,6 +53,7 @@ func TestManager(t *testing.T) {
 		Price:     float64(10),
 		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
 		StopLoss:  float64(8),
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	mgr.SendEntrySignal(entrySignal)
@@ -66,6 +67,7 @@ func TestManager(t *testing.T) {
 		Direction: shared.Long,
 		Price:     float64(15),
 		Reasons:   []shared.Reason{shared.BearishEngulfing, shared.StrongVolume},
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	mgr.SendExitSignal(exitSignal)
@@ -98,6 +100,7 @@ func TestFillManagerChannels(t *testing.T) {
 		Price:     float64(10),
 		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
 		StopLoss:  float64(8),
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	exitSignal := shared.ExitSignal{
@@ -106,6 +109,7 @@ func TestFillManagerChannels(t *testing.T) {
 		Direction: shared.Long,
 		Price:     float64(15),
 		Reasons:   []shared.Reason{shared.BearishEngulfing, shared.StrongVolume},
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	marketSkewReq := shared.MarketSkewRequest{
@@ -137,6 +141,7 @@ func TestHandleEntrySignals(t *testing.T) {
 		Price:     float64(10),
 		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
 		StopLoss:  float64(8),
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err := mgr.handleEntrySignal(&unknownMarketEntrySignal)
@@ -150,6 +155,7 @@ func TestHandleEntrySignals(t *testing.T) {
 		Price:     float64(10),
 		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
 		StopLoss:  float64(8),
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err = mgr.handleEntrySignal(&entrySignal)
@@ -170,6 +176,7 @@ func TestHandleExitSignals(t *testing.T) {
 		Price:     float64(10),
 		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
 		StopLoss:  float64(8),
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err := mgr.handleEntrySignal(&entrySignal)
@@ -184,6 +191,7 @@ func TestHandleExitSignals(t *testing.T) {
 		Direction: shared.Long,
 		Price:     float64(15),
 		Reasons:   []shared.Reason{shared.BearishEngulfing, shared.StrongVolume},
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err = mgr.handleExitSignal(&unknownMarketExitSignal)
@@ -196,6 +204,7 @@ func TestHandleExitSignals(t *testing.T) {
 		Direction: shared.Long,
 		Price:     float64(15),
 		Reasons:   []shared.Reason{shared.BearishEngulfing, shared.StrongVolume},
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err = mgr.handleExitSignal(&exitSignal)

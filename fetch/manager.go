@@ -155,7 +155,7 @@ func (m *Manager) fetchMarketDataJob(marketName string, timeframe shared.Timefra
 // handleCatchUpSignal processes the provided catch up signal.
 func (m *Manager) handleCatchUpSignal(signal shared.CatchUpSignal) error {
 	defer func() {
-		signal.Status <- shared.Processing
+		signal.Status <- shared.Processed
 	}()
 
 	m.lastUpdatedTimesMtx.RLock()
@@ -168,10 +168,7 @@ func (m *Manager) handleCatchUpSignal(signal shared.CatchUpSignal) error {
 
 	m.fetchMarketData(signal.Market, signal.Timeframe, signal.Start)
 
-	sig := shared.CaughtUpSignal{
-		Market: signal.Market,
-	}
-
+	sig := shared.NewCaughtUpSignal(signal.Market)
 	m.cfg.SignalCaughtUp(sig)
 
 	// Periodically fetch market updates once caught up.

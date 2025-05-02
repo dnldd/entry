@@ -59,6 +59,7 @@ func TestMarket(t *testing.T) {
 
 		Market:    market,
 		Timeframe: shared.OneHour,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err = mkt.Update(ignoredCandle)
@@ -75,6 +76,7 @@ func TestMarket(t *testing.T) {
 
 		Market:    market,
 		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err = mkt.Update(firstCandle)
@@ -91,6 +93,7 @@ func TestMarket(t *testing.T) {
 
 		Market:    market,
 		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err = mkt.Update(secondCandle)

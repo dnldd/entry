@@ -102,7 +102,7 @@ type Candlestick struct {
 	Market    string
 	Timeframe Timeframe
 	VWAP      float64
-	Done      chan struct{}
+	Status    chan StatusCode
 }
 
 // FetchSentiment returns the provided candlestick's sentiment.
@@ -173,6 +173,7 @@ func ParseCandlesticks(data []gjson.Result, market string, timeframe Timeframe) 
 
 		candle.Market = market
 		candle.Timeframe = timeframe
+		candle.Status = make(chan StatusCode, 1)
 
 		dt, err := time.Parse(DateLayout, data[idx].Get("date").String())
 		if err != nil {

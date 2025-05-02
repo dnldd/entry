@@ -71,9 +71,7 @@ func TestManager(t *testing.T) {
 	assert.Equal(t, sig.Market, market)
 
 	// Ensure the manager can handle a catch up signal.
-	signal := shared.CaughtUpSignal{
-		Market: market,
-	}
+	signal := shared.NewCaughtUpSignal(market)
 	mgr.SendCaughtUpSignal(signal)
 
 	// Ensure the manager can process a market update.
@@ -87,7 +85,7 @@ func TestManager(t *testing.T) {
 
 		Market:    market,
 		Timeframe: shared.FiveMinute,
-		Done:      make(chan struct{}),
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	mgr.SendMarketUpdate(candle)
@@ -138,6 +136,7 @@ func TestFillManagerChannels(t *testing.T) {
 
 		Market:    market,
 		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	priceDataReq := shared.PriceDataRequest{
@@ -182,6 +181,7 @@ func TestHandleUpdateCandle(t *testing.T) {
 
 		Market:    "^AAPL",
 		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err = mgr.handleUpdateCandle(&wrongMarketCandle)
@@ -198,6 +198,7 @@ func TestHandleUpdateCandle(t *testing.T) {
 
 		Market:    market,
 		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err = mgr.handleUpdateCandle(&candle)
@@ -211,6 +212,7 @@ func TestHandleCaughtUpSignal(t *testing.T) {
 	// Ensure processing a caught up signal for an unknown market errors.
 	wrongMarketCaughtUpSignal := shared.CaughtUpSignal{
 		Market: "^AAPL",
+		Status: make(chan shared.StatusCode, 1),
 	}
 
 	err := mgr.handleCaughtUpSignal(&wrongMarketCaughtUpSignal)
@@ -219,6 +221,7 @@ func TestHandleCaughtUpSignal(t *testing.T) {
 	// Ensure processing a valid caught up signal succeeds as expected.
 	caughtUpSignal := shared.CaughtUpSignal{
 		Market: market,
+		Status: make(chan shared.StatusCode, 1),
 	}
 
 	err = mgr.handleCaughtUpSignal(&caughtUpSignal)
@@ -243,6 +246,7 @@ func TestHandleAverageVolumeSignal(t *testing.T) {
 
 		Market:    market,
 		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err = mgr.handleUpdateCandle(&candle)
@@ -295,6 +299,7 @@ func TestHandlePriceDataRequest(t *testing.T) {
 
 			Market:    market,
 			Timeframe: shared.FiveMinute,
+			Status:    make(chan shared.StatusCode, 1),
 		}
 
 		err = mgr.handleUpdateCandle(&candle)

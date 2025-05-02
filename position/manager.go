@@ -91,6 +91,10 @@ func (m *Manager) SendMarketStatusRequest(req shared.MarketSkewRequest) {
 
 // handleEntrySignal processes the provided entry signal.
 func (m *Manager) handleEntrySignal(signal *shared.EntrySignal) error {
+	defer func() {
+		signal.Status <- shared.Processed
+	}()
+
 	position, err := NewPosition(signal)
 	if err != nil {
 		return fmt.Errorf("creating new position: %v", err)
@@ -117,6 +121,10 @@ func (m *Manager) handleEntrySignal(signal *shared.EntrySignal) error {
 
 // handleExitSignal processes the provided exit signal.
 func (m *Manager) handleExitSignal(signal *shared.ExitSignal) error {
+	defer func() {
+		signal.Status <- shared.Processed
+	}()
+
 	mkt, ok := m.markets[signal.Market]
 	if !ok {
 		return fmt.Errorf("no position market found with id %s", signal.Market)
