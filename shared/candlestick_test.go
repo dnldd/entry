@@ -2,6 +2,7 @@ package shared
 
 import (
 	"testing"
+	"time"
 
 	"github.com/peterldowns/testy/assert"
 	"github.com/tidwall/gjson"
@@ -469,7 +470,9 @@ func TestParseCandlesticks(t *testing.T) {
 	gjd := gjson.Parse(data).Array()
 
 	// Ensure candlesticks data can be parsed.
-	candles, err := ParseCandlesticks(gjd, market, timeframe)
+	loc, err := time.LoadLocation(NewYorkLocation)
+	assert.NoError(t, err)
+	candles, err := ParseCandlesticks(gjd, market, timeframe, loc)
 	assert.NoError(t, err)
 	assert.Equal(t, len(candles), 1)
 	assert.Equal(t, candles[0].Open, float64(10))

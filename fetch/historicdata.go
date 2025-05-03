@@ -28,8 +28,9 @@ type HistoricDataConfig struct {
 
 // HistoricData represents historic market data.
 type HistoricData struct {
-	cfg     *HistoricDataConfig
-	candles []shared.Candlestick
+	cfg      *HistoricDataConfig
+	location *time.Location
+	candles  []shared.Candlestick
 }
 
 // loadHistoricData loads the historic data bytes from the provided file path.
@@ -51,11 +52,17 @@ func NewHistoricData(cfg *HistoricDataConfig) (*HistoricData, error) {
 		return nil, fmt.Errorf("loading historic data: %v", err)
 	}
 
-	historicData := HistoricData{
-		cfg: cfg,
+	loc, err := time.LoadLocation(shared.NewYorkLocation)
+	if err != nil {
+		return nil, fmt.Errorf("loading new york location: %v", err)
 	}
 
-	candles, err := shared.ParseCandlesticks(b, cfg.Market, cfg.Timeframe)
+	historicData := HistoricData{
+		cfg:      cfg,
+		location: loc,
+	}
+
+	candles, err := shared.ParseCandlesticks(b, cfg.Market, cfg.Timeframe, loc)
 	if err != nil {
 		return nil, fmt.Errorf("parsing candlesticks: %v", err)
 	}

@@ -159,7 +159,7 @@ func (c *Candlestick) FetchKind() Kind {
 }
 
 // ParseCandlesticks parses candlesticks from the provided json data.
-func ParseCandlesticks(data []gjson.Result, market string, timeframe Timeframe) ([]Candlestick, error) {
+func ParseCandlesticks(data []gjson.Result, market string, timeframe Timeframe, loc *time.Location) ([]Candlestick, error) {
 	candles := make([]Candlestick, len(data))
 
 	for idx := range data {
@@ -175,7 +175,7 @@ func ParseCandlesticks(data []gjson.Result, market string, timeframe Timeframe) 
 		candle.Timeframe = timeframe
 		candle.Status = make(chan StatusCode, 1)
 
-		dt, err := time.Parse(DateLayout, data[idx].Get("date").String())
+		dt, err := time.ParseInLocation(DateLayout, data[idx].Get("date").String(), loc)
 		if err != nil {
 			return nil, fmt.Errorf("parsing candlestick date: %w", err)
 		}

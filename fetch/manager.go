@@ -42,6 +42,7 @@ type Manager struct {
 	catchUpSignals      chan shared.CatchUpSignal
 	subscribers         []chan shared.Candlestick
 	subscribersMtx      sync.RWMutex
+	location            *time.Location
 	workers             chan struct{}
 }
 
@@ -53,12 +54,18 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 		lastUpdatedTimes[cfg.Markets[idx]] = time.Time{}
 	}
 
+	loc, err := time.LoadLocation(shared.NewYorkLocation)
+	if err != nil {
+		return nil, fmt.Errorf("loading new york location: %v", err)
+	}
+
 	mgr := &Manager{
 		cfg:              cfg,
 		lastUpdatedTimes: lastUpdatedTimes,
 		catchUpSignals:   make(chan shared.CatchUpSignal, bufferSize),
 		subscribers:      make([]chan shared.Candlestick, 0, minSubscriberBuffer),
 		workers:          make(chan struct{}, maxWorkers),
+		location:         loc,
 	}
 
 	return mgr, nil
@@ -100,7 +107,7 @@ func (m *Manager) fetchMarketData(market string, timeframe shared.Timeframe, sta
 		return fmt.Errorf("fetching market data %s: %v", market, err)
 	}
 
-	candles, err := shared.ParseCandlesticks(data, market, timeframe)
+	candles, err := shared.ParseCandlesticks(data, market, timeframe, m.location)
 	if err != nil {
 		return fmt.Errorf("parsing candlesticks for %s: %v", market, err)
 	}
