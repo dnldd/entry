@@ -93,7 +93,7 @@ func (c *FMPClient) FetchIndexIntradayHistorical(ctx context.Context, market str
 		return nil, fmt.Errorf("reading response body: %w", err)
 	}
 
-	data := gjson.GetBytes(body, "").Array()
+	data := gjson.ParseBytes(body).Array()
 
 	return data, nil
 }

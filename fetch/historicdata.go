@@ -40,7 +40,7 @@ func loadHistoricData(filepath string) ([]gjson.Result, error) {
 		return nil, fmt.Errorf("reading historic data from file with path '%s': %v", filepath, err)
 	}
 
-	b := gjson.GetBytes(readb, "").Array()
+	b := gjson.ParseBytes(readb).Array()
 
 	return b, nil
 }
@@ -93,12 +93,11 @@ func (h *HistoricData) ProcessHistoricalData() error {
 		candle := h.candles[idx]
 		if candle.Date.After(currentSession.Close) && !caughtUp {
 			// Send a caught up signal immediately the current session closes.
-			h.cfg.SignalCaughtUp(shared.CaughtUpSignal{
-				Market: h.cfg.Market,
-				Status: make(chan shared.StatusCode, 1),
-			})
-
+			sig := shared.NewCaughtUpSignal(h.cfg.Market)
+			h.cfg.SignalCaughtUp(sig)
+			<-sig.Status
 			caughtUp = true
+			h.cfg.Logger.Info().Msgf("caught up signal sent for %s historic data", h.cfg.Market)
 		}
 
 		// Process historical data synchroniously.
