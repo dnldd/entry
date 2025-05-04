@@ -28,6 +28,8 @@ const (
 type ManagerConfig struct {
 	// MarketIDs represents the collection of ids of the markets to manage.
 	MarketIDs []string
+	// Backtest is the backtesting flag.
+	Backtest bool
 	// Subscribe registers the provided subscriber for market updates.
 	Subscribe func(sub chan shared.Candlestick)
 	// CatchUp signals a catchup process for a market.
@@ -258,10 +260,14 @@ func (m *Manager) catchUp() error {
 // Run manages the lifecycle processes of the position manager.
 func (m *Manager) Run(ctx context.Context) {
 	m.cfg.Subscribe(m.updateSignals)
-	err := m.catchUp()
-	if err != nil {
-		m.cfg.Logger.Error().Err(err).Send()
-		return
+
+	if !m.cfg.Backtest {
+		// Catch up only in live execution environments.
+		err := m.catchUp()
+		if err != nil {
+			m.cfg.Logger.Error().Err(err).Send()
+			return
+		}
 	}
 
 	for {

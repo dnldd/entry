@@ -11,7 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func setupManager(t *testing.T, market string) (*Manager, chan shared.CatchUpSignal, chan shared.LevelSignal) {
+func setupManager(t *testing.T, market string, now time.Time, backtest bool) (*Manager, chan shared.CatchUpSignal, chan shared.LevelSignal) {
 	bufferSize := 10
 	subscriptions := make([]chan shared.Candlestick, 0, bufferSize)
 	subscribe := func(sub chan shared.Candlestick) {
@@ -36,12 +36,10 @@ func setupManager(t *testing.T, market string) (*Manager, chan shared.CatchUpSig
 		Subscribe:    subscribe,
 		CatchUp:      catchUp,
 		SignalLevel:  signalLevel,
+		Backtest:     backtest,
 		JobScheduler: gocron.NewScheduler(loc),
 		Logger:       &log.Logger,
 	}
-
-	now, _, err := shared.NewYorkTime()
-	assert.NoError(t, err)
 
 	mgr, err := NewManager(cfg, now)
 	assert.NoError(t, err)
@@ -52,10 +50,11 @@ func setupManager(t *testing.T, market string) (*Manager, chan shared.CatchUpSig
 func TestManager(t *testing.T) {
 	// Ensure the market manager can be started.
 	market := "^GSPC"
-	mgr, catchUpSignals, _ := setupManager(t, market)
 
 	now, _, err := shared.NewYorkTime()
 	assert.NoError(t, err)
+
+	mgr, catchUpSignals, _ := setupManager(t, market, now, false)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -117,10 +116,11 @@ func TestManager(t *testing.T) {
 func TestFillManagerChannels(t *testing.T) {
 	// Ensure the price action manager can be created.
 	market := "^GSPC"
-	mgr, _, _ := setupManager(t, market)
 
 	now, _, err := shared.NewYorkTime()
 	assert.NoError(t, err)
+
+	mgr, _, _ := setupManager(t, market, now, false)
 
 	caughtUpSignal := shared.CaughtUpSignal{
 		Market: market,
@@ -165,10 +165,11 @@ func TestFillManagerChannels(t *testing.T) {
 
 func TestHandleUpdateCandle(t *testing.T) {
 	market := "^GSPC"
-	mgr, _, _ := setupManager(t, market)
 
 	now, _, err := shared.NewYorkTime()
 	assert.NoError(t, err)
+
+	mgr, _, _ := setupManager(t, market, now, false)
 
 	// Ensure processing a candle with an unknown market errors.
 	wrongMarketCandle := shared.Candlestick{
@@ -207,7 +208,11 @@ func TestHandleUpdateCandle(t *testing.T) {
 
 func TestHandleCaughtUpSignal(t *testing.T) {
 	market := "^GSPC"
-	mgr, _, _ := setupManager(t, market)
+
+	now, _, err := shared.NewYorkTime()
+	assert.NoError(t, err)
+
+	mgr, _, _ := setupManager(t, market, now, false)
 
 	// Ensure processing a caught up signal for an unknown market errors.
 	wrongMarketCaughtUpSignal := shared.CaughtUpSignal{
@@ -215,7 +220,7 @@ func TestHandleCaughtUpSignal(t *testing.T) {
 		Status: make(chan shared.StatusCode, 1),
 	}
 
-	err := mgr.handleCaughtUpSignal(&wrongMarketCaughtUpSignal)
+	err = mgr.handleCaughtUpSignal(&wrongMarketCaughtUpSignal)
 	assert.Error(t, err)
 
 	// Ensure processing a valid caught up signal succeeds as expected.
@@ -230,10 +235,11 @@ func TestHandleCaughtUpSignal(t *testing.T) {
 
 func TestHandleAverageVolumeSignal(t *testing.T) {
 	market := "^GSPC"
-	mgr, _, _ := setupManager(t, market)
 
 	now, _, err := shared.NewYorkTime()
 	assert.NoError(t, err)
+
+	mgr, _, _ := setupManager(t, market, now, false)
 
 	// Update the market with a candle.
 	candle := shared.Candlestick{
@@ -281,10 +287,11 @@ func TestHandleAverageVolumeSignal(t *testing.T) {
 
 func TestHandlePriceDataRequest(t *testing.T) {
 	market := "^GSPC"
-	mgr, _, _ := setupManager(t, market)
 
 	now, _, err := shared.NewYorkTime()
 	assert.NoError(t, err)
+
+	mgr, _, _ := setupManager(t, market, now, false)
 
 	// Update the market with candle data.
 
@@ -332,4 +339,58 @@ func TestHandlePriceDataRequest(t *testing.T) {
 	assert.NoError(t, err)
 	req := <-priceDataReq.Response
 	assert.GreaterThan(t, len(req), 0)
+}
+
+func TestBacktestLevelGeneration(t *testing.T) {
+	market := "^GSPC"
+	backtest := true
+
+	// Ensure the market manager starts at the time of the historic data.
+	startTimeStr := "2025-05-01 02:45:00"
+	loc, err := time.LoadLocation(shared.NewYorkLocation)
+	assert.NoError(t, err)
+
+	start, err := time.ParseInLocation(shared.DateLayout, startTimeStr, loc)
+	assert.NoError(t, err)
+
+	mgr, _, levelSignals := setupManager(t, market, start, backtest)
+
+	hCfg := &shared.HistoricDataConfig{
+		Market:           market,
+		Timeframe:        shared.FiveMinute,
+		FilePath:         "../testdata/historicdata.json",
+		SignalCaughtUp:   mgr.SendCaughtUpSignal,
+		SendMarketUpdate: mgr.SendMarketUpdate,
+		Logger:           &log.Logger,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case sig := <-levelSignals:
+				// Ensure the historical data source triggers level signals as expected.
+				assert.In(t, sig.Price, []float64{36, 20})
+			}
+		}
+	}()
+
+	historicData, err := shared.NewHistoricData(hCfg)
+	assert.NoError(t, err)
+
+	done := make(chan struct{})
+	go func() {
+		mgr.Run(ctx)
+		close(done)
+	}()
+
+	err = historicData.ProcessHistoricalData()
+	assert.NoError(t, err)
+
+	cancel()
+	<-done
 }
