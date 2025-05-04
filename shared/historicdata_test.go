@@ -1,29 +1,28 @@
-package fetch
+package shared
 
 import (
 	"context"
 	"testing"
 
-	"github.com/dnldd/entry/shared"
 	"github.com/peterldowns/testy/assert"
 	"github.com/rs/zerolog/log"
 )
 
 func TestHistoricalData(t *testing.T) {
 	market := "^GSPC"
-	caughtUpSignals := make(chan shared.CaughtUpSignal, 5)
-	signalCaughtUp := func(signal shared.CaughtUpSignal) {
+	caughtUpSignals := make(chan CaughtUpSignal, 5)
+	signalCaughtUp := func(signal CaughtUpSignal) {
 		caughtUpSignals <- signal
 	}
 
-	marketUpdateSignals := make(chan shared.Candlestick, 5)
-	sendMarketUpdate := func(candle shared.Candlestick) {
+	marketUpdateSignals := make(chan Candlestick, 5)
+	sendMarketUpdate := func(candle Candlestick) {
 		marketUpdateSignals <- candle
 	}
 
 	cfg := &HistoricDataConfig{
 		Market:           market,
-		Timeframe:        shared.FiveMinute,
+		Timeframe:        FiveMinute,
 		FilePath:         "../testdata/historicdata.json",
 		SignalCaughtUp:   signalCaughtUp,
 		SendMarketUpdate: sendMarketUpdate,
@@ -47,10 +46,10 @@ func TestHistoricalData(t *testing.T) {
 				close(done)
 				return
 			case candle := <-marketUpdateSignals:
-				candle.Status <- shared.Processed
+				candle.Status <- Processed
 				candleCount++
 			case sig := <-caughtUpSignals:
-				sig.Status <- shared.Processed
+				sig.Status <- Processed
 				caughUpCount++
 			}
 		}

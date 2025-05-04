@@ -1,11 +1,10 @@
-package fetch
+package shared
 
 import (
 	"fmt"
 	"os"
 	"time"
 
-	"github.com/dnldd/entry/shared"
 	"github.com/rs/zerolog"
 	"github.com/tidwall/gjson"
 )
@@ -15,13 +14,13 @@ type HistoricDataConfig struct {
 	// Market represents the historic data market.
 	Market string
 	// Timeframe represents the timeframe for the historic data.
-	Timeframe shared.Timeframe
+	Timeframe Timeframe
 	// FilePath is the filepath to the historic market data.
 	FilePath string
 	// SignalCaughtUp signals a market is caught up on market data.
-	SignalCaughtUp func(signal shared.CaughtUpSignal)
+	SignalCaughtUp func(signal CaughtUpSignal)
 	// SendMarketUpdate relays the provided market update for processing.
-	SendMarketUpdate func(candle shared.Candlestick)
+	SendMarketUpdate func(candle Candlestick)
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
 }
@@ -30,7 +29,7 @@ type HistoricDataConfig struct {
 type HistoricData struct {
 	cfg      *HistoricDataConfig
 	location *time.Location
-	candles  []shared.Candlestick
+	candles  []Candlestick
 }
 
 // loadHistoricData loads the historic data bytes from the provided file path.
@@ -52,7 +51,7 @@ func NewHistoricData(cfg *HistoricDataConfig) (*HistoricData, error) {
 		return nil, fmt.Errorf("loading historic data: %v", err)
 	}
 
-	loc, err := time.LoadLocation(shared.NewYorkLocation)
+	loc, err := time.LoadLocation(NewYorkLocation)
 	if err != nil {
 		return nil, fmt.Errorf("loading new york location: %v", err)
 	}
@@ -62,7 +61,7 @@ func NewHistoricData(cfg *HistoricDataConfig) (*HistoricData, error) {
 		location: loc,
 	}
 
-	candles, err := shared.ParseCandlesticks(b, cfg.Market, cfg.Timeframe, loc)
+	candles, err := ParseCandlesticks(b, cfg.Market, cfg.Timeframe, loc)
 	if err != nil {
 		return nil, fmt.Errorf("parsing candlesticks: %v", err)
 	}
@@ -83,7 +82,7 @@ func (h *HistoricData) ProcessHistoricalData() error {
 		timeDiffInHours, first.Format(time.RFC1123), last.Format(time.RFC1123))
 
 	// Find the current session and use its close to determine when to signal the market has caught up.
-	_, currentSession, err := shared.CurrentSession(first)
+	_, currentSession, err := CurrentSession(first)
 	if err != nil {
 		return fmt.Errorf("fetching current session: %v", err)
 	}
@@ -93,7 +92,7 @@ func (h *HistoricData) ProcessHistoricalData() error {
 		candle := h.candles[idx]
 		if candle.Date.After(currentSession.Close) && !caughtUp {
 			// Send a caught up signal immediately the current session closes.
-			sig := shared.NewCaughtUpSignal(h.cfg.Market)
+			sig := NewCaughtUpSignal(h.cfg.Market)
 			h.cfg.SignalCaughtUp(sig)
 			<-sig.Status
 			caughtUp = true
