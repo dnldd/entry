@@ -3,6 +3,7 @@ package shared
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -27,9 +28,10 @@ type HistoricDataConfig struct {
 
 // HistoricData represents historic market data.
 type HistoricData struct {
-	cfg      *HistoricDataConfig
-	location *time.Location
-	candles  []Candlestick
+	cfg        *HistoricDataConfig
+	location   *time.Location
+	candles    []Candlestick
+	candlesMtx sync.RWMutex
 }
 
 // loadHistoricData loads the historic data bytes from the provided file path.
@@ -66,7 +68,9 @@ func NewHistoricData(cfg *HistoricDataConfig) (*HistoricData, error) {
 		return nil, fmt.Errorf("parsing candlesticks: %v", err)
 	}
 
+	historicData.candlesMtx.Lock()
 	historicData.candles = candles
+	historicData.candlesMtx.Unlock()
 
 	return &historicData, nil
 }
@@ -74,6 +78,9 @@ func NewHistoricData(cfg *HistoricDataConfig) (*HistoricData, error) {
 // ProcessHistoricalData streams historical data for a market.
 func (h *HistoricData) ProcessHistoricalData() error {
 	// Determine the range for the data provided.
+	h.candlesMtx.RLock()
+	defer h.candlesMtx.RUnlock()
+
 	first := h.candles[0].Date
 	last := h.candles[len(h.candles)-1].Date
 	timeDiffInHours := last.Sub(first).Hours()
@@ -109,4 +116,20 @@ func (h *HistoricData) ProcessHistoricalData() error {
 	}
 
 	return nil
+}
+
+// FetchStartTime returns the start time of the loaded historical data.
+func (h *HistoricData) FetchStartTime() time.Time {
+	h.candlesMtx.RLock()
+	defer h.candlesMtx.RUnlock()
+
+	return h.candles[0].Date
+}
+
+// FetchEndTime returns the end time of the loaded historical data.
+func (h *HistoricData) FetchEndTime() time.Time {
+	h.candlesMtx.RLock()
+	defer h.candlesMtx.RUnlock()
+
+	return h.candles[len(h.candles)-1].Date
 }

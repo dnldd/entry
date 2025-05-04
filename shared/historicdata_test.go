@@ -61,6 +61,12 @@ func TestHistoricalData(t *testing.T) {
 		cancel()
 	}()
 
+	// Ensure the start and end times of the historical data can be fetched.
+	startTime := historicData.FetchStartTime()
+	assert.Equal(t, startTime, historicData.candles[0].Date)
+	endTime := historicData.FetchEndTime()
+	assert.Equal(t, endTime, historicData.candles[len(historicData.candles)-1].Date)
+
 	// Ensure the historical data process terminates gracefully.
 	<-done
 	assert.Equal(t, candleCount, 8)
