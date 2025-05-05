@@ -6,16 +6,17 @@ import (
 
 	"github.com/peterldowns/testy/assert"
 	"github.com/rs/zerolog/log"
+	"go.uber.org/atomic"
 )
 
 func TestHistoricalData(t *testing.T) {
 	market := "^GSPC"
-	caughtUpSignals := make(chan CaughtUpSignal, 5)
+	caughtUpSignals := make(chan CaughtUpSignal, 1)
 	signalCaughtUp := func(signal CaughtUpSignal) {
 		caughtUpSignals <- signal
 	}
 
-	notifySubscribersSignals := make(chan Candlestick, 5)
+	notifySubscribersSignals := make(chan Candlestick, 1)
 	notifySubscribers := func(candle Candlestick) error {
 		notifySubscribersSignals <- candle
 		return nil
@@ -37,39 +38,39 @@ func TestHistoricalData(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	done := make(chan struct{})
-	candleCount := 0
-	caughUpCount := 0
+	candleCount := atomic.NewInt32(0)
+	caughUpCount := atomic.NewInt32(0)
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-				close(done)
 				return
 			case candle := <-notifySubscribersSignals:
 				candle.Status <- Processed
-				candleCount++
+				candleCount.Inc()
 			case sig := <-caughtUpSignals:
 				sig.Status <- Processed
-				caughUpCount++
+				caughUpCount.Inc()
 			}
 		}
 	}()
 
+	done := make(chan struct{})
 	go func() {
-		err := historicData.ProcessHistoricalData()
+		err = historicData.ProcessHistoricalData()
 		assert.NoError(t, err)
-		cancel()
+		close(done)
 	}()
+
+	// Ensure the historical data process terminates gracefully.
+	<-done
+	cancel()
 
 	// Ensure the start and end times of the historical data can be fetched.
 	startTime := historicData.FetchStartTime()
 	assert.Equal(t, startTime, historicData.candles[0].Date)
 	endTime := historicData.FetchEndTime()
 	assert.Equal(t, endTime, historicData.candles[len(historicData.candles)-1].Date)
-
-	// Ensure the historical data process terminates gracefully.
-	<-done
-	assert.Equal(t, candleCount, 8)
-	assert.Equal(t, caughUpCount, 1)
+	assert.Equal(t, candleCount.Load(), 10)
+	assert.Equal(t, caughUpCount.Load(), 1)
 }

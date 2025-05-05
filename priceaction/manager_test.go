@@ -38,6 +38,7 @@ func setupManager(t *testing.T, market string) *Manager {
 	levelReactionSignals := make(chan shared.LevelReaction, 5)
 	signalLevelReaction := func(reaction shared.LevelReaction) {
 		levelReactionSignals <- reaction
+		reaction.Status <- shared.Processed
 	}
 	cfg := &ManagerConfig{
 		Markets:             []string{market},
@@ -87,6 +88,7 @@ func TestManager(t *testing.T) {
 	levelSignal := shared.LevelSignal{
 		Market: market,
 		Price:  20,
+		Status: make(chan shared.StatusCode, 1),
 	}
 
 	mgr.SendLevelSignal(levelSignal)
@@ -94,7 +96,7 @@ func TestManager(t *testing.T) {
 	// Ensure the price action manager can process candle metadata requests.
 	candleMetaReq := shared.CandleMetadataRequest{
 		Market:   market,
-		Response: make(chan []*shared.CandleMetadata),
+		Response: make(chan []*shared.CandleMetadata, 1),
 	}
 
 	mgr.SendCandleMetadataRequest(candleMetaReq)
@@ -278,6 +280,7 @@ func TestManagerHandleCandleMetadataSignal(t *testing.T) {
 
 			Market:    market,
 			Timeframe: shared.FiveMinute,
+			Status:    make(chan shared.StatusCode, 1),
 		}
 
 		err := mgr.handleUpdateSignal(&candle)
