@@ -3,6 +3,7 @@ package priceaction
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/dnldd/entry/shared"
 	"github.com/rs/zerolog"
@@ -11,6 +12,8 @@ import (
 const (
 	// bufferSize is the default buffer size for channels.
 	bufferSize = 64
+	// workerBufferSize is the default buffer size for workers.
+	workerBufferSize = 4
 	// maxWorkers is the maximum number of concurrent workers.
 	maxWorkers = 8
 	// candleMetadataSize is the required elements for fetching candle metadata.
@@ -33,18 +36,21 @@ type ManagerConfig struct {
 
 // Manager represents the price action manager.
 type Manager struct {
-	cfg           *ManagerConfig
-	markets       map[string]*Market
-	levelSignals  chan shared.LevelSignal
-	updateSignals chan shared.Candlestick
-	metaSignals   chan shared.CandleMetadataRequest
-	workers       chan struct{}
+	cfg            *ManagerConfig
+	markets        map[string]*Market
+	levelSignals   chan shared.LevelSignal
+	updateSignals  chan shared.Candlestick
+	metaSignals    chan shared.CandleMetadataRequest
+	workers        map[string]chan struct{}
+	requestWorkers chan struct{}
 }
 
 // NewManager initializes a new price action manager.
 func NewManager(cfg *ManagerConfig) (*Manager, error) {
 	markets := make(map[string]*Market)
+	workers := make(map[string]chan struct{})
 	for idx := range cfg.Markets {
+		workers[cfg.Markets[idx]] = make(chan struct{}, workerBufferSize)
 		mkt, err := NewMarket(cfg.Markets[idx])
 		if err != nil {
 			return nil, fmt.Errorf("creating %s market: %v", cfg.Markets[idx], err)
@@ -53,12 +59,13 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 		markets[cfg.Markets[idx]] = mkt
 	}
 	return &Manager{
-		cfg:           cfg,
-		markets:       markets,
-		levelSignals:  make(chan shared.LevelSignal, bufferSize),
-		updateSignals: make(chan shared.Candlestick, bufferSize),
-		metaSignals:   make(chan shared.CandleMetadataRequest, bufferSize),
-		workers:       make(chan struct{}, maxWorkers),
+		cfg:            cfg,
+		markets:        markets,
+		levelSignals:   make(chan shared.LevelSignal, bufferSize),
+		updateSignals:  make(chan shared.Candlestick, bufferSize),
+		metaSignals:    make(chan shared.CandleMetadataRequest, bufferSize),
+		requestWorkers: make(chan struct{}, maxWorkers),
+		workers:        workers,
 	}, nil
 }
 
@@ -97,6 +104,10 @@ func (m *Manager) SendCandleMetadataRequest(req shared.CandleMetadataRequest) {
 
 // handleUpdateSignal processes the provided update signal.
 func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) error {
+	defer func() {
+		candle.Status <- shared.Processed
+	}()
+
 	mkt, ok := m.markets[candle.Market]
 	if !ok {
 		return fmt.Errorf("no market found with name: %s", candle.Market)
@@ -106,21 +117,28 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) error {
 	mkt.Update(candle)
 	if mkt.RequestingPriceData() {
 		// Request price data and generate price reactions from them.
-		req := shared.PriceDataRequest{
-			Market:   mkt.market,
-			Response: make(chan []*shared.Candlestick),
+		req := shared.NewPriceDataRequest(mkt.market)
+		m.cfg.RequestPriceData(*req)
+		var data []*shared.Candlestick
+		select {
+		case data = <-req.Response:
+		case <-time.After(shared.TimeoutDuration):
+			return fmt.Errorf("timed out waiting for price data response")
 		}
 
-		m.cfg.RequestPriceData(req)
-		data := <-req.Response
-
-		reactions, err := mkt.GenerateLevelReactions(data)
+		levelReactions, err := mkt.GenerateLevelReactions(data)
 		if err != nil {
 			return fmt.Errorf("generating level reactions: %v", err)
 		}
 
-		for idx := range reactions {
-			m.cfg.SignalLevelReaction(*reactions[idx])
+		for idx := range levelReactions {
+			levelReaction := levelReactions[idx]
+			m.cfg.SignalLevelReaction(*levelReaction)
+			select {
+			case <-levelReaction.Status:
+			case <-time.After(shared.TimeoutDuration):
+				return fmt.Errorf("timed out waiting for level reaction status")
+			}
 		}
 
 		mkt.ResetPriceDataState()
@@ -131,6 +149,10 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) error {
 
 // handleLevelSignal processes the provided level signal.
 func (m *Manager) handleLevelSignal(signal shared.LevelSignal) error {
+	defer func() {
+		signal.Status <- shared.Processed
+	}()
+
 	mkt, ok := m.markets[signal.Market]
 	if !ok {
 		return fmt.Errorf("no market found with name %s", signal.Market)
@@ -143,6 +165,7 @@ func (m *Manager) handleLevelSignal(signal shared.LevelSignal) error {
 
 	level := shared.NewLevel(signal.Market, signal.Price, currentCandle)
 	mkt.levelSnapshot.Add(level)
+	m.cfg.Logger.Info().Msgf("added new %s level @ %.2f for %s", level.Kind.String(), level.Price, level.Market)
 
 	return nil
 }
@@ -181,7 +204,11 @@ func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest)
 		metadataSet = append(metadataSet, meta)
 	}
 
-	req.Response <- metadataSet
+	select {
+	case req.Response <- metadataSet:
+	case <-time.After(shared.TimeoutDuration):
+		return fmt.Errorf("timed out waiting for candle metadata response")
+	}
 
 	return nil
 }
@@ -196,32 +223,32 @@ func (m *Manager) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case signal := <-m.levelSignals:
-			m.workers <- struct{}{}
-			go func(signal *shared.LevelSignal) {
-				err := m.handleLevelSignal(*signal)
+			m.workers[signal.Market] <- struct{}{}
+			go func(signal shared.LevelSignal) {
+				err := m.handleLevelSignal(signal)
 				if err != nil {
 					m.cfg.Logger.Error().Err(err).Send()
 				}
-				<-m.workers
-			}(&signal)
+				<-m.workers[signal.Market]
+			}(signal)
 		case candle := <-m.updateSignals:
-			m.workers <- struct{}{}
-			go func(candle *shared.Candlestick) {
-				err := m.handleUpdateSignal(candle)
+			m.workers[candle.Market] <- struct{}{}
+			go func(candle shared.Candlestick) {
+				err := m.handleUpdateSignal(&candle)
 				if err != nil {
 					m.cfg.Logger.Error().Err(err).Send()
 				}
-				<-m.workers
-			}(&candle)
+				<-m.workers[candle.Market]
+			}(candle)
 		case req := <-m.metaSignals:
-			m.workers <- struct{}{}
-			go func(req *shared.CandleMetadataRequest) {
-				err := m.handleCandleMetadataRequest(req)
+			m.requestWorkers <- struct{}{}
+			go func(req shared.CandleMetadataRequest) {
+				err := m.handleCandleMetadataRequest(&req)
 				if err != nil {
 					m.cfg.Logger.Error().Err(err).Send()
 				}
-				<-m.workers
-			}(&req)
+				<-m.requestWorkers
+			}(req)
 
 		default:
 			// fallthrough

@@ -108,16 +108,18 @@ func (m *Market) FilterTaggedLevels(candle *shared.Candlestick) []*shared.Level 
 	return taggedLevels
 }
 
-// GenerateLevelReactions generates level reactions for all levels tagged by the provided
-// market candlestick data.
+// GenerateLevelReaction generates level reactions for all levels tagged by the first of the
+// provided market candlestick data.
 func (m *Market) GenerateLevelReactions(data []*shared.Candlestick) ([]*shared.LevelReaction, error) {
-	// Fetch all levels tagged by the provided price data.
-	taggedSet := make([]*shared.Level, 0)
-	for idx := range data {
-		candle := data[idx]
-		filtered := m.FilterTaggedLevels(candle)
-		taggedSet = append(taggedSet, filtered...)
+	if len(data) == 0 {
+		return nil, fmt.Errorf("data cannot be an empty slice")
 	}
+	// Fetch all levels tagged by the first of the provided market candlestick data.
+	firstCandle := data[0]
+	taggedSet := make([]*shared.Level, 0)
+
+	filtered := m.FilterTaggedLevels(firstCandle)
+	taggedSet = append(taggedSet, filtered...)
 
 	// Create the associated price level reactions for all tagged levels.
 	reactions := make([]*shared.LevelReaction, len(taggedSet))

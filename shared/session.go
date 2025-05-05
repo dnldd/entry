@@ -71,16 +71,13 @@ func NewSession(name string, open string, close string, now time.Time) (*Session
 
 // Update updates the provided session's high and low.
 func (s *Session) Update(candle *Candlestick) {
-	if s.Low.Load() == 0 {
+	low := s.Low.Load()
+	high := s.High.Load()
+
+	if low == 0 || candle.Low < low {
 		s.Low.Store(candle.Low)
 	}
-	if s.High.Load() == 0 {
-		s.High.Store(candle.High)
-	}
-	if candle.Low < s.Low.Load() {
-		s.Low.Store(candle.Low)
-	}
-	if candle.High > s.High.Load() {
+	if high == 0 || candle.High > high {
 		s.High.Store(candle.High)
 	}
 }
