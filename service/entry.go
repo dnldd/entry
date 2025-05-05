@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/dnldd/entry/engine"
 	"github.com/dnldd/entry/fetch"
@@ -165,12 +166,14 @@ func NewEntry(cfg *EntryConfig) (*Entry, error) {
 		return nil, fmt.Errorf("creating price action manager: %v", err)
 	}
 
+	engineLogger := logger.With().Str("component", "engine").Logger()
 	entryEngine = engine.NewEngine(&engine.EngineConfig{
 		RequestCandleMetadata: priceActionMgr.SendCandleMetadataRequest,
 		RequestAverageVolume:  marketMgr.SendAverageVolumeRequest,
 		SendEntrySignal:       positionMgr.SendEntrySignal,
 		SendExitSignal:        positionMgr.SendExitSignal,
 		RequestMarketSkew:     positionMgr.SendMarketSkewRequest,
+		Logger:                engineLogger,
 	})
 
 	service := &Entry{
@@ -217,6 +220,8 @@ func (e *Entry) Run(ctx context.Context) {
 
 	if e.cfg.Backtest {
 		go func() {
+			// wait briefly.
+			time.Sleep(time.Second * 1)
 			e.historicData.ProcessHistoricalData()
 		}()
 	}

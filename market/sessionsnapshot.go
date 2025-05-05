@@ -54,12 +54,15 @@ func NewSessionSnapshot(size int32, now time.Time) (*SessionSnapshot, error) {
 
 // Adds adds the provided session to the snapshot.
 func (s *SessionSnapshot) Add(session *shared.Session) {
-	end := (s.start.Load() + s.count.Load()) % s.size.Load()
+	start := s.start.Load()
+	count := s.count.Load()
+	size := s.size.Load()
+	end := (start + count) % size
 	s.data[end] = session
 
-	if s.count.Load() == s.size.Load() {
+	if count == size {
 		// Overwrite the oldest entry when the snapshot is at capacity.
-		s.start.Store((s.start.Load() + 1) % s.size.Load())
+		s.start.Store((start + 1) % size)
 	} else {
 		s.count.Add(1)
 	}
@@ -68,8 +71,11 @@ func (s *SessionSnapshot) Add(session *shared.Session) {
 // Exists checks whether the snapshot has an existing session corresponding to
 // the provided name and opening day.
 func (s *SessionSnapshot) Exists(name string, open time.Time) bool {
-	for i := s.count.Load() - 1; i >= 0; i-- {
-		idx := (s.start.Load() + i) % s.size.Load()
+	start := s.start.Load()
+	count := s.count.Load()
+	size := s.size.Load()
+	for i := count - 1; i >= 0; i-- {
+		idx := (start + i) % size
 		session := s.data[idx]
 		if session.Name == name && session.Open.Equal(open) {
 			return true
@@ -132,8 +138,11 @@ func (s *SessionSnapshot) SetCurrentSession(now time.Time) (bool, error) {
 	var set bool
 	var changed bool
 	prev := s.current.Load()
-	for i := range s.count.Load() {
-		idx := (s.start.Load() + i) % s.size.Load()
+	start := s.start.Load()
+	count := s.count.Load()
+	size := s.size.Load()
+	for i := range count {
+		idx := (start + i) % size
 		session := s.data[idx]
 		if session.IsCurrentSession(now) {
 			set = true
@@ -149,8 +158,11 @@ func (s *SessionSnapshot) SetCurrentSession(now time.Time) (bool, error) {
 	// If the current session is not set then the market is closed and current time is
 	// approaching the asian session. Preemptively set the asian session.
 	if !set {
-		for i := range s.count.Load() {
-			idx := (s.start.Load() + s.count.Load() - 1 - i + s.size.Load()) % s.size.Load()
+		start := s.start.Load()
+		count := s.count.Load()
+		size := s.size.Load()
+		for i := range count {
+			idx := (start + count - 1 - i + size) % size
 			session := s.data[idx]
 			if session.Name == shared.Asia && now.Before(session.Open) {
 				if prev != idx {
@@ -174,14 +186,18 @@ func (s *SessionSnapshot) FetchCurrentSession() *shared.Session {
 // FetchLastSessionOpen returns the last session open.
 func (s *SessionSnapshot) FetchLastSessionOpen() (time.Time, error) {
 	var open time.Time
-	if s.count.Load() > 0 {
-		if s.current.Load() == s.start.Load() {
+	count := s.count.Load()
+	if count > 0 {
+		start := s.start.Load()
+		size := s.size.Load()
+		current := s.current.Load()
+		if current == start {
 			// There is no last session, set the open to the current one.
-			open = s.data[s.current.Load()].Open
+			open = s.data[current].Open
 			return open, nil
 		}
 
-		previous := (s.current.Load() - 1 + s.size.Load()) % s.size.Load()
+		previous := (current - 1 + size) % size
 		open = s.data[previous].Open
 		return open, nil
 	}
@@ -192,15 +208,24 @@ func (s *SessionSnapshot) FetchLastSessionOpen() (time.Time, error) {
 // fetchLastSessionHighLow fetches newly generated levels from the previously completed session.
 func (s *SessionSnapshot) FetchLastSessionHighLow() (float64, float64, error) {
 	var high, low float64
-	if s.count.Load() > 0 {
-		if s.current.Load() == s.start.Load() {
+	count := s.count.Load()
+	if count > 0 {
+		current := s.current.Load()
+		start := s.start.Load()
+		size := s.size.Load()
+		if current == start {
 			// There is no previous completed session.
 			return 0, 0, fmt.Errorf("no completed previous session available")
 		}
 
-		previous := (s.current.Load() - 1 + s.size.Load()) % s.size.Load()
+		previous := (current - 1 + size) % size
 		high = s.data[previous].High.Load()
 		low = s.data[previous].Low.Load()
+
+		if high == 29 {
+			fmt.Println("high is 29")
+		}
+
 		return high, low, nil
 	}
 

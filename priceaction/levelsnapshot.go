@@ -45,12 +45,15 @@ func (s *LevelSnapshot) Add(level *shared.Level) {
 	s.dataMtx.Lock()
 	defer s.dataMtx.Unlock()
 
-	end := (s.start.Load() + s.count.Load()) % s.size.Load()
+	start := s.start.Load()
+	count := s.count.Load()
+	size := s.size.Load()
+	end := (start + count) % size
 	s.data[end] = level
 
-	if s.count.Load() == s.size.Load() {
+	if count == size {
 		// Overwrite the oldest entry when the snapshot is at capacity.
-		s.start.Store((s.start.Load() + 1) % s.size.Load())
+		s.start.Store((start + 1) % size)
 	} else {
 		s.count.Add(1)
 	}
@@ -58,8 +61,11 @@ func (s *LevelSnapshot) Add(level *shared.Level) {
 
 // Update applies the provided market update to all tracked levels.
 func (s *LevelSnapshot) Update(candle *shared.Candlestick) {
-	for i := range s.count.Load() {
-		level := s.data[(s.start.Load()+i)%s.size.Load()]
+	start := s.start.Load()
+	count := s.count.Load()
+	size := s.size.Load()
+	for i := range count {
+		level := s.data[(start+i)%size]
 		level.Update(candle)
 	}
 }
@@ -69,9 +75,12 @@ func (s *LevelSnapshot) Filter(candle *shared.Candlestick, fn func(*shared.Level
 	s.dataMtx.RLock()
 	defer s.dataMtx.RUnlock()
 
+	start := s.start.Load()
+	count := s.count.Load()
+	size := s.size.Load()
 	levels := make([]*shared.Level, 0)
-	for i := range s.count.Load() {
-		level := s.data[(s.start.Load()+i)%s.size.Load()]
+	for i := range count {
+		level := s.data[(start+i)%size]
 		ok := fn(level, candle)
 		if ok {
 			levels = append(levels, level)

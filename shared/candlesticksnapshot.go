@@ -38,12 +38,15 @@ func NewCandlestickSnapshot(size int32) (*CandlestickSnapshot, error) {
 
 // Update adds the provided candlestick to the snapshot.
 func (s *CandlestickSnapshot) Update(candle *Candlestick) {
-	end := (s.start.Load() + s.count.Load()) % s.size.Load()
+	start := s.start.Load()
+	count := s.count.Load()
+	size := s.size.Load()
+	end := (start + count) % size
 	s.data[end] = candle
 
-	if s.count.Load() == s.size.Load() {
+	if count == size {
 		// Overwrite the oldest entry when the snapshot is at capacity.
-		s.start.Store((s.start.Load() + 1) % s.size.Load())
+		s.start.Store((start + 1) % size)
 	} else {
 		s.count.Add(1)
 	}
@@ -51,11 +54,14 @@ func (s *CandlestickSnapshot) Update(candle *Candlestick) {
 
 // Last returns the last added entry for the snapshot.
 func (s *CandlestickSnapshot) Last() *Candlestick {
-	if s.count.Load() == 0 {
+	start := s.start.Load()
+	count := s.count.Load()
+	size := s.size.Load()
+	if count == 0 {
 		return nil
 	}
 
-	end := (s.start.Load() + s.count.Load() - 1) % s.size.Load()
+	end := (start + count - 1) % size
 	return s.data[end]
 }
 
@@ -65,16 +71,20 @@ func (s *CandlestickSnapshot) LastN(n int32) []*Candlestick {
 		return nil
 	}
 
+	start := s.start.Load()
+	count := s.count.Load()
+	size := s.size.Load()
+
 	// Clamp the number of elements excpected if it is greater than the snapshot count.
-	if n > s.count.Load() {
-		n = s.count.Load()
+	if n > count {
+		n = count
 	}
 
 	set := make([]*Candlestick, n)
-	start := (s.start.Load() + s.count.Load() - n + s.size.Load()) % s.size.Load()
+	start = (start + count - n + size) % size
 
 	for i := range n {
-		idx := (start + i) % s.size.Load()
+		idx := (start + i) % size
 		set[i] = s.data[idx]
 	}
 
@@ -86,8 +96,9 @@ func (s *CandlestickSnapshot) AverageVolumeN(n int32) float64 {
 	candles := s.LastN(n + 1)
 
 	// Clamp the number of elements excpected if it is greater than the snapshot count.
-	if n > s.count.Load() {
-		n = s.count.Load()
+	count := s.count.Load()
+	if n > count {
+		n = count
 	}
 
 	var volumeSum float64

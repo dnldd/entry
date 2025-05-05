@@ -108,6 +108,8 @@ func (m *Manager) NotifySubscribers(candle shared.Candlestick) error {
 		}
 	}
 
+	m.cfg.Logger.Info().Msgf("processed candle update – %v", candle.Date)
+
 	return nil
 }
 
