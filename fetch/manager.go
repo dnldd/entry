@@ -79,12 +79,12 @@ func (m *Manager) Subscribe(sub chan shared.Candlestick) {
 }
 
 // notifySubscribers notifies subscribers of the new market update.
-func (m *Manager) notifySubscribers(candle *shared.Candlestick) {
+func (m *Manager) NotifySubscribers(candle shared.Candlestick) {
 	m.subscribersMtx.RLock()
 	defer m.subscribersMtx.RUnlock()
 
 	for k := range m.subscribers {
-		m.subscribers[k] <- *candle
+		m.subscribers[k] <- candle
 	}
 }
 
@@ -113,7 +113,7 @@ func (m *Manager) fetchMarketData(market string, timeframe shared.Timeframe, sta
 	}
 
 	for idx := range candles {
-		m.notifySubscribers(&candles[idx])
+		m.NotifySubscribers(candles[idx])
 	}
 
 	m.lastUpdatedTimesMtx.Lock()

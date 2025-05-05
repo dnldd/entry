@@ -80,7 +80,7 @@ func TestManager(t *testing.T) {
 		Volume: float64(3),
 	}
 
-	mgr.notifySubscribers(&candle)
+	mgr.NotifySubscribers(candle)
 	notifiedCandle := <-sub
 	assert.Equal(t, candle, notifiedCandle)
 

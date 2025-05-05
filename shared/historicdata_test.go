@@ -15,18 +15,18 @@ func TestHistoricalData(t *testing.T) {
 		caughtUpSignals <- signal
 	}
 
-	marketUpdateSignals := make(chan Candlestick, 5)
-	sendMarketUpdate := func(candle Candlestick) {
-		marketUpdateSignals <- candle
+	notifySubscribersSignals := make(chan Candlestick, 5)
+	notifySubscribers := func(candle Candlestick) {
+		notifySubscribersSignals <- candle
 	}
 
 	cfg := &HistoricDataConfig{
-		Market:           market,
-		Timeframe:        FiveMinute,
-		FilePath:         "../testdata/historicdata.json",
-		SignalCaughtUp:   signalCaughtUp,
-		SendMarketUpdate: sendMarketUpdate,
-		Logger:           &log.Logger,
+		Market:            market,
+		Timeframe:         FiveMinute,
+		FilePath:          "../testdata/historicdata.json",
+		SignalCaughtUp:    signalCaughtUp,
+		NotifySubscribers: notifySubscribers,
+		Logger:            &log.Logger,
 	}
 
 	// Ensure historic data can be initialized.
@@ -45,7 +45,7 @@ func TestHistoricalData(t *testing.T) {
 			case <-ctx.Done():
 				close(done)
 				return
-			case candle := <-marketUpdateSignals:
+			case candle := <-notifySubscribersSignals:
 				candle.Status <- Processed
 				candleCount++
 			case sig := <-caughtUpSignals:
