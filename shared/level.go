@@ -2,8 +2,9 @@ package shared
 
 import (
 	"fmt"
-	"sync/atomic"
 	"time"
+
+	"go.uber.org/atomic"
 )
 
 const (

@@ -3,9 +3,9 @@ package position
 import (
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"github.com/dnldd/entry/shared"
+	"go.uber.org/atomic"
 )
 
 // Market tracks positions for the provided market.

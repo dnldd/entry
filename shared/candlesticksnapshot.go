@@ -2,7 +2,8 @@ package shared
 
 import (
 	"errors"
-	"sync/atomic"
+
+	"go.uber.org/atomic"
 )
 
 const (
@@ -40,7 +41,7 @@ func (s *CandlestickSnapshot) Update(candle *Candlestick) {
 	end := (s.start.Load() + s.count.Load()) % s.size.Load()
 	s.data[end] = candle
 
-	if s.count == s.size {
+	if s.count.Load() == s.size.Load() {
 		// Overwrite the oldest entry when the snapshot is at capacity.
 		s.start.Store((s.start.Load() + 1) % s.size.Load())
 	} else {

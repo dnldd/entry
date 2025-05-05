@@ -3,11 +3,11 @@ package market
 import (
 	"errors"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/dnldd/entry/shared"
 	"github.com/rs/zerolog"
+	"go.uber.org/atomic"
 )
 
 const (
@@ -199,8 +199,8 @@ func (s *SessionSnapshot) FetchLastSessionHighLow() (float64, float64, error) {
 		}
 
 		previous := (s.current.Load() - 1 + s.size.Load()) % s.size.Load()
-		high = s.data[previous].High
-		low = s.data[previous].Low
+		high = s.data[previous].High.Load()
+		low = s.data[previous].Low.Load()
 		return high, low, nil
 	}
 

@@ -2,9 +2,9 @@ package priceaction
 
 import (
 	"fmt"
-	"sync/atomic"
 
 	"github.com/dnldd/entry/shared"
+	"go.uber.org/atomic"
 )
 
 const (

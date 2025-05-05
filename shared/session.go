@@ -3,6 +3,8 @@ package shared
 import (
 	"fmt"
 	"time"
+
+	"go.uber.org/atomic"
 )
 
 const (
@@ -29,8 +31,8 @@ const (
 // Session represents a market session.
 type Session struct {
 	Name  string
-	High  float64
-	Low   float64
+	High  atomic.Float64
+	Low   atomic.Float64
 	Open  time.Time
 	Close time.Time
 }
@@ -69,23 +71,23 @@ func NewSession(name string, open string, close string, now time.Time) (*Session
 
 // Update updates the provided session's high and low.
 func (s *Session) Update(candle *Candlestick) {
-	if s.Low == 0 {
-		s.Low = candle.Low
+	if s.Low.Load() == 0 {
+		s.Low.Store(candle.Low)
 	}
-	if s.High == 0 {
-		s.High = candle.High
+	if s.High.Load() == 0 {
+		s.High.Store(candle.High)
 	}
-	if candle.Low < s.Low {
-		s.Low = candle.Low
+	if candle.Low < s.Low.Load() {
+		s.Low.Store(candle.Low)
 	}
-	if candle.High > s.High {
-		s.High = candle.High
+	if candle.High > s.High.Load() {
+		s.High.Store(candle.High)
 	}
 }
 
 // IsCurrentSession checks whether the provided session is the current session.
 func (s *Session) IsCurrentSession(current time.Time) bool {
-	return (current.Equal(s.Open) || current.After(s.Open)) && current.Before(s.Close)
+	return current.After(s.Open) && (current.Before(s.Close) || current.Equal(s.Close))
 }
 
 // CurrentSession returns the current active session name.

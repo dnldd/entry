@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/dnldd/entry/shared"
+	"go.uber.org/atomic"
 )
 
 const (
@@ -14,11 +15,11 @@ const (
 
 // VWAP represents the Volume Weighted Average Price Indicator.
 type VWAP struct {
-	TypicalPriceVolume float64
-	Volume             float64
+	TypicalPriceVolume atomic.Float64
+	Volume             atomic.Float64
 	Market             string
 	Timeframe          shared.Timeframe
-	LastUpdateTime     time.Time
+	LastUpdateTime     atomic.Pointer[time.Time]
 }
 
 // NewVWAP initializes a VWAP for the provided market and timeframe.
@@ -37,15 +38,15 @@ func (v *VWAP) Update(candle *shared.Candlestick) (float64, error) {
 	}
 
 	typicalPrice := (candle.High + candle.Low + candle.Close) / 3
-	v.TypicalPriceVolume += typicalPrice * candle.Volume
-	v.Volume += candle.Volume
+	v.TypicalPriceVolume.Add(typicalPrice * candle.Volume)
+	v.Volume.Add(candle.Volume)
 
-	if v.TypicalPriceVolume == 0 {
+	if v.TypicalPriceVolume.Load() == 0 {
 		return 0, nil
 	}
 
-	vwap := v.TypicalPriceVolume / v.Volume
-	v.LastUpdateTime = candle.Date
+	vwap := v.TypicalPriceVolume.Load() / v.Volume.Load()
+	v.LastUpdateTime.Store(&candle.Date)
 	candle.VWAP = vwap
 
 	return vwap, nil
@@ -53,6 +54,6 @@ func (v *VWAP) Update(candle *shared.Candlestick) (float64, error) {
 
 // Reset resets the VWAP indicator after a trading session.
 func (v *VWAP) Reset() {
-	v.TypicalPriceVolume = 0
-	v.Volume = 0
+	v.TypicalPriceVolume.Store(0)
+	v.Volume.Store(0)
 }

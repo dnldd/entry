@@ -33,8 +33,8 @@ func TestSession(t *testing.T) {
 	}
 
 	asia.Update(firstCandle)
-	assert.Equal(t, asia.Low, firstCandle.Low)
-	assert.Equal(t, asia.High, firstCandle.High)
+	assert.Equal(t, asia.Low.Load(), firstCandle.Low)
+	assert.Equal(t, asia.High.Load(), firstCandle.High)
 
 	secondCandle := &Candlestick{
 		Open:  12,
@@ -44,8 +44,8 @@ func TestSession(t *testing.T) {
 	}
 
 	asia.Update(secondCandle)
-	assert.Equal(t, asia.Low, secondCandle.Low)
-	assert.Equal(t, asia.High, secondCandle.High)
+	assert.Equal(t, asia.Low.Load(), secondCandle.Low)
+	assert.Equal(t, asia.High.Load(), secondCandle.High)
 
 	// Ensure sessions can be checked to assert if they are the current session.
 	futureTime := asia.Close.Add(time.Hour * 4)

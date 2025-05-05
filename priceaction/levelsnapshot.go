@@ -3,9 +3,9 @@ package priceaction
 import (
 	"errors"
 	"sync"
-	"sync/atomic"
 
 	"github.com/dnldd/entry/shared"
+	"go.uber.org/atomic"
 )
 
 const (
@@ -48,7 +48,7 @@ func (s *LevelSnapshot) Add(level *shared.Level) {
 	end := (s.start.Load() + s.count.Load()) % s.size.Load()
 	s.data[end] = level
 
-	if s.count == s.size {
+	if s.count.Load() == s.size.Load() {
 		// Overwrite the oldest entry when the snapshot is at capacity.
 		s.start.Store((s.start.Load() + 1) % s.size.Load())
 	} else {

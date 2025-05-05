@@ -59,11 +59,11 @@ func TestVWAP(t *testing.T) {
 	vwp, err = vwap.Update(candle)
 	assert.NoError(t, err)
 	assert.GreaterThan(t, vwp, 0)
-	assert.GreaterThan(t, vwap.TypicalPriceVolume, 0)
-	assert.GreaterThan(t, vwap.Volume, 0)
+	assert.GreaterThan(t, vwap.TypicalPriceVolume.Load(), 0)
+	assert.GreaterThan(t, vwap.Volume.Load(), 0)
 
 	// Ensure vwap can be reset.
 	vwap.Reset()
-	assert.Equal(t, vwap.Volume, 0)
-	assert.Equal(t, vwap.TypicalPriceVolume, 0)
+	assert.Equal(t, vwap.Volume.Load(), 0)
+	assert.Equal(t, vwap.TypicalPriceVolume.Load(), 0)
 }

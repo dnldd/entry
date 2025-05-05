@@ -2,13 +2,13 @@ package market
 
 import (
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/dnldd/entry/indicator"
 	"github.com/dnldd/entry/shared"
 	"github.com/go-co-op/gocron"
 	"github.com/rs/zerolog"
+	"go.uber.org/atomic"
 )
 
 const (
