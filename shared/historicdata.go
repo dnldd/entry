@@ -21,7 +21,7 @@ type HistoricDataConfig struct {
 	// SignalCaughtUp signals a market is caught up on market data.
 	SignalCaughtUp func(signal CaughtUpSignal)
 	// SendMarketUpdate relays the provided market update to all subscribers.
-	NotifySubscribers func(candle Candlestick)
+	NotifySubscribers func(candle Candlestick) error
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
 }
@@ -107,11 +107,9 @@ func (h *HistoricData) ProcessHistoricalData() error {
 		}
 
 		// Process historical data synchroniously.
-		h.cfg.NotifySubscribers(candle)
-		select {
-		case <-candle.Status:
-		case <-time.After(time.Second * 3):
-			return fmt.Errorf("timed out processing market update: %v", err)
+		err := h.cfg.NotifySubscribers(candle)
+		if err != nil {
+			return fmt.Errorf("processing historical data: %v", err)
 		}
 	}
 

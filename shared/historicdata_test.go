@@ -16,8 +16,9 @@ func TestHistoricalData(t *testing.T) {
 	}
 
 	notifySubscribersSignals := make(chan Candlestick, 5)
-	notifySubscribers := func(candle Candlestick) {
+	notifySubscribers := func(candle Candlestick) error {
 		notifySubscribersSignals <- candle
+		return nil
 	}
 
 	cfg := &HistoricDataConfig{

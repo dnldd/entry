@@ -69,7 +69,7 @@ func TestManager(t *testing.T) {
 
 	// Ensure entities can subscribe for market updates.
 	sub := make(chan shared.Candlestick, 5)
-	mgr.Subscribe(sub)
+	mgr.Subscribe("sub", sub)
 
 	// Ensure subscribers are notified of market updates.
 	candle := shared.Candlestick{

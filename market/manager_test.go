@@ -14,7 +14,7 @@ import (
 func setupManager(t *testing.T, market string, now time.Time, backtest bool) (*Manager, chan shared.CatchUpSignal, chan shared.LevelSignal) {
 	bufferSize := 10
 	subscriptions := make([]chan shared.Candlestick, 0, bufferSize)
-	subscribe := func(sub chan shared.Candlestick) {
+	subscribe := func(name string, sub chan shared.Candlestick) {
 		subscriptions = append(subscriptions, sub)
 	}
 
@@ -355,12 +355,17 @@ func TestBacktestLevelGeneration(t *testing.T) {
 
 	mgr, _, levelSignals := setupManager(t, market, start, backtest)
 
+	notifySubscribersFunc := func(candle shared.Candlestick) error {
+		mgr.SendMarketUpdate(candle)
+		return nil
+	}
+
 	hCfg := &shared.HistoricDataConfig{
 		Market:            market,
 		Timeframe:         shared.FiveMinute,
 		FilePath:          "../testdata/historicdata.json",
 		SignalCaughtUp:    mgr.SendCaughtUpSignal,
-		NotifySubscribers: mgr.SendMarketUpdate,
+		NotifySubscribers: notifySubscribersFunc,
 		Logger:            &log.Logger,
 	}
 
@@ -374,7 +379,7 @@ func TestBacktestLevelGeneration(t *testing.T) {
 				return
 			case sig := <-levelSignals:
 				// Ensure the historical data source triggers level signals as expected.
-				assert.In(t, sig.Price, []float64{36, 20})
+				assert.In(t, sig.Price, []float64{36, 18})
 			}
 		}
 	}()

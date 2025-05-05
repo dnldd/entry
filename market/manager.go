@@ -31,7 +31,7 @@ type ManagerConfig struct {
 	// Backtest is the backtesting flag.
 	Backtest bool
 	// Subscribe registers the provided subscriber for market updates.
-	Subscribe func(sub chan shared.Candlestick)
+	Subscribe func(name string, sub chan shared.Candlestick)
 	// CatchUp signals a catchup process for a market.
 	CatchUp func(signal shared.CatchUpSignal)
 	// SignalLevel relays the provided  level signal for  processing.
@@ -137,6 +137,10 @@ func (m *Manager) SendAverageVolumeRequest(request shared.AverageVolumeRequest) 
 
 // handleUpdateSignal processes the provided market update candle.
 func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) error {
+	defer func() {
+		candle.Status <- shared.Processed
+	}()
+
 	m.marketsMtx.RLock()
 	mkt, ok := m.markets[candle.Market]
 	m.marketsMtx.RUnlock()
@@ -259,7 +263,8 @@ func (m *Manager) catchUp() error {
 
 // Run manages the lifecycle processes of the position manager.
 func (m *Manager) Run(ctx context.Context) {
-	m.cfg.Subscribe(m.updateSignals)
+	const marketManager = "marketmanager"
+	m.cfg.Subscribe(marketManager, m.updateSignals)
 
 	if !m.cfg.Backtest {
 		// Catch up only in live execution environments.

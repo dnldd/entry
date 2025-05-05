@@ -18,6 +18,8 @@ const (
 	maxWorkers = 8
 	// minSubscriberBuffer is the minimum buffer size for subscribers.
 	minSubscriberBuffer = 24
+	// notifyTimeout is the maximum time to wait before timing out for a market update notification.
+	notifyTimeout = time.Second * 3
 )
 
 // ManagerConfig represents the configuration for the query manager.
@@ -40,10 +42,11 @@ type Manager struct {
 	lastUpdatedTimes    map[string]time.Time
 	lastUpdatedTimesMtx sync.RWMutex
 	catchUpSignals      chan shared.CatchUpSignal
-	subscribers         []chan shared.Candlestick
+	subscribers         map[string]chan shared.Candlestick
 	subscribersMtx      sync.RWMutex
 	location            *time.Location
 	workers             chan struct{}
+	timer               *time.Timer
 }
 
 // NewManager initializes the fetch manager.
@@ -59,33 +62,53 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 		return nil, fmt.Errorf("loading new york location: %v", err)
 	}
 
+	timer := time.NewTimer(notifyTimeout)
+	timer.Stop()
+
 	mgr := &Manager{
 		cfg:              cfg,
 		lastUpdatedTimes: lastUpdatedTimes,
 		catchUpSignals:   make(chan shared.CatchUpSignal, bufferSize),
-		subscribers:      make([]chan shared.Candlestick, 0, minSubscriberBuffer),
+		subscribers:      make(map[string]chan shared.Candlestick),
 		workers:          make(chan struct{}, maxWorkers),
 		location:         loc,
+		timer:            timer,
 	}
 
 	return mgr, nil
 }
 
 // Subscriber registers the provided subscriber for market updates.
-func (m *Manager) Subscribe(sub chan shared.Candlestick) {
+func (m *Manager) Subscribe(name string, sub chan shared.Candlestick) {
 	m.subscribersMtx.Lock()
-	m.subscribers = append(m.subscribers, sub)
+	m.subscribers[name] = sub
 	m.subscribersMtx.Unlock()
 }
 
 // notifySubscribers notifies subscribers of the new market update.
-func (m *Manager) NotifySubscribers(candle shared.Candlestick) {
+func (m *Manager) NotifySubscribers(candle shared.Candlestick) error {
 	m.subscribersMtx.RLock()
 	defer m.subscribersMtx.RUnlock()
+	subs := len(m.subscribers)
 
+	// Notify subscribers.
 	for k := range m.subscribers {
 		m.subscribers[k] <- candle
 	}
+
+	// Wait for subscribers to process the candle.
+	m.timer.Reset(notifyTimeout)
+	for range subs {
+		select {
+		case <-candle.Status:
+			m.timer.Stop()
+		case <-m.timer.C:
+			m.timer.Stop()
+			return fmt.Errorf("timed out waiting for market update processing")
+		}
+	}
+
+	return nil
 }
 
 // SendCatchUpSignal relays the provided market catch up signal for processing.

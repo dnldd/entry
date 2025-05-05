@@ -29,8 +29,6 @@ type EntryConfig struct {
 	BacktestMarket string
 	// BacktestDataFilepath is the filepath to the backtest data.
 	BacktestDataFilepath string
-	// Logger represents the application logger.
-	Logger *zerolog.Logger
 }
 
 // Entry represents a market entry finding service.
@@ -65,10 +63,12 @@ func NewEntry(cfg *EntryConfig) (*Entry, error) {
 		}
 	}
 
-	notifySubcribersFunc := func(candle shared.Candlestick) {
+	notifySubcribersFunc := func(candle shared.Candlestick) error {
 		if fetchMgr != nil {
-			fetchMgr.NotifySubscribers(candle)
+			return fetchMgr.NotifySubscribers(candle)
 		}
+
+		return nil
 	}
 
 	now, loc, err := shared.NewYorkTime()

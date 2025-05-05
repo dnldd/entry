@@ -22,7 +22,7 @@ type ManagerConfig struct {
 	// Markets represents the collection of ids of the markets to manage.
 	Markets []string
 	// Subscribe registers the provided subscriber for market updates.
-	Subscribe func(sub chan shared.Candlestick)
+	Subscribe func(name string, sub chan shared.Candlestick)
 	// RequestPriceData sends a price data request.
 	RequestPriceData func(request shared.PriceDataRequest)
 	// SignalLevelReaction relays a level reaction for processing.
@@ -188,7 +188,8 @@ func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest)
 
 // Run manages the lifecycle processes of the price action manager.
 func (m *Manager) Run(ctx context.Context) {
-	m.cfg.Subscribe(m.updateSignals)
+	const priceActionManager = "priceactionmanager"
+	m.cfg.Subscribe(priceActionManager, m.updateSignals)
 
 	for {
 		select {

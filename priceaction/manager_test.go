@@ -11,7 +11,7 @@ import (
 
 func setupManager(t *testing.T, market string) *Manager {
 	subs := make([]chan shared.Candlestick, 0, 10)
-	subscribe := func(sub chan shared.Candlestick) {
+	subscribe := func(name string, sub chan shared.Candlestick) {
 		subs = append(subs, sub)
 	}
 
@@ -228,6 +228,7 @@ func TestManagerHandleLevelSignal(t *testing.T) {
 
 		Market:    market,
 		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
 	}
 
 	err := mgr.handleUpdateSignal(&firstCandle)
@@ -237,6 +238,7 @@ func TestManagerHandleLevelSignal(t *testing.T) {
 	wrongMarketLevelSignal := shared.LevelSignal{
 		Market: "^AAPL",
 		Price:  20,
+		Status: make(chan shared.StatusCode, 1),
 	}
 	err = mgr.handleLevelSignal(wrongMarketLevelSignal)
 	assert.Error(t, err)
@@ -245,6 +247,7 @@ func TestManagerHandleLevelSignal(t *testing.T) {
 	levelSignal := shared.LevelSignal{
 		Market: market,
 		Price:  20,
+		Status: make(chan shared.StatusCode, 1),
 	}
 	err = mgr.handleLevelSignal(levelSignal)
 	assert.NoError(t, err)
