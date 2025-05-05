@@ -26,8 +26,8 @@ const (
 
 // ManagerConfig represents the market manager configuration.
 type ManagerConfig struct {
-	// MarketIDs represents the collection of ids of the markets to manage.
-	MarketIDs []string
+	// Markets represents the collection of ids of the markets to manage.
+	Markets []string
 	// Backtest is the backtesting flag.
 	Backtest bool
 	// Subscribe registers the provided subscriber for market updates.
@@ -62,11 +62,11 @@ func NewManager(cfg *ManagerConfig, now time.Time) (*Manager, error) {
 	// initialize managed markets.
 	markets := make(map[string]*Market, 0)
 	workers := make(map[string]chan struct{})
-	for idx := range cfg.MarketIDs {
-		workers[cfg.MarketIDs[idx]] = make(chan struct{}, workerBufferSize)
+	for idx := range cfg.Markets {
+		workers[cfg.Markets[idx]] = make(chan struct{}, workerBufferSize)
 
 		mCfg := &MarketConfig{
-			Market:       cfg.MarketIDs[idx],
+			Market:       cfg.Markets[idx],
 			SignalLevel:  cfg.SignalLevel,
 			JobScheduler: cfg.JobScheduler,
 		}
@@ -75,7 +75,7 @@ func NewManager(cfg *ManagerConfig, now time.Time) (*Manager, error) {
 			return nil, fmt.Errorf("creating market: %w", err)
 		}
 
-		markets[cfg.MarketIDs[idx]] = market
+		markets[cfg.Markets[idx]] = market
 	}
 
 	return &Manager{

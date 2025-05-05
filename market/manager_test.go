@@ -32,7 +32,7 @@ func setupManager(t *testing.T, market string, now time.Time, backtest bool) (*M
 	assert.NoError(t, err)
 
 	cfg := &ManagerConfig{
-		MarketIDs:    []string{market},
+		Markets:      []string{market},
 		Subscribe:    subscribe,
 		CatchUp:      catchUp,
 		SignalLevel:  signalLevel,
@@ -356,12 +356,12 @@ func TestBacktestLevelGeneration(t *testing.T) {
 	mgr, _, levelSignals := setupManager(t, market, start, backtest)
 
 	hCfg := &shared.HistoricDataConfig{
-		Market:           market,
-		Timeframe:        shared.FiveMinute,
-		FilePath:         "../testdata/historicdata.json",
-		SignalCaughtUp:   mgr.SendCaughtUpSignal,
-		SendMarketUpdate: mgr.SendMarketUpdate,
-		Logger:           &log.Logger,
+		Market:            market,
+		Timeframe:         shared.FiveMinute,
+		FilePath:          "../testdata/historicdata.json",
+		SignalCaughtUp:    mgr.SendCaughtUpSignal,
+		NotifySubscribers: mgr.SendMarketUpdate,
+		Logger:            &log.Logger,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

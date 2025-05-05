@@ -79,7 +79,7 @@ func (m *Manager) SendExitSignal(signal shared.ExitSignal) {
 }
 
 // SendMarketSkewRequest relays the provided market skew request for processing.
-func (m *Manager) SendMarketStatusRequest(req shared.MarketSkewRequest) {
+func (m *Manager) SendMarketSkewRequest(req shared.MarketSkewRequest) {
 	select {
 	case m.marketSkewRequests <- req:
 		// do nothing.

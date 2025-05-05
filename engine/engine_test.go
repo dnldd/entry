@@ -67,7 +67,7 @@ func TestEngine(t *testing.T) {
 
 	// Ensure the engine can handle a level reaction signal.
 	market := "^GSPC"
-	levelReaction := &shared.LevelReaction{
+	levelReaction := shared.LevelReaction{
 		Market: market,
 		Level: &shared.Level{
 			Market: market,
@@ -126,7 +126,7 @@ func TestFillManagerChannels(t *testing.T) {
 
 	// Fill all the channels used by the manager.
 	for range bufferSize + 1 {
-		eng.SignalLevelReaction(&levelReaction)
+		eng.SignalLevelReaction(levelReaction)
 	}
 
 	assert.Equal(t, len(eng.levelReactionSignals), bufferSize)

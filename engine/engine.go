@@ -44,7 +44,7 @@ type EngineConfig struct {
 type Engine struct {
 	cfg                  *EngineConfig
 	workers              chan struct{}
-	levelReactionSignals chan *shared.LevelReaction
+	levelReactionSignals chan shared.LevelReaction
 }
 
 // NewEngine initializes a new market engine.
@@ -52,12 +52,12 @@ func NewEngine(cfg *EngineConfig) *Engine {
 	return &Engine{
 		cfg:                  cfg,
 		workers:              make(chan struct{}, maxWorkers),
-		levelReactionSignals: make(chan *shared.LevelReaction, bufferSize),
+		levelReactionSignals: make(chan shared.LevelReaction, bufferSize),
 	}
 }
 
 // SignalLevelReaction relays the provided level reaction for processing.
-func (e *Engine) SignalLevelReaction(reaction *shared.LevelReaction) {
+func (e *Engine) SignalLevelReaction(reaction shared.LevelReaction) {
 	select {
 	case e.levelReactionSignals <- reaction:
 		// do nothing.
@@ -532,8 +532,8 @@ func (e *Engine) Run(ctx context.Context) {
 		case signal := <-e.levelReactionSignals:
 			// use workers to process level reactions concurrently.
 			e.workers <- struct{}{}
-			go func(signal *shared.LevelReaction) {
-				err := e.handleLevelReaction(signal)
+			go func(signal shared.LevelReaction) {
+				err := e.handleLevelReaction(&signal)
 				if err != nil {
 					e.cfg.Logger.Error().Err(err).Send()
 				}

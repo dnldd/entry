@@ -79,7 +79,7 @@ func TestManager(t *testing.T) {
 		Response: make(chan shared.MarketSkew, 5),
 	}
 
-	mgr.SendMarketStatusRequest(marketSkewReq)
+	mgr.SendMarketSkewRequest(marketSkewReq)
 	<-marketSkewReq.Response
 
 	// Ensure the position manager can be gracefully shutdown.
@@ -121,7 +121,7 @@ func TestFillManagerChannels(t *testing.T) {
 	for range bufferSize + 1 {
 		mgr.SendEntrySignal(entrySignal)
 		mgr.SendExitSignal(exitSignal)
-		mgr.SendMarketStatusRequest(marketSkewReq)
+		mgr.SendMarketSkewRequest(marketSkewReq)
 	}
 
 	assert.Equal(t, len(mgr.entrySignals), bufferSize)
