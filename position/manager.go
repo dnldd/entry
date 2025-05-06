@@ -111,9 +111,10 @@ func (m *Manager) handleEntrySignal(signal *shared.EntrySignal) error {
 	}
 
 	// Notify of the newly created position.
-	msg := fmt.Sprintf("Created new %s position (%s) for %s @ %.2f with stoploss %.2f (%.2f points)",
+	msg := fmt.Sprintf("Created new %s position (%s) for %s @ %.2f with stoploss @ %.2f (%.2f points)",
 		position.Direction.String(), position.ID, position.Market, position.EntryPrice,
 		position.StopLoss, signal.StopLossPointsRange)
+	m.cfg.Logger.Info().Msg(msg)
 	m.cfg.Notify(msg)
 
 	return nil
@@ -142,9 +143,10 @@ func (m *Manager) handleExitSignal(signal *shared.ExitSignal) error {
 		m.cfg.PersistClosedPosition(pos)
 
 		// Notify discord session about the closed position.
-		msg := fmt.Sprintf("Closed %s position (%s) for %s @ %.2f with stoploss %.2f (%.2f points), PNL %.2f",
+		msg := fmt.Sprintf("Closed %s position (%s) for %s @ %.2f with stoploss @ %.2f (%.2f points), PNL %.2f",
 			pos.Direction.String(), pos.ID, pos.Market, pos.ExitPrice, pos.StopLoss,
 			pos.StopLossPointsRange, pos.PNLPercent)
+		m.cfg.Logger.Info().Msg(msg)
 		m.cfg.Notify(msg)
 	}
 

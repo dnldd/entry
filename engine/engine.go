@@ -387,6 +387,11 @@ func (e *Engine) evaluatePriceReversalStrength(levelReaction *shared.LevelReacti
 			signal := shared.NewEntrySignal(levelReaction.Market, levelReaction.Timeframe, direction,
 				levelReaction.CurrentPrice, reasons, confluence, levelReaction.CreatedOn, stopLoss, pointsRange)
 			e.cfg.SendEntrySignal(signal)
+			select {
+			case <-signal.Status:
+			case <-time.After(shared.TimeoutDuration):
+				return fmt.Errorf("timed out waiting for entry signal status")
+			}
 
 		case skew == shared.LongSkewed && levelReaction.Level.Kind == shared.Resistance:
 			// A confirmed resistance level reversal for a long skewed market acts as an exit condition.
@@ -394,6 +399,11 @@ func (e *Engine) evaluatePriceReversalStrength(levelReaction *shared.LevelReacti
 			signal := shared.NewExitSignal(levelReaction.Market, levelReaction.Timeframe, direction,
 				levelReaction.CurrentPrice, reasons, confluence, levelReaction.CreatedOn)
 			e.cfg.SendExitSignal(signal)
+			select {
+			case <-signal.Status:
+			case <-time.After(shared.TimeoutDuration):
+				return fmt.Errorf("timed out waiting for entry signal status")
+			}
 
 		case (skew == shared.NeutralSkew || skew == shared.ShortSkewed) && levelReaction.Level.Kind == shared.Resistance:
 			// Signal a short position on a confirmed resistance reversal if the market is
@@ -407,6 +417,11 @@ func (e *Engine) evaluatePriceReversalStrength(levelReaction *shared.LevelReacti
 			signal := shared.NewEntrySignal(levelReaction.Market, levelReaction.Timeframe, direction,
 				levelReaction.CurrentPrice, reasons, confluence, levelReaction.CreatedOn, stopLoss, pointsRange)
 			e.cfg.SendEntrySignal(signal)
+			select {
+			case <-signal.Status:
+			case <-time.After(shared.TimeoutDuration):
+				return fmt.Errorf("timed out waiting for entry signal status")
+			}
 
 		case skew == shared.ShortSkewed && levelReaction.Level.Kind == shared.Support:
 			// A confirmed support reversal for a short skewed market acts as an exit condition.
@@ -414,6 +429,11 @@ func (e *Engine) evaluatePriceReversalStrength(levelReaction *shared.LevelReacti
 			signal := shared.NewExitSignal(levelReaction.Market, levelReaction.Timeframe, direction,
 				levelReaction.CurrentPrice, reasons, confluence, levelReaction.CreatedOn)
 			e.cfg.SendExitSignal(signal)
+			select {
+			case <-signal.Status:
+			case <-time.After(shared.TimeoutDuration):
+				return fmt.Errorf("timed out waiting for entry signal status")
+			}
 		}
 	}
 
