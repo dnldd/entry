@@ -257,6 +257,64 @@ type CandleMetadata struct {
 	Date      time.Time
 }
 
+// Strength returns the estimated strength of the provided candlestick.
+func (m *CandleMetadata) Strength() uint32 {
+	score := uint32(0)
+
+	// Award scores bsased on candle structure tied with momentum.
+	if m.Kind == Marubozu {
+		switch m.Momentum {
+		case High:
+			score += 3
+		case Medium:
+			score += 2
+		}
+	}
+	if m.Kind == Pinbar {
+		switch m.Momentum {
+		case High:
+			score += 4
+		case Medium:
+			score += 3
+		}
+	}
+
+	// An engulfing candle signifies strength.
+	if m.Engulfing {
+		score += 2
+	}
+
+	return score
+}
+
+// FetchSignalCandle returns the strongest candle from the provided set and sentiment.
+func FetchSignalCandle(meta []*CandleMetadata, sentiment Sentiment) *CandleMetadata {
+	var strongest *CandleMetadata
+	var strongestStrength uint32
+
+	for idx := range meta {
+		current := meta[idx]
+		if current.Sentiment != sentiment {
+			// Signal candles must match sentiment.
+			continue
+		}
+
+		if current.Kind == Doji {
+			// Signal candles cannot be dojis.
+			continue
+		}
+
+		currentStrength := current.Strength()
+		if strongest == nil || currentStrength > strongestStrength ||
+			(currentStrength == strongestStrength && current.Volume > strongest.Volume) {
+			strongest = current
+			strongestStrength = currentStrength
+		}
+	}
+
+	return strongest
+}
+
 // CandleMetaRangeHighAndLow determines the high and low of the provided range of candle metadata.
 func CandleMetaRangeHighAndLow(meta []*CandleMetadata) (float64, float64) {
 	if len(meta) == 0 {
@@ -266,18 +324,11 @@ func CandleMetaRangeHighAndLow(meta []*CandleMetadata) (float64, float64) {
 
 	for idx := range meta {
 		candleMeta := meta[idx]
-		if high == 0 {
-			high = candleMeta.High
-		}
-		if low == 0 {
-			low = candleMeta.Low
-		}
-
-		if candleMeta.High > high {
+		if high == 0 || candleMeta.High > high {
 			high = candleMeta.High
 		}
 
-		if candleMeta.Low < low {
+		if low == 0 || candleMeta.Low < low {
 			low = candleMeta.Low
 		}
 	}
