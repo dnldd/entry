@@ -20,11 +20,13 @@ func setupEngine(avgVolume *float64, candleMeta []*shared.CandleMetadata, market
 
 	entrySignals := make(chan shared.EntrySignal, 5)
 	signalEntry := func(signal shared.EntrySignal) {
+		signal.Status <- shared.Processed
 		entrySignals <- signal
 	}
 
 	exitSignals := make(chan shared.ExitSignal, 5)
 	signalExit := func(signal shared.ExitSignal) {
+		signal.Status <- shared.Processed
 		exitSignals <- signal
 	}
 
@@ -205,7 +207,7 @@ func generateSessionTimes(t *testing.T) (time.Time, time.Time) {
 	assert.NoError(t, err)
 	asiaSessionTime := time.Date(now.Year(), now.Month(), now.Day(), asiaSession.Hour(), asiaSession.Minute(), 0, 0, loc)
 
-	londonSessionStr := "03:30"
+	londonSessionStr := "9:00" // within high volume window
 	londonSession, err := time.Parse(shared.SessionTimeLayout, londonSessionStr)
 	assert.NoError(t, err)
 	londonSessionTime := time.Date(now.Year(), now.Month(), now.Day(), londonSession.Hour(), londonSession.Minute(), 0, 0, loc)
@@ -342,7 +344,7 @@ func TestEvaluateHighVolumeSession(t *testing.T) {
 	assert.Equal(t, confluence, uint32(0))
 	assert.Equal(t, len(reasons), 0)
 
-	// Ensure confluence points are awarded for high volume sessions (london & new york)
+	// Ensure confluence points are awarded for times within the high volume  window (london & new york)
 	levelReaction.CreatedOn = londonSessionTime
 
 	err = eng.evaluateHighVolumeSession(&levelReaction, &confluence, reasons)

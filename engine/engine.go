@@ -69,13 +69,13 @@ func (e *Engine) SignalLevelReaction(reaction shared.LevelReaction) {
 
 // evaluateHighVolumeSession awards confluence points if the provided level reaction occured during a high volume session.
 func (e *Engine) evaluateHighVolumeSession(levelReaction *shared.LevelReaction, confluence *uint32, reasons map[shared.Reason]struct{}) error {
-	// A reversal occuring during sessions known for high volume indicates strength.
-	sessionName, _, err := shared.CurrentSession(levelReaction.CreatedOn)
+	// Any notable price action move occuring during the high volume window indicates strength.
+	highVolumeWindow, err := shared.InHighVolumeWindow(levelReaction.CreatedOn)
 	if err != nil {
-		return fmt.Errorf("fetching current session: %v", err)
+		return fmt.Errorf("checking high volume window status: %v", err)
 	}
 
-	if sessionName == shared.London || sessionName == shared.NewYork {
+	if highVolumeWindow {
 		(*confluence)++
 		reasons[shared.HighVolumeSession] = struct{}{}
 	}

@@ -21,6 +21,10 @@ const (
 	NewYorkOpen  = "08:00"
 	NewYorkClose = "17:00"
 
+	// High volume window (futures) in new york time (ET).
+	HighVolumeWindowOpen  = "8:30"
+	HighVolumeWindowClose = "11:00"
+
 	// maxSessions is the maximum number of sessions tracked by a market.
 	maxSessions = 12
 
@@ -137,4 +141,19 @@ func IsMarketOpen(now time.Time) (bool, string, error) {
 	}
 
 	return open, name, nil
+}
+
+// InHighVolumeWindow check whether the provided time is within the high volume window for the day.
+func InHighVolumeWindow(now time.Time) (bool, error) {
+	highVolumeWindow, err := NewSession("hvw", HighVolumeWindowOpen, HighVolumeWindowClose, now)
+	if err != nil {
+		return false, fmt.Errorf("creating high volume window session: %v", err)
+	}
+
+	if (now.Equal(highVolumeWindow.Open) || now.After(highVolumeWindow.Open)) &&
+		(now.Equal(highVolumeWindow.Close) || now.Before(highVolumeWindow.Close)) {
+		return true, nil
+	}
+
+	return false, nil
 }

@@ -72,6 +72,21 @@ func TestSession(t *testing.T) {
 
 	noSessionTime := time.Date(now.Year(), now.Month(), now.Day(), noSession.Hour(), noSession.Minute(), 0, 0, loc)
 
+	// Ensure the any provided time can be checked to be within the high volume window.
+	hwv, err := InHighVolumeWindow(noSessionTime)
+	assert.NoError(t, err)
+	assert.False(t, hwv)
+
+	highVolumeWindowStr := "9:00"
+	highVolumeWindow, err := time.Parse(SessionTimeLayout, highVolumeWindowStr)
+	assert.NoError(t, err)
+
+	highVolumeWindowTime := time.Date(now.Year(), now.Month(), now.Day(), highVolumeWindow.Hour(), highVolumeWindow.Minute(), 0, 0, loc)
+
+	hwv, err = InHighVolumeWindow(highVolumeWindowTime)
+	assert.NoError(t, err)
+	assert.True(t, hwv)
+
 	name, session, err := CurrentSession(noSessionTime)
 	assert.NoError(t, err)
 	assert.Nil(t, session)
