@@ -1,27 +1,48 @@
 package position
 
 import (
+	"encoding/csv"
 	"fmt"
+	"os"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/dnldd/entry/shared"
+	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 )
 
+var (
+	// positionsHeaderCSV is the header used for position csv files.
+	positionsHeaderCSV = []string{"id", "market", "timeframe", "direction", "stoploss",
+		"stoplosspointsrange", "pnlpercent", "entryprice", "entryreasons", "exitprice",
+		"exitreasons", "status", "createdon", "closedon"}
+)
+
+type MarketConfig struct {
+	// The tracked market.
+	Market string
+	// Logger represents the application logger.
+	Logger *zerolog.Logger
+}
+
 // Market tracks positions for the provided market.
 type Market struct {
-	market      string
+	cfg         *MarketConfig
 	positions   map[string]*Position
 	positionMtx sync.RWMutex
 	skew        atomic.Uint32
 }
 
 // NewMarket initializes a new market.
-func NewMarket(market string) *Market {
-	return &Market{
-		market:    market,
+func NewMarket(cfg *MarketConfig) (*Market, error) {
+	mkt := &Market{
+		cfg:       cfg,
 		positions: make(map[string]*Position),
 	}
+
+	return mkt, nil
 }
 
 // AddPosition adds the provided position to the market.
@@ -29,7 +50,7 @@ func (m *Market) AddPosition(position *Position) error {
 	if position == nil {
 		return fmt.Errorf("position cannot be nil")
 	}
-	if position.Market != m.market {
+	if position.Market != m.cfg.Market {
 		return fmt.Errorf("unexpected position market provided: %s", position.Market)
 	}
 
@@ -52,7 +73,7 @@ func (m *Market) AddPosition(position *Position) error {
 		// added until all long positions have been concluded.
 		switch position.Direction {
 		case shared.Short:
-			return fmt.Errorf("short position provided to market currently managing longs: %s", m.market)
+			return fmt.Errorf("short position provided to market currently managing longs: %s", m.cfg.Market)
 		case shared.Long:
 			// do nothing.
 		}
@@ -62,7 +83,7 @@ func (m *Market) AddPosition(position *Position) error {
 		// added until all short positions have been concluded.
 		switch position.Direction {
 		case shared.Long:
-			return fmt.Errorf("long position provided to market currently managing shorts: %s", m.market)
+			return fmt.Errorf("long position provided to market currently managing shorts: %s", m.cfg.Market)
 		case shared.Short:
 			// do nothing.
 		}
@@ -106,8 +127,8 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 
 // ClosePositions closes
 func (m *Market) ClosePositions(signal *shared.ExitSignal) ([]*Position, error) {
-	if signal.Market != m.market {
-		return nil, fmt.Errorf("unexpected %s exit signal provided for %s market", signal.Market, m.market)
+	if signal.Market != m.cfg.Market {
+		return nil, fmt.Errorf("unexpected %s exit signal provided for %s market", signal.Market, m.cfg.Market)
 	}
 
 	m.positionMtx.Lock()
@@ -124,14 +145,95 @@ func (m *Market) ClosePositions(signal *shared.ExitSignal) ([]*Position, error) 
 		m.positions[k].ClosePosition(signal)
 
 		set = append(set, m.positions[k])
+	}
 
-		delete(m.positions, k)
+	// Update the market skew based on remaining open positions.
+	openPositionSkew := shared.NeutralSkew
+	for k := range m.positions {
+		position := m.positions[k]
+		if position.ClosedOn.IsZero() {
+			switch position.Direction {
+			case shared.Long:
+				openPositionSkew = shared.LongSkewed
+			case shared.Short:
+				openPositionSkew = shared.ShortSkewed
+			}
+
+			break
+		}
 	}
 
 	// Reset the market status to neutral if all positions have been removed.
-	if len(m.positions) == 0 {
-		m.skew.Store(uint32(shared.NeutralSkew))
-	}
+	m.skew.Store(uint32(openPositionSkew))
 
 	return set, nil
+}
+
+// PersistPositionsCSV writes the tracked positions of the provided market to file as csv.
+func (m *Market) PersistPositionsCSV() (string, error) {
+	now, _, err := shared.NewYorkTime()
+	if err != nil {
+		return "", fmt.Errorf("fetching new york time: %v", err)
+	}
+
+	filename := fmt.Sprintf("%s-positions@%s.csv", m.cfg.Market, now.Format(time.RFC3339))
+	file, err := os.Create(filename)
+	if err != nil {
+		return "", fmt.Errorf("creating positions CSV file: %v", err)
+	}
+
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write the CSV header to file.
+	writer.Write(positionsHeaderCSV)
+
+	// Write the position records to file.
+	m.positionMtx.RLock()
+	defer m.positionMtx.RUnlock()
+
+	record := make([]string, 14)
+	resetRecord := func() {
+		for i := range record {
+			record[i] = ""
+		}
+	}
+
+	for idx := range m.positions {
+		position := m.positions[idx]
+
+		record[0] = position.ID
+		record[1] = position.Market
+		record[2] = position.Timeframe.String()
+		record[3] = position.Direction.String()
+		record[4] = strconv.FormatFloat(position.StopLoss, 'f', 3, 64)
+		record[5] = strconv.FormatFloat(position.StopLossPointsRange, 'f', 3, 64)
+		record[6] = strconv.FormatFloat(position.PNLPercent, 'f', 3, 64)
+		record[7] = strconv.FormatFloat(position.EntryPrice, 'f', 3, 64)
+		record[8] = position.EntryReasons
+		record[9] = strconv.FormatFloat(position.ExitPrice, 'f', 3, 64)
+		if position.ExitReasons == "" {
+			record[10] = "–"
+		} else {
+			record[10] = position.ExitReasons
+		}
+		record[11] = position.Status.String()
+		record[12] = position.CreatedOn.Format(time.RFC1123)
+		if position.ClosedOn.IsZero() {
+			record[13] = "–"
+		} else {
+			record[13] = position.ClosedOn.Format(time.RFC1123)
+		}
+
+		err = writer.Write(record)
+		if err != nil {
+			return "", fmt.Errorf("writing position record: %v", err)
+		}
+
+		resetRecord()
+	}
+
+	return filename, nil
 }

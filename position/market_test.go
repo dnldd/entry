@@ -1,16 +1,30 @@
 package position
 
 import (
+	"os"
 	"testing"
+	"time"
 
 	"github.com/dnldd/entry/shared"
+	"github.com/go-co-op/gocron"
 	"github.com/peterldowns/testy/assert"
+	"github.com/rs/zerolog/log"
 )
 
 func TestMarket(t *testing.T) {
 	// Ensure a market can be created.
 	market := "^GSPC"
-	mkt := NewMarket(market)
+
+	loc, err := time.LoadLocation(shared.NewYorkLocation)
+	assert.NoError(t, err)
+
+	cfg := &MarketConfig{
+		Market:       market,
+		JobScheduler: gocron.NewScheduler(loc),
+		Logger:       &log.Logger,
+	}
+	mkt, err := NewMarket(cfg)
+	assert.NoError(t, err)
 
 	now, _, err := shared.NewYorkTime()
 	assert.NoError(t, err)
@@ -87,7 +101,7 @@ func TestMarket(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, shared.MarketSkew(mkt.skew.Load()), shared.LongSkewed)
 
-	// Ensure once a markets skew  is set, tracking positions of the opposite
+	// Ensure once a markets skew is set, tracking positions of the opposite.
 	// skew returns an error.
 	shortEntrySignal := &shared.EntrySignal{
 		Market:    market,
@@ -106,7 +120,13 @@ func TestMarket(t *testing.T) {
 	err = mkt.AddPosition(pos)
 	assert.Error(t, err)
 
-	// Ensure a closing tracked market posions an exit signal for another market returns an error.
+	// Ensure the market can persist its positions to file.
+	filename, err := mkt.PersistPositionsCSV()
+	assert.NoError(t, err)
+
+	defer os.Remove(filename)
+
+	// Ensure an exit signal for an unknown market returns an error.
 	wrongMarketExitSignal := &shared.ExitSignal{
 		Market:     "^AAPL",
 		Timeframe:  shared.FiveMinute,
