@@ -9,8 +9,14 @@ import (
 	"time"
 
 	"github.com/dnldd/entry/shared"
+	"github.com/go-co-op/gocron"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
+)
+
+const (
+	// maxPositionsPurgeDuration is the maximum time closed position will be kept around for before being purged.
+	maxPositionsPurgeDuration = time.Hour * 48
 )
 
 var (
@@ -23,6 +29,8 @@ var (
 type MarketConfig struct {
 	// The tracked market.
 	Market string
+	// JobScheduler represents the job scheduler.
+	JobScheduler *gocron.Scheduler
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
 }
@@ -40,6 +48,18 @@ func NewMarket(cfg *MarketConfig) (*Market, error) {
 	mkt := &Market{
 		cfg:       cfg,
 		positions: make(map[string]*Position),
+	}
+
+	// Schedule closed positions purge job.
+	_, err := cfg.JobScheduler.Every(6).Hours().
+		Do(func() {
+			err := mkt.PurgeClosedPositionsJob()
+			if err != nil {
+				mkt.cfg.Logger.Error().Err(err).Send()
+			}
+		})
+	if err != nil {
+		return nil, fmt.Errorf("scheduling closed positions purge job for %s: %v", mkt.cfg.Market, err)
 	}
 
 	return mkt, nil
@@ -167,6 +187,32 @@ func (m *Market) ClosePositions(signal *shared.ExitSignal) ([]*Position, error) 
 	m.skew.Store(uint32(openPositionSkew))
 
 	return set, nil
+}
+
+// PurgeClosedPositionsJob purges old closed positions from the provided market.
+//
+// This job should be run periodically.
+func (m *Market) PurgeClosedPositionsJob() error {
+	now, _, err := shared.NewYorkTime()
+	if err != nil {
+		return fmt.Errorf("fetching new york time: %v", err)
+	}
+
+	m.positionMtx.Lock()
+	defer m.positionMtx.Unlock()
+
+	for k := range m.positions {
+		if m.positions[k].ClosedOn.IsZero() {
+			continue
+		}
+
+		// Delete old closed positions.
+		if now.Sub(m.positions[k].ClosedOn) > maxPositionsPurgeDuration {
+			delete(m.positions, k)
+		}
+	}
+
+	return nil
 }
 
 // PersistPositionsCSV writes the tracked positions of the provided market to file as csv.
