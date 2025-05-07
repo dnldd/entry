@@ -16,9 +16,11 @@ const (
 	// maxWorkers is the maximum number of concurrent workers.
 	maxWorkers = 16
 	// minReversalConfluence is the minumum required confluence to confirm a reversal.
-	minReversalConfluence = 7
+	// TODO: this will be adjusted based on findings from backtests.
+	minReversalConfluence = 6
 	// minBreakConfluence is the minumum required confluence to confirm a break.
-	minBreakConfluence = 7
+	// TODO: this will be adjusted based on findings from backtests.
+	minBreakConfluence = 6
 	// minAverageVolumePercent is the minimum percentage above average volume to be considered
 	// substantive.
 	minAverageVolumePercent = float64(0.3)
