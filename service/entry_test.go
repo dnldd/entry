@@ -120,7 +120,7 @@ func setupEntry() (*Entry, chan shared.LevelSignal, chan shared.LevelReaction, c
 	}
 
 	positionMgrLogger := logger.With().Str("component", "positionmanager").Logger()
-	positionMgr = position.NewPositionManager(&position.ManagerConfig{
+	positionMgr, err = position.NewPositionManager(&position.ManagerConfig{
 		Markets: cfg.Markets,
 		Notify: func(message string) {
 			// todo.
@@ -129,7 +129,8 @@ func setupEntry() (*Entry, chan shared.LevelSignal, chan shared.LevelReaction, c
 			// todo.
 			return nil
 		},
-		Logger: &positionMgrLogger,
+		JobScheduler: jobScheduler,
+		Logger:       &positionMgrLogger,
 	})
 
 	levelReactionLeak := make(chan shared.LevelReaction, 10)

@@ -136,7 +136,7 @@ func NewEntry(cfg *EntryConfig) (*Entry, error) {
 	}
 
 	positionMgrLogger := logger.With().Str("component", "positionmanager").Logger()
-	positionMgr = position.NewPositionManager(&position.ManagerConfig{
+	positionMgr, err = position.NewPositionManager(&position.ManagerConfig{
 		Markets: cfg.Markets,
 		Notify: func(message string) {
 			// todo.
@@ -145,7 +145,8 @@ func NewEntry(cfg *EntryConfig) (*Entry, error) {
 			// todo.
 			return nil
 		},
-		Logger: &positionMgrLogger,
+		JobScheduler: jobScheduler,
+		Logger:       &positionMgrLogger,
 	})
 
 	levelReactionFunc := func(signal shared.LevelReaction) {
