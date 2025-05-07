@@ -4,18 +4,23 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dnldd/entry/shared"
+	"github.com/go-co-op/gocron"
 	"github.com/peterldowns/testy/assert"
 	"github.com/rs/zerolog/log"
 )
 
-func setupManager(market string) (*Manager, chan string, *error) {
+func setupManager(t *testing.T, market string) (*Manager, chan string, *error) {
 	notifyMsgs := make(chan string, 10)
 	var persistClosedPositionErr error
 	persistClosedPosition := func(pos *Position) error {
 		return persistClosedPositionErr
 	}
+
+	loc, err := time.LoadLocation(shared.NewYorkLocation)
+	assert.NoError(t, err)
 
 	cfg := &ManagerConfig{
 		Markets: []string{market},
@@ -23,17 +28,19 @@ func setupManager(market string) (*Manager, chan string, *error) {
 			notifyMsgs <- message
 		},
 		PersistClosedPosition: persistClosedPosition,
+		JobScheduler:          gocron.NewScheduler(loc),
 		Logger:                &log.Logger,
 	}
 
-	mgr := NewPositionManager(cfg)
+	mgr, err := NewPositionManager(cfg)
+	assert.NoError(t, err)
 
 	return mgr, notifyMsgs, &persistClosedPositionErr
 }
 
 func TestManager(t *testing.T) {
 	market := "^GSPC"
-	mgr, notifyMsgs, _ := setupManager(market)
+	mgr, notifyMsgs, _ := setupManager(t, market)
 
 	// Ensure the position manager can be started.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -90,7 +97,7 @@ func TestManager(t *testing.T) {
 func TestFillManagerChannels(t *testing.T) {
 	// Ensure the price action manager can be created.
 	market := "^GSPC"
-	mgr, _, _ := setupManager(market)
+	mgr, _, _ := setupManager(t, market)
 
 	// Ensure the position manager can process entry signals.
 	entrySignal := shared.EntrySignal{
@@ -131,7 +138,7 @@ func TestFillManagerChannels(t *testing.T) {
 
 func TestHandleEntrySignals(t *testing.T) {
 	market := "^GSPC"
-	mgr, notifyMsgs, _ := setupManager(market)
+	mgr, notifyMsgs, _ := setupManager(t, market)
 
 	// Ensure handling an entry signal for an unknown market errors.
 	unknownMarketEntrySignal := shared.EntrySignal{
@@ -166,7 +173,7 @@ func TestHandleEntrySignals(t *testing.T) {
 
 func TestHandleExitSignals(t *testing.T) {
 	market := "^GSPC"
-	mgr, notifyMsgs, _ := setupManager(market)
+	mgr, notifyMsgs, _ := setupManager(t, market)
 
 	// Create a valid position.
 	entrySignal := shared.EntrySignal{
@@ -215,7 +222,7 @@ func TestHandleExitSignals(t *testing.T) {
 
 func TestHandleMarketStatusRequest(t *testing.T) {
 	market := "^GSPC"
-	mgr, _, _ := setupManager(market)
+	mgr, _, _ := setupManager(t, market)
 
 	// Ensure handling a request with an unknown market errors.
 	unknownMarketSkewReq := shared.MarketSkewRequest{

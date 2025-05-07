@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/dnldd/entry/shared"
+	"github.com/go-co-op/gocron"
 	"github.com/rs/zerolog"
 )
 
@@ -21,8 +22,12 @@ type ManagerConfig struct {
 	Markets []string
 	// Notify sends the provided message.
 	Notify func(message string)
+	// Backtest is the backtesting flag.
+	Backtest bool
 	// PersistClosedPosition persists the provided closed position to the database.
 	PersistClosedPosition func(position *Position) error
+	// JobScheduler represents the job scheduler.
+	JobScheduler *gocron.Scheduler
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
 }
@@ -38,12 +43,22 @@ type Manager struct {
 }
 
 // NewPositionManager initializes a new position manager.
-func NewPositionManager(cfg *ManagerConfig) *Manager {
+func NewPositionManager(cfg *ManagerConfig) (*Manager, error) {
 	// Create markets for position tracking.
 	markets := make(map[string]*Market)
 	for idx := range cfg.Markets {
-		mkt := NewMarket(cfg.Markets[idx])
-		markets[mkt.market] = mkt
+		market := cfg.Markets[idx]
+		mCfg := &MarketConfig{
+			Market:       market,
+			JobScheduler: cfg.JobScheduler,
+			Logger:       cfg.Logger,
+		}
+		mkt, err := NewMarket(mCfg)
+		if err != nil {
+			return nil, fmt.Errorf("creating new positions market %s: %v", market, err)
+		}
+
+		markets[market] = mkt
 	}
 
 	return &Manager{
@@ -53,7 +68,7 @@ func NewPositionManager(cfg *ManagerConfig) *Manager {
 		exitSignals:        make(chan shared.ExitSignal, bufferSize),
 		marketSkewRequests: make(chan shared.MarketSkewRequest, bufferSize),
 		workers:            make(chan struct{}, maxWorkers),
-	}
+	}, nil
 }
 
 // SendEntrySignal relays the provided entry signal for processing.
@@ -170,6 +185,18 @@ func (m *Manager) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			if !m.cfg.Backtest {
+				return
+			}
+
+			// Persist tracked positions for markets to csv files when backtesting.
+			for k := range m.markets {
+				_, err := m.markets[k].PersistPositionsCSV()
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+				}
+			}
+
 			return
 		case signal := <-m.entrySignals:
 			m.workers <- struct{}{}
