@@ -217,84 +217,213 @@ func generateSessionTimes(t *testing.T) (time.Time, time.Time) {
 
 func TestEstimateStopLoss(t *testing.T) {
 	avgVolume := float64(10)
-	candleMeta := []*shared.CandleMetadata{}
+	asianSessionTime, _ := generateSessionTimes(t)
+	bullishCandleMeta := []*shared.CandleMetadata{
+		{
+			Kind:      shared.Marubozu,
+			Sentiment: shared.Bearish,
+			Momentum:  shared.Medium,
+			Volume:    float64(3),
+			Engulfing: false,
+			High:      7,
+			Low:       3,
+			Date:      asianSessionTime,
+		},
+		{
+			Kind:      shared.Marubozu,
+			Sentiment: shared.Bullish,
+			Momentum:  shared.High,
+			Volume:    float64(6),
+			Engulfing: true,
+			High:      9,
+			Low:       2,
+			Date:      asianSessionTime,
+		},
+		{
+			Kind:      shared.Pinbar,
+			Sentiment: shared.Bullish,
+			Momentum:  shared.Medium,
+			Volume:    float64(4),
+			Engulfing: false,
+			High:      12,
+			Low:       5,
+			Date:      asianSessionTime,
+		},
+		{
+			Kind:      shared.Pinbar,
+			Sentiment: shared.Bullish,
+			Momentum:  shared.Medium,
+			Volume:    float64(4),
+			Engulfing: false,
+			High:      16,
+			Low:       8,
+			Date:      asianSessionTime,
+		},
+	}
+
+	bearishCandleMeta := []*shared.CandleMetadata{
+		{
+			Kind:      shared.Marubozu,
+			Sentiment: shared.Bullish,
+			Momentum:  shared.Medium,
+			Volume:    float64(3),
+			Engulfing: false,
+			High:      9,
+			Low:       7,
+			Date:      asianSessionTime,
+		},
+		{
+			Kind:      shared.Marubozu,
+			Sentiment: shared.Bearish,
+			Momentum:  shared.High,
+			Volume:    float64(6),
+			Engulfing: true,
+			High:      10,
+			Low:       6,
+			Date:      asianSessionTime,
+		},
+		{
+			Kind:      shared.Pinbar,
+			Sentiment: shared.Bearish,
+			Momentum:  shared.Medium,
+			Volume:    float64(4),
+			Engulfing: false,
+			High:      9,
+			Low:       5,
+			Date:      asianSessionTime,
+		},
+		{
+			Kind:      shared.Pinbar,
+			Sentiment: shared.Bearish,
+			Momentum:  shared.Medium,
+			Volume:    float64(4),
+			Engulfing: false,
+			High:      7,
+			Low:       4,
+			Date:      asianSessionTime,
+		},
+	}
+
+	noSignalCandleMeta := []*shared.CandleMetadata{
+		{
+			Kind:      shared.Doji,
+			Sentiment: shared.Bullish,
+			Momentum:  shared.Medium,
+			Volume:    float64(2),
+			Engulfing: false,
+			High:      9,
+			Low:       7,
+			Date:      asianSessionTime,
+		},
+		{
+			Kind:      shared.Doji,
+			Sentiment: shared.Bullish,
+			Momentum:  shared.Medium,
+			Volume:    float64(2),
+			Engulfing: false,
+			High:      11,
+			Low:       9,
+			Date:      asianSessionTime,
+		},
+		{
+			Kind:      shared.Doji,
+			Sentiment: shared.Bullish,
+			Momentum:  shared.Medium,
+			Volume:    float64(2),
+			Engulfing: false,
+			High:      13,
+			Low:       11,
+			Date:      asianSessionTime,
+		},
+		{
+			Kind:      shared.Doji,
+			Sentiment: shared.Bullish,
+			Momentum:  shared.Medium,
+			Volume:    float64(2),
+			Engulfing: false,
+			High:      16,
+			Low:       13,
+			Date:      asianSessionTime,
+		},
+	}
 	marketSkew := shared.NeutralSkew
-	eng, _, _ := setupEngine(&avgVolume, candleMeta, &marketSkew)
+	eng, _, _ := setupEngine(&avgVolume, []*shared.CandleMetadata{}, &marketSkew)
+
+	market := "^GSPC"
+	supportLevelReaction := &shared.LevelReaction{
+		Market: market,
+		Level: &shared.Level{
+			Market: market,
+			Price:  float64(5),
+			Kind:   shared.Support,
+		},
+		Timeframe:     shared.FiveMinute,
+		PriceMovement: []shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above},
+		Reaction:      shared.Reversal,
+		CreatedOn:     asianSessionTime,
+		CurrentPrice:  float64(16),
+		Status:        make(chan shared.StatusCode, 1),
+	}
+
+	resistanceLevelReaction := &shared.LevelReaction{
+		Market: market,
+		Level: &shared.Level{
+			Market: market,
+			Price:  float64(9),
+			Kind:   shared.Resistance,
+		},
+		Timeframe:     shared.FiveMinute,
+		PriceMovement: []shared.Movement{shared.Below, shared.Below, shared.Below, shared.Below},
+		Reaction:      shared.Reversal,
+		CreatedOn:     asianSessionTime,
+		CurrentPrice:  float64(4),
+		Status:        make(chan shared.StatusCode, 1),
+	}
 
 	tests := []struct {
-		name        string
-		high        float64
-		low         float64
-		entry       float64
-		direction   shared.Direction
-		wantErr     bool
-		stoploss    float64
-		pointsRange float64
+		name          string
+		meta          []*shared.CandleMetadata
+		levelReaction *shared.LevelReaction
+		wantErr       bool
+		stoploss      float64
+		pointsRange   float64
 	}{
 		{
-			"negative stop loss",
-			float64(2),
-			float64(1),
-			float64(1.2),
-			shared.Long,
+			"no candle metadata provided",
+			[]*shared.CandleMetadata{},
+			supportLevelReaction,
 			true,
-			0,
-			0,
+			0.0,
+			0.0,
 		},
 		{
-			"low is greater than high",
-			float64(2),
-			float64(4),
-			float64(5),
-			shared.Long,
-			true,
-			0,
-			0,
-		},
-		{
-			"entry is greater than high",
-			float64(5),
-			float64(4),
-			float64(7),
-			shared.Long,
-			true,
-			0,
-			0,
-		},
-		{
-			"entry is less than low",
-			float64(5),
-			float64(4),
-			float64(3),
-			shared.Long,
-			true,
-			0,
-			0,
-		},
-		{
-			"valid stop loss (long)",
-			float64(8),
-			float64(4),
-			float64(5),
-			shared.Long,
+			"support reversal stop loss",
+			bullishCandleMeta,
+			supportLevelReaction,
 			false,
-			2.0,
-			3.0,
+			1.0,
+			15.0,
 		},
 		{
-			"valid stop loss (short)",
-			float64(10),
-			float64(7),
-			float64(9),
-			shared.Short,
+			"resistance reversal stop loss",
+			bearishCandleMeta,
+			resistanceLevelReaction,
 			false,
-			12.0,
-			3.0,
+			11.0,
+			7.0,
+		},
+		{
+			"no signal candle",
+			noSignalCandleMeta,
+			supportLevelReaction,
+			false,
+			6.0,
+			10.0,
 		},
 	}
 
 	for _, test := range tests {
-		sl, pr, err := eng.estimateStopLoss(test.high, test.low, test.entry, test.direction)
+		sl, pr, err := eng.estimateStopLoss(test.meta, test.levelReaction)
 		if test.wantErr && err == nil {
 			t.Errorf("%s: expected an error, got none", test.name)
 		}
@@ -916,26 +1045,22 @@ func TestEvaluatePriceReversalStrength(t *testing.T) {
 	}
 
 	// Ensure a support price reversal triggers a long entry signal for a market long or neutral skewed.
-	high := float64(14)
-	low := float64(3)
-	err := eng.evaluatePriceReversalStrength(supportLevelReaction, candleMeta, high, low)
+	err := eng.evaluatePriceReversalStrength(supportLevelReaction, candleMeta)
 	assert.NoError(t, err)
 	entrySignal := <-entrySignals
 	assert.Equal(t, entrySignal.Direction, shared.Long)
 
 	// Ensure a support price reversal triggers a short exit signal for a market short skewed.
 	marketSkew = shortSkew
-	err = eng.evaluatePriceReversalStrength(supportLevelReaction, candleMeta, high, low)
+	err = eng.evaluatePriceReversalStrength(supportLevelReaction, candleMeta)
 	assert.NoError(t, err)
 	exitSignal := <-exitSignals
 	assert.Equal(t, exitSignal.Direction, shared.Short)
 
 	// Ensure a resistance price reversal triggers a long exit signal for a market long skewed.
-	high = 11
-	low = 1
 	marketSkew = longSkew
 	candleMeta = resistanceCandleMeta
-	err = eng.evaluatePriceReversalStrength(resistanceLevelReaction, candleMeta, high, low)
+	err = eng.evaluatePriceReversalStrength(resistanceLevelReaction, candleMeta)
 	assert.NoError(t, err)
 	exitSignal = <-exitSignals
 	assert.Equal(t, exitSignal.Direction, shared.Long)
@@ -943,7 +1068,7 @@ func TestEvaluatePriceReversalStrength(t *testing.T) {
 	// Ensure a resistance price reversal triggers a short entry signal for a market short or neutral skewed.
 	marketSkew = shortSkew
 	candleMeta = resistanceCandleMeta
-	err = eng.evaluatePriceReversalStrength(resistanceLevelReaction, candleMeta, high, low)
+	err = eng.evaluatePriceReversalStrength(resistanceLevelReaction, candleMeta)
 	assert.NoError(t, err)
 	entrySignal = <-entrySignals
 	assert.Equal(t, entrySignal.Direction, shared.Short)
@@ -1073,32 +1198,28 @@ func TestEvaluateLevelBreakStrength(t *testing.T) {
 	}
 
 	// Ensure a support price break triggers a short entry signal for a market short or neutral skewed.
-	high := float64(16)
-	low := float64(1)
-	err := eng.evaluateLevelBreakStrength(supportLevelReaction, candleMeta, high, low)
+	err := eng.evaluateLevelBreakStrength(supportLevelReaction, candleMeta)
 	assert.NoError(t, err)
 	entrySignal := <-entrySignals
 	assert.Equal(t, entrySignal.Direction, shared.Short)
 
 	// Ensure a support price break triggers a short exit signal for a market long skewed.
 	marketSkew = longSkew
-	err = eng.evaluateLevelBreakStrength(supportLevelReaction, candleMeta, high, low)
+	err = eng.evaluateLevelBreakStrength(supportLevelReaction, candleMeta)
 	assert.NoError(t, err)
 	exitSignal := <-exitSignals
 	assert.Equal(t, exitSignal.Direction, shared.Long)
 
 	// Ensure a resistance level break triggers a long entry signal for a market long skewed.
-	high = float64(18)
-	low = float64(4)
 	candleMeta = resistanceBreakCandleMeta
-	err = eng.evaluateLevelBreakStrength(resistanceLevelReaction, candleMeta, high, low)
+	err = eng.evaluateLevelBreakStrength(resistanceLevelReaction, candleMeta)
 	assert.NoError(t, err)
 	entrySignal = <-entrySignals
 	assert.Equal(t, entrySignal.Direction, shared.Long)
 
 	// Ensure a resistance level break triggers a short exit signal for a market short skewed.
 	marketSkew = shortSkew
-	err = eng.evaluateLevelBreakStrength(resistanceLevelReaction, candleMeta, high, low)
+	err = eng.evaluateLevelBreakStrength(resistanceLevelReaction, candleMeta)
 	assert.NoError(t, err)
 	exitSignal = <-exitSignals
 	assert.Equal(t, exitSignal.Direction, shared.Short)

@@ -325,45 +325,58 @@ func (e *Engine) evaluateLevelBreak(levelReaction *shared.LevelReaction, meta []
 
 // estimateStopLoss calculates the stoploss and the point range from entry for a position using
 // the provided candle metadata.
-func (e *Engine) estimateStopLoss(meta []*shared.CandleMetadata, entry float64, direction shared.Direction) (float64, float64, error) {
+func (e *Engine) estimateStopLoss(meta []*shared.CandleMetadata, levelReaction *shared.LevelReaction) (float64, float64, error) {
 	if len(meta) == 0 {
 		return 0, 0, fmt.Errorf("no candle metadata provided")
 	}
 
+	// Derive the directional sentiment from the level reaction.
 	var sentiment shared.Sentiment
-	switch direction {
-	case shared.Long:
-		sentiment = shared.Bullish
-	case shared.Short:
-		sentiment = shared.Bearish
-	default:
-		return 0, 0, fmt.Errorf("unknown market direction provided: %v", direction)
+	switch levelReaction.Level.Kind {
+	case shared.Support:
+		switch levelReaction.Reaction {
+		case shared.Break:
+			sentiment = shared.Bearish
+		case shared.Reversal:
+			sentiment = shared.Bullish
+		case shared.Chop:
+			return 0, 0, fmt.Errorf("no stop loss set for chop level reaction")
+		}
+	case shared.Resistance:
+		switch levelReaction.Reaction {
+		case shared.Break:
+			sentiment = shared.Bullish
+		case shared.Reversal:
+			sentiment = shared.Bearish
+		case shared.Chop:
+			return 0, 0, fmt.Errorf("no stop loss set for chop level reaction")
+		}
 	}
 
 	var stopLoss float64
 
-	// Fetch the signal candle based on directional sentiment.
 	signalCandle := shared.FetchSignalCandle(meta, sentiment)
 	if signalCandle == nil {
+		// Fallback on the high and low of the candle metadata range for stop loss placement.
 		high, low := shared.CandleMetaRangeHighAndLow(meta)
-		switch direction {
-		case shared.Long:
+		switch sentiment {
+		case shared.Bullish:
 			stopLoss = low - stopLossPointsBuffer
-		case shared.Short:
+		case shared.Bearish:
 			stopLoss = high + stopLossPointsBuffer
 		}
 
 	} else {
-		// Use the signal candle as the pivot point for the entry.
-		switch direction {
-		case shared.Long:
+		// Use the signal candle as the focal point for the stop loss placement.
+		switch sentiment {
+		case shared.Bullish:
 			stopLoss = signalCandle.Low - stopLossPointsBuffer
-		case shared.Short:
+		case shared.Bearish:
 			stopLoss = signalCandle.High + stopLossPointsBuffer
 		}
 	}
 
-	pointsRange := math.Abs(entry - stopLoss)
+	pointsRange := math.Abs(levelReaction.CurrentPrice - stopLoss)
 
 	if stopLoss <= 0 {
 		return 0, 0, fmt.Errorf("stop loss cannot be less than or equal to zero")
@@ -375,7 +388,7 @@ func (e *Engine) estimateStopLoss(meta []*shared.CandleMetadata, entry float64, 
 // evaluatePriceReversalStrength determines whether a price reversal at a level has enough confluences to
 // be classified as strong. An associated entry or exit signal is generated and relayed for it based on
 // the skew of the associated market.
-func (e *Engine) evaluatePriceReversalStrength(levelReaction *shared.LevelReaction, meta []*shared.CandleMetadata, high float64, low float64) error {
+func (e *Engine) evaluatePriceReversalStrength(levelReaction *shared.LevelReaction, meta []*shared.CandleMetadata) error {
 	signal, confluence, reasons, err := e.evaluatePriceReversal(levelReaction, meta)
 	if err != nil {
 		return fmt.Errorf("evaluating price reversal reaction: %v", err)
@@ -394,7 +407,7 @@ func (e *Engine) evaluatePriceReversalStrength(levelReaction *shared.LevelReacti
 			// Signal a long position on a confirmed support level reversal if the market is
 			// neutral skewed or already long skewed.
 			direction := shared.Long
-			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction.CurrentPrice, direction)
+			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction)
 			if err != nil {
 				return fmt.Errorf("estimating stop loss: %v", err)
 			}
@@ -424,7 +437,7 @@ func (e *Engine) evaluatePriceReversalStrength(levelReaction *shared.LevelReacti
 			// Signal a short position on a confirmed resistance reversal if the market is
 			// neutral skewed or already short skewed.
 			direction := shared.Short
-			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction.CurrentPrice, direction)
+			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction)
 			if err != nil {
 				return fmt.Errorf("estimating stop loss: %v", err)
 			}
@@ -458,7 +471,7 @@ func (e *Engine) evaluatePriceReversalStrength(levelReaction *shared.LevelReacti
 // evaluateLevelBreakStrength determines whether a level break has enough confluences to be
 // classified as strong. An associated entry or exit signal is generated and relayed for it based on
 // the skew of the associated market.
-func (e *Engine) evaluateLevelBreakStrength(levelReaction *shared.LevelReaction, meta []*shared.CandleMetadata, high float64, low float64) error {
+func (e *Engine) evaluateLevelBreakStrength(levelReaction *shared.LevelReaction, meta []*shared.CandleMetadata) error {
 	signal, confluence, reasons, err := e.evaluateLevelBreak(levelReaction, meta)
 	if err != nil {
 		return fmt.Errorf("evaluating level break reaction: %v", err)
@@ -477,7 +490,7 @@ func (e *Engine) evaluateLevelBreakStrength(levelReaction *shared.LevelReaction,
 			// Signal a long position on a confirmed resistance level break if the market is
 			// neutral skewed or already long skewed.
 			direction := shared.Long
-			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction.CurrentPrice, direction)
+			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction)
 			if err != nil {
 				return fmt.Errorf("estimating stop loss: %v", err)
 			}
@@ -495,7 +508,7 @@ func (e *Engine) evaluateLevelBreakStrength(levelReaction *shared.LevelReaction,
 			// Signal a short position on a confirmed support break if the market is
 			// neutral skewed or already short skewed.
 			direction := shared.Short
-			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction.CurrentPrice, direction)
+			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction)
 			if err != nil {
 				return fmt.Errorf("estimating stop loss: %v", err)
 			}
@@ -530,16 +543,14 @@ func (e *Engine) handleLevelReaction(levelReaction *shared.LevelReaction) error 
 		return fmt.Errorf("fetching candle metadata: %v", err)
 	}
 
-	high, low := shared.CandleMetaRangeHighAndLow(meta)
-
 	switch levelReaction.Reaction {
 	case shared.Reversal:
-		err := e.evaluatePriceReversalStrength(levelReaction, meta, high, low)
+		err := e.evaluatePriceReversalStrength(levelReaction, meta)
 		if err != nil {
 			return fmt.Errorf("evaluating level reversal strength: %v", err)
 		}
 	case shared.Break:
-		err := e.evaluateLevelBreakStrength(levelReaction, meta, high, low)
+		err := e.evaluateLevelBreakStrength(levelReaction, meta)
 		if err != nil {
 			return fmt.Errorf("evaluating level break strength: %v", err)
 		}

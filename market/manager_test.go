@@ -20,11 +20,13 @@ func setupManager(t *testing.T, market string, now time.Time, backtest bool) (*M
 
 	catchUpSignals := make(chan shared.CatchUpSignal, bufferSize)
 	catchUp := func(signal shared.CatchUpSignal) {
+		signal.Status <- shared.Processed
 		catchUpSignals <- signal
 	}
 
 	signalLevelSignals := make(chan shared.LevelSignal, bufferSize)
 	signalLevel := func(signal shared.LevelSignal) {
+		signal.Status <- shared.Processed
 		signalLevelSignals <- signal
 	}
 
