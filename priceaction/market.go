@@ -2,8 +2,10 @@ package priceaction
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/dnldd/entry/shared"
+	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 )
 
@@ -12,9 +14,20 @@ const (
 	smallSnapshotSize = 8
 )
 
+type MarketConfig struct {
+	// Market is the name of the tracked market.
+	Market string
+	// RequestVWAPData relays the provided vwap request for processing.
+	RequestVWAPData func(request shared.VWAPDataRequest)
+	// RequestVWAP relays the provided vwap request for processing.
+	RequestVWAP func(request shared.VWAPRequest)
+	// Logger represents the application logger.
+	Logger *zerolog.Logger
+}
+
 // Market represents all the the price action data related to a market.
 type Market struct {
-	market              string
+	cfg                 *MarketConfig
 	levelSnapshot       *LevelSnapshot
 	candleSnapshot      *shared.CandlestickSnapshot
 	taggedLevels        atomic.Bool
@@ -26,7 +39,7 @@ type Market struct {
 }
 
 // NewMarket initializes a new market.
-func NewMarket(market string) (*Market, error) {
+func NewMarket(cfg *MarketConfig) (*Market, error) {
 	levelSnapshot, err := NewLevelSnapshot(levelSnapshotSize)
 	if err != nil {
 		return nil, fmt.Errorf("creating level snapshot: %v", err)
@@ -38,7 +51,7 @@ func NewMarket(market string) (*Market, error) {
 	}
 
 	mgr := &Market{
-		market:         market,
+		cfg:            cfg,
 		levelSnapshot:  levelSnapshot,
 		candleSnapshot: candleSnapshot,
 	}
@@ -51,14 +64,11 @@ func (m *Market) FetchCurrentCandle() *shared.Candlestick {
 	return m.candleSnapshot.Last()
 }
 
-// Update processes the provided market candlestick data.
-func (m *Market) Update(candle *shared.Candlestick) {
-	m.levelSnapshot.Update(candle)
-	m.candleSnapshot.Update(candle)
-
+// evaluateTaggedLevels checks whether levels have been tagged by current price action. If confirmed
+// a price data request is signalled after a brief interval of updates.
+func (m *Market) evaluateTaggedLevels(candle *shared.Candlestick) {
 	filteredLevels := m.FilterTaggedLevels(candle)
 
-	// TODO: refactor into func.
 	switch {
 	case len(filteredLevels) > 0 && !m.taggedLevels.Load() && m.levelUpdateCounter.Load() == 0:
 		// Set the tagged levels flag to true if there is no pending price data request.
@@ -74,8 +84,12 @@ func (m *Market) Update(candle *shared.Candlestick) {
 			m.requestingPriceData.Store(true)
 		}
 	}
+}
 
-	vwapTagged := m.taggedCurrentVWAP(candle)
+// evaluateTaggedVWAP checks whether the current vwap is tagged by current price action. If confirmed
+// a vwap data request is signalled after a brief interval of updates.
+func (m *Market) evaluateTaggedVWAP(candle *shared.Candlestick, vwap *shared.VWAP) {
+	vwapTagged := m.vwapTagged(candle, vwap)
 
 	switch {
 	case vwapTagged && !m.taggedVWAP.Load() && m.vwapUpdateCounter.Load() == 0:
@@ -94,9 +108,34 @@ func (m *Market) Update(candle *shared.Candlestick) {
 	}
 }
 
+// Update processes the provided market candlestick data.
+func (m *Market) Update(candle *shared.Candlestick) {
+	m.levelSnapshot.Update(candle)
+	m.candleSnapshot.Update(candle)
+
+	m.evaluateTaggedLevels(candle)
+
+	// Fetch the vwap corresponding to the update candle.
+	var vwap *shared.VWAP
+	req := shared.NewVWAPRequest(m.cfg.Market, candle.Date)
+	m.cfg.RequestVWAP(*req)
+	select {
+	case vwap = <-req.Response:
+	case <-time.After(shared.TimeoutDuration * 4):
+		m.cfg.Logger.Error().Msgf("timed out waiting for current vwap response")
+	}
+
+	m.evaluateTaggedVWAP(candle, vwap)
+}
+
 // RequestingPriceData indicates whether the provided market is requesting price data.
 func (m *Market) RequestingPriceData() bool {
 	return m.requestingPriceData.Load()
+}
+
+// RequestingVWAPData indicates whether the provided market is requesting vwap data.
+func (m *Market) RequestingVWAPData() bool {
+	return m.requestingVWAPData.Load()
 }
 
 // AddLevel adds the provided level to the market's level snapshot.
@@ -104,23 +143,23 @@ func (m *Market) AddLevel(level *shared.Level) {
 	m.levelSnapshot.Add(level)
 }
 
-// taggedCurrentVWAP checks whether the provided vwap was tagged by the provided candlestick.
-func (m *Market) taggedCurrentVWAP(candle *shared.Candlestick) bool {
+// vwaptagged checks whether the provided vwap was tagged by the provided candlestick.
+func (m *Market) vwapTagged(candle *shared.Candlestick, vwap *shared.VWAP) bool {
 	var kind shared.LevelKind
 	switch {
-	case candle.VWAP > candle.Close:
+	case vwap.Value > candle.Close:
 		kind = shared.Resistance
-	case candle.VWAP < candle.Close:
+	case vwap.Value < candle.Close:
 		kind = shared.Support
 	}
 
 	switch kind {
 	case shared.Support:
-		if candle.Low <= candle.VWAP {
+		if candle.Low <= vwap.Value {
 			return true
 		}
 	case shared.Resistance:
-		if candle.High >= candle.VWAP {
+		if candle.High >= vwap.Value {
 			return true
 		}
 	}
@@ -171,7 +210,7 @@ func (m *Market) GenerateLevelReactions(data []*shared.Candlestick) ([]*shared.L
 	reactions := make([]*shared.LevelReaction, len(taggedSet))
 	for idx := range taggedSet {
 		taggedLevel := taggedSet[idx]
-		reaction, err := shared.NewLevelReaction(m.market, taggedLevel, data)
+		reaction, err := shared.NewLevelReaction(m.cfg.Market, taggedLevel, data)
 		if err != nil {
 			return nil, err
 		}

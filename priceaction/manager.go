@@ -28,6 +28,10 @@ type ManagerConfig struct {
 	Subscribe func(name string, sub chan shared.Candlestick)
 	// RequestPriceData sends a price data request.
 	RequestPriceData func(request shared.PriceDataRequest)
+	// RequestVWAPData relays the provided vwap request for processing.
+	RequestVWAPData func(request shared.VWAPDataRequest)
+	// RequestVWAP relays the provided vwap request for processing.
+	RequestVWAP func(request shared.VWAPRequest)
 	// SignalLevelReaction relays a level reaction for processing.
 	SignalLevelReaction func(signal shared.LevelReaction)
 	// Logger represents the application logger.
@@ -50,13 +54,22 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 	markets := make(map[string]*Market)
 	workers := make(map[string]chan struct{})
 	for idx := range cfg.Markets {
-		workers[cfg.Markets[idx]] = make(chan struct{}, workerBufferSize)
-		mkt, err := NewMarket(cfg.Markets[idx])
+		market := cfg.Markets[idx]
+
+		workers[market] = make(chan struct{}, workerBufferSize)
+
+		cfg := &MarketConfig{
+			Market:          market,
+			RequestVWAP:     cfg.RequestVWAP,
+			RequestVWAPData: cfg.RequestVWAPData,
+			Logger:          cfg.Logger,
+		}
+		mkt, err := NewMarket(cfg)
 		if err != nil {
-			return nil, fmt.Errorf("creating %s market: %v", cfg.Markets[idx], err)
+			return nil, fmt.Errorf("creating %s market: %v", market, err)
 		}
 
-		markets[cfg.Markets[idx]] = mkt
+		markets[market] = mkt
 	}
 	return &Manager{
 		cfg:            cfg,
@@ -117,7 +130,7 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) error {
 	mkt.Update(candle)
 	if mkt.RequestingPriceData() {
 		// Request price data and generate price reactions from them.
-		req := shared.NewPriceDataRequest(mkt.market)
+		req := shared.NewPriceDataRequest(mkt.cfg.Market)
 		m.cfg.RequestPriceData(*req)
 		var data []*shared.Candlestick
 		select {
@@ -160,7 +173,7 @@ func (m *Manager) handleLevelSignal(signal shared.LevelSignal) error {
 
 	currentCandle := mkt.FetchCurrentCandle()
 	if currentCandle == nil {
-		return fmt.Errorf("no current candle available for market: %s", mkt.market)
+		return fmt.Errorf("no current candle available for market: %s", mkt.cfg.Market)
 	}
 
 	level := shared.NewLevel(signal.Market, signal.Price, currentCandle)

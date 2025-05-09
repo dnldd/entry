@@ -5,6 +5,8 @@ import "time"
 const (
 	// PriceDataPayloadSize is the number of candles expected as payload for a price data range request.
 	PriceDataPayloadSize = 4
+	// VWAPDataPayloadSize is the number of vwap data expected as payload for a vwap data request.
+	VWAPDataPayloadSize = 4
 	// MaxPriceDataRequestInterval is the maximum update intervals to wait before triggering a
 	// price data request.
 	MaxPriceDataRequestInterval = 3
