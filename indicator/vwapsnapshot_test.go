@@ -37,9 +37,10 @@ func TestVWAPSnapshot(t *testing.T) {
 
 	// Ensure the snapshot can be updated with vwap.
 	for idx := range size {
+		t := now.AddDate(0, 0, int(idx))
 		vwap := &VWAP{
 			Value: float64(idx + 1),
-			Date:  now,
+			Date:  t,
 		}
 
 		vwapSnapshot.Update(vwap)
@@ -78,7 +79,7 @@ func TestVWAPSnapshot(t *testing.T) {
 	assert.Equal(t, nSet[0].Value, lastButOneVwap.Value)
 	assert.Equal(t, nSet[1].Value, vwap.Value)
 
-	// Ensure candle updates after capacity advances the start index for the next addition.
+	// Ensure vwap updates after capacity advances the start index for the next addition.
 	next := &VWAP{
 		Value: 6,
 	}
@@ -88,4 +89,8 @@ func TestVWAPSnapshot(t *testing.T) {
 	assert.Equal(t, vwapSnapshot.size.Load(), size)
 	assert.Equal(t, vwapSnapshot.start.Load(), 2)
 	assert.Equal(t, len(vwapSnapshot.data), int(size))
+
+	// Ensure vwap entries can be fetched by their associated date times.
+	vwapAtTime := vwapSnapshot.At(now)
+	assert.NotNil(t, vwapAtTime)
 }

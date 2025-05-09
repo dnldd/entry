@@ -2,6 +2,7 @@ package indicator
 
 import (
 	"errors"
+	"time"
 
 	"go.uber.org/atomic"
 )
@@ -58,6 +59,22 @@ func (s *VWAPSnapshot) Last() *VWAP {
 
 	end := (start + count - 1) % size
 	return s.data[end]
+}
+
+// At returns the vwap entry at the provided time for the snapshot.
+func (s *VWAPSnapshot) At(t time.Time) *VWAP {
+	start := s.start.Load()
+	count := s.count.Load()
+	size := s.size.Load()
+
+	for i := int32(0); i < count; i++ {
+		idx := (start + count - 1 - i + size) % size
+		if s.data[idx].Date.Equal(t) {
+			return s.data[idx]
+		}
+	}
+
+	return nil
 }
 
 // LastN fetches the last n number of elements from the snapshot.
