@@ -3,6 +3,7 @@ package priceaction
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/dnldd/entry/shared"
 	"github.com/peterldowns/testy/assert"
@@ -40,12 +41,48 @@ func setupManager(t *testing.T, market string) *Manager {
 		levelReactionSignals <- reaction
 		reaction.Status <- shared.Processed
 	}
+
+	now, _, err := shared.NewYorkTime()
+	assert.NoError(t, err)
+
+	vwapData := []*shared.VWAP{
+		{
+			Value: 4.2,
+			Date:  now.Add(-time.Minute * 15),
+		},
+		{
+			Value: 4.3,
+			Date:  now.Add(-time.Minute * 10),
+		},
+		{
+			Value: 4.4,
+			Date:  now.Add(-time.Minute * 5),
+		},
+		{
+			Value: 4.5,
+			Date:  now,
+		},
+	}
+	requestVWAPData := func(request shared.VWAPDataRequest) {
+		request.Response <- vwapData
+	}
+	requestVWAP := func(request shared.VWAPRequest) {
+		request.Response <- &shared.VWAP{
+			Value: 4.5,
+			Date:  now,
+		}
+	}
 	cfg := &ManagerConfig{
 		Markets:             []string{market},
 		Subscribe:           subscribe,
 		RequestPriceData:    requestPriceData,
 		SignalLevelReaction: signalLevelReaction,
-		Logger:              &log.Logger,
+		RequestVWAPData:     requestVWAPData,
+		RequestVWAP:         requestVWAP,
+		FetchCaughtUpState: func(market string) (bool, error) {
+			return true, nil
+		},
+		Logger: &log.Logger,
 	}
 
 	mgr, err := NewManager(cfg)

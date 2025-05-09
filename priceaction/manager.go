@@ -34,6 +34,8 @@ type ManagerConfig struct {
 	RequestVWAP func(request shared.VWAPRequest)
 	// SignalLevelReaction relays a level reaction for processing.
 	SignalLevelReaction func(signal shared.LevelReaction)
+	// FetchCaughtUpState returns the caught up statis of the provided market.
+	FetchCaughtUpState func(market string) (bool, error)
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
 }
@@ -59,10 +61,11 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 		workers[market] = make(chan struct{}, workerBufferSize)
 
 		cfg := &MarketConfig{
-			Market:          market,
-			RequestVWAP:     cfg.RequestVWAP,
-			RequestVWAPData: cfg.RequestVWAPData,
-			Logger:          cfg.Logger,
+			Market:             market,
+			RequestVWAP:        cfg.RequestVWAP,
+			RequestVWAPData:    cfg.RequestVWAPData,
+			FetchCaughtUpState: cfg.FetchCaughtUpState,
+			Logger:             cfg.Logger,
 		}
 		mkt, err := NewMarket(cfg)
 		if err != nil {

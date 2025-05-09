@@ -20,6 +20,9 @@ func TestMarket(t *testing.T) {
 		RequestVWAP: func(request shared.VWAPRequest) {
 			request.Response <- &vwap
 		},
+		FetchCaughtUpState: func(market string) (bool, error) {
+			return true, nil
+		},
 		Logger: &log.Logger,
 	}
 	mkt, err := NewMarket(cfg)

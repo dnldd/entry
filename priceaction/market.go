@@ -21,6 +21,8 @@ type MarketConfig struct {
 	RequestVWAPData func(request shared.VWAPDataRequest)
 	// RequestVWAP relays the provided vwap request for processing.
 	RequestVWAP func(request shared.VWAPRequest)
+	// FetchCaughtUpState returns the caught up statis of the provided market.
+	FetchCaughtUpState func(market string) (bool, error)
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
 }
@@ -113,19 +115,28 @@ func (m *Market) Update(candle *shared.Candlestick) {
 	m.levelSnapshot.Update(candle)
 	m.candleSnapshot.Update(candle)
 
-	m.evaluateTaggedLevels(candle)
-
-	// Fetch the vwap corresponding to the update candle.
-	var vwap *shared.VWAP
-	req := shared.NewVWAPRequest(m.cfg.Market, candle.Date)
-	m.cfg.RequestVWAP(*req)
-	select {
-	case vwap = <-req.Response:
-	case <-time.After(shared.TimeoutDuration * 4):
-		m.cfg.Logger.Error().Msgf("timed out waiting for current vwap response")
+	caughtUp, err := m.cfg.FetchCaughtUpState(m.cfg.Market)
+	if err != nil {
+		m.cfg.Logger.Error().Msgf("fetching %s caught up state: %v", m.cfg.Market, err)
 	}
 
-	m.evaluateTaggedVWAP(candle, vwap)
+	// Only evaluate vwap tags when the market is confirmed to be caught up.
+	if caughtUp {
+		m.evaluateTaggedLevels(candle)
+
+		// Fetch the vwap corresponding to the update candle.
+		var vwap *shared.VWAP
+		req := shared.NewVWAPRequest(m.cfg.Market, candle.Date)
+		m.cfg.RequestVWAP(*req)
+		select {
+		case vwap = <-req.Response:
+		case <-time.After(shared.TimeoutDuration * 4):
+			m.cfg.Logger.Error().Msgf("timed out waiting for current vwap response")
+			return
+		}
+
+		m.evaluateTaggedVWAP(candle, vwap)
+	}
 }
 
 // RequestingPriceData indicates whether the provided market is requesting price data.

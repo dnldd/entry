@@ -146,6 +146,9 @@ func setupEntry() (*Entry, chan shared.LevelSignal, chan shared.LevelReaction, c
 		Markets:             cfg.Markets,
 		Subscribe:           fetchMgr.Subscribe,
 		RequestPriceData:    marketMgr.SendPriceDataRequest,
+		RequestVWAPData:     marketMgr.SendVWAPDataRequest,
+		RequestVWAP:         marketMgr.SendVWAPRequest,
+		FetchCaughtUpState:  marketMgr.FetchCaughtUpState,
 		SignalLevelReaction: levelReactionFunc,
 		Logger:              &priceActionMgrLogger,
 	})

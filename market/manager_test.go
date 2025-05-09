@@ -374,6 +374,7 @@ func TestBacktestLevelGeneration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	expectedLevelPrices := []float64{36, 18}
 	go func() {
 		for {
 			select {
@@ -381,7 +382,7 @@ func TestBacktestLevelGeneration(t *testing.T) {
 				return
 			case sig := <-levelSignals:
 				// Ensure the historical data source triggers level signals as expected.
-				assert.In(t, sig.Price, []float64{36, 18})
+				assert.In(t, sig.Price, expectedLevelPrices)
 			}
 		}
 	}()

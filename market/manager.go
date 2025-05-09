@@ -163,6 +163,19 @@ func (m *Manager) SendAverageVolumeRequest(request shared.AverageVolumeRequest) 
 	}
 }
 
+// FetchCaughtUpState returns the caught up statis of the provided market.
+func (m *Manager) FetchCaughtUpState(market string) (bool, error) {
+	m.marketsMtx.RLock()
+	mkt, ok := m.markets[market]
+	m.marketsMtx.RUnlock()
+
+	if !ok {
+		return false, fmt.Errorf("no market found with name %s", market)
+	}
+
+	return mkt.CaughtUp(), nil
+}
+
 // handleUpdateSignal processes the provided market update candle.
 func (m *Manager) handleUpdateCandle(candle *shared.Candlestick) error {
 	defer func() {
