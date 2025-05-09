@@ -54,7 +54,8 @@ type Manager struct {
 	caughtUpSignals       chan shared.CaughtUpSignal
 	priceDataRequests     chan shared.PriceDataRequest
 	averageVolumeRequests chan shared.AverageVolumeRequest
-	vwapDataRequests      chan indicator.VWAPDataRequest
+	vwapDataRequests      chan shared.VWAPDataRequest
+	vwapRequests          chan shared.VWAPRequest
 	workers               map[string]chan struct{}
 	requestWorkers        chan struct{}
 }
@@ -87,7 +88,8 @@ func NewManager(cfg *ManagerConfig, now time.Time) (*Manager, error) {
 		priceDataRequests:     make(chan shared.PriceDataRequest, bufferSize),
 		averageVolumeRequests: make(chan shared.AverageVolumeRequest, bufferSize),
 		caughtUpSignals:       make(chan shared.CaughtUpSignal, bufferSize),
-		vwapDataRequests:      make(chan indicator.VWAPDataRequest, bufferSize),
+		vwapDataRequests:      make(chan shared.VWAPDataRequest, bufferSize),
+		vwapRequests:          make(chan shared.VWAPRequest, bufferSize),
 		averageVolume:         make(map[string]shared.AverageVolumeEntry),
 		workers:               workers,
 		requestWorkers:        make(chan struct{}, maxWorkers),
@@ -127,8 +129,8 @@ func (m *Manager) SendPriceDataRequest(request shared.PriceDataRequest) {
 	}
 }
 
-// SendVWAPRequest relays the provided vwap request for processing.
-func (m *Manager) SendVWAPDataRequest(request indicator.VWAPDataRequest) {
+// SendVWAPDataRequest relays the provided vwap request for processing.
+func (m *Manager) SendVWAPDataRequest(request shared.VWAPDataRequest) {
 	select {
 	case m.vwapDataRequests <- request:
 		// do nothing.
@@ -255,8 +257,8 @@ func (m *Manager) handlePriceDataRequest(req *shared.PriceDataRequest) error {
 	return nil
 }
 
-// handleVWAPDataRequest processes the provided vwap request.
-func (m *Manager) handleVWAPDataRequest(req *indicator.VWAPDataRequest) error {
+// handleVWAPDataRequest processes the provided vwap data request.
+func (m *Manager) handleVWAPDataRequest(req *shared.VWAPDataRequest) error {
 	m.marketsMtx.RLock()
 	mkt, ok := m.markets[req.Market]
 	m.marketsMtx.RUnlock()
@@ -269,7 +271,7 @@ func (m *Manager) handleVWAPDataRequest(req *indicator.VWAPDataRequest) error {
 		return fmt.Errorf("%s is not caught up to current market data", req.Market)
 	}
 
-	data := mkt.vwapSnapshot.LastN(indicator.VWAPDataPayloadSize)
+	data := mkt.vwapSnapshot.LastN(shared.VWAPDataPayloadSize)
 
 	req.Response <- data
 
@@ -350,7 +352,7 @@ func (m *Manager) Run(ctx context.Context) {
 		case req := <-m.vwapDataRequests:
 			// handle vwap data requests concurrently.
 			m.requestWorkers <- struct{}{}
-			go func(req indicator.VWAPDataRequest) {
+			go func(req shared.VWAPDataRequest) {
 				err := m.handleVWAPDataRequest(&req)
 				if err != nil {
 					m.cfg.Logger.Error().Err(err).Send()

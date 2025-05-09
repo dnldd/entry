@@ -11,50 +11,28 @@ import (
 const (
 	// VwapReset is the vwap reset time (in new york time).
 	VwapResetTime = "17:00:10"
-	// VWAPDataPayloadSize is the number of vwap data expected as payload for a vwap data request.
-	VWAPDataPayloadSize = 4
 )
 
-// VWAP represents a unit VWAP entry for a market.
+// VWAP represents the Volume Weighted Average Price Indicator.
 type VWAP struct {
-	Value float64
-	Date  time.Time
-}
-
-// VWAPDataRequest represents a VWAP data request for a market.
-type VWAPDataRequest struct {
-	Market   string
-	Response chan []*VWAP
-}
-
-// NewVWAPDataRequest initializes a new VWAP request.
-func NewVWAPDataRequest(market string) *VWAPDataRequest {
-	return &VWAPDataRequest{
-		Market:   market,
-		Response: make(chan []*VWAP, 1),
-	}
-}
-
-// VWAPGenerator represents the Volume Weighted Average Price Indicator.
-type VWAPGenerator struct {
 	TypicalPriceVolume atomic.Float64
 	Volume             atomic.Float64
-	Current            atomic.Pointer[VWAP]
+	Current            atomic.Pointer[shared.VWAP]
 	Market             string
 	Timeframe          shared.Timeframe
 	LastUpdateTime     atomic.Pointer[time.Time]
 }
 
-// NewVWAPGenerator initializes a VWAP indicator for the provided market and timeframe.
-func NewVWAPGenerator(market string, timeframe shared.Timeframe) *VWAPGenerator {
-	return &VWAPGenerator{
+// NewVWAP initializes a VWAP indicator for the provided market and timeframe.
+func NewVWAP(market string, timeframe shared.Timeframe) *VWAP {
+	return &VWAP{
 		Market:    market,
 		Timeframe: timeframe,
 	}
 }
 
 // Update cummulatively updates the VWAP indicator with the provided candlestick data.
-func (v *VWAPGenerator) Update(candle *shared.Candlestick) (*VWAP, error) {
+func (v *VWAP) Update(candle *shared.Candlestick) (*shared.VWAP, error) {
 	if candle.Timeframe != v.Timeframe {
 		return nil, fmt.Errorf("expected candles with timeframe %s, got %s",
 			v.Timeframe.String(), candle.Timeframe.String())
@@ -64,7 +42,7 @@ func (v *VWAPGenerator) Update(candle *shared.Candlestick) (*VWAP, error) {
 	v.TypicalPriceVolume.Add(typicalPrice * candle.Volume)
 	v.Volume.Add(candle.Volume)
 
-	vwap := &VWAP{
+	vwap := &shared.VWAP{
 		Date: candle.Date,
 	}
 
@@ -74,7 +52,6 @@ func (v *VWAPGenerator) Update(candle *shared.Candlestick) (*VWAP, error) {
 
 	val := v.TypicalPriceVolume.Load() / v.Volume.Load()
 	vwap.Value = val
-	candle.VWAP = val
 	v.Current.Store(vwap)
 	v.LastUpdateTime.Store(&candle.Date)
 
@@ -82,7 +59,7 @@ func (v *VWAPGenerator) Update(candle *shared.Candlestick) (*VWAP, error) {
 }
 
 // Reset resets the VWAP indicator after a trading session.
-func (v *VWAPGenerator) Reset() {
+func (v *VWAP) Reset() {
 	v.TypicalPriceVolume.Store(0)
 	v.Volume.Store(0)
 }

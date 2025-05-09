@@ -32,8 +32,8 @@ type Market struct {
 	cfg             *MarketConfig
 	candleSnapshot  *shared.CandlestickSnapshot
 	sessionSnapshot *SessionSnapshot
-	vwapSnapshot    *indicator.VWAPSnapshot
-	vwapGenerator   *indicator.VWAPGenerator
+	vwapSnapshot    *shared.VWAPSnapshot
+	vwapIndicator   *indicator.VWAP
 	caughtUp        atomic.Bool
 }
 
@@ -49,7 +49,7 @@ func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
 		return nil, err
 	}
 
-	vwapSnapshot, err := indicator.NewVWAPSnapshot(shared.SnapshotSize)
+	vwapSnapshot, err := shared.NewVWAPSnapshot(shared.SnapshotSize)
 	if err != nil {
 		return nil, err
 	}
@@ -59,12 +59,12 @@ func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
 		candleSnapshot:  candleSnapshot,
 		sessionSnapshot: sessionsSnapshot,
 		vwapSnapshot:    vwapSnapshot,
-		vwapGenerator:   indicator.NewVWAPGenerator(cfg.Market, shared.FiveMinute),
+		vwapIndicator:   indicator.NewVWAP(cfg.Market, shared.FiveMinute),
 	}
 
 	// Periodically reset the market vwap when the new york session closes.
 	_, err = mkt.cfg.JobScheduler.Every(1).Day().At(indicator.VwapResetTime).WaitForSchedule().
-		Do(mkt.vwapGenerator.Reset)
+		Do(mkt.vwapIndicator.Reset)
 	if err != nil {
 		return nil, fmt.Errorf("scheduling %s market vwap reset job for %s: %w", mkt.cfg.Market,
 			shared.FiveMinute, err)
@@ -107,7 +107,7 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 	}
 
 	m.sessionSnapshot.FetchCurrentSession().Update(candle)
-	vwap, err := m.vwapGenerator.Update(candle)
+	vwap, err := m.vwapIndicator.Update(candle)
 	if err != nil {
 		return err
 	}

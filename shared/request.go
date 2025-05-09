@@ -72,3 +72,33 @@ func NewMarketSkewRequest(market string) *MarketSkewRequest {
 		Response: make(chan MarketSkew, 1),
 	}
 }
+
+// VWAPRequest represents a VWAP request for a market.
+type VWAPRequest struct {
+	Market   string
+	At       time.Time
+	Response chan *VWAP
+}
+
+// NewVWAPRequest initializes a new VWAP request.
+func NewVWAPRequest(market string, time time.Time) *VWAPRequest {
+	return &VWAPRequest{
+		Market:   market,
+		At:       time,
+		Response: make(chan *VWAP, 1),
+	}
+}
+
+// VWAPDataRequest represents a VWAP data request for a market.
+type VWAPDataRequest struct {
+	Market   string
+	Response chan []*VWAP
+}
+
+// NewVWAPDataRequest initializes a new VWAP data request.
+func NewVWAPDataRequest(market string) *VWAPDataRequest {
+	return &VWAPDataRequest{
+		Market:   market,
+		Response: make(chan []*VWAP, 1),
+	}
+}

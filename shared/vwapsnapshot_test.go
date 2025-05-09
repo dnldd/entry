@@ -1,9 +1,8 @@
-package indicator
+package shared
 
 import (
 	"testing"
 
-	"github.com/dnldd/entry/shared"
 	"github.com/peterldowns/testy/assert"
 )
 
@@ -32,7 +31,7 @@ func TestVWAPSnapshot(t *testing.T) {
 	lastN = vwapSnapshot.LastN(-1)
 	assert.Nil(t, lastN)
 
-	now, _, err := shared.NewYorkTime()
+	now, _, err := NewYorkTime()
 	assert.NoError(t, err)
 
 	// Ensure the snapshot can be updated with vwap.
@@ -90,7 +89,7 @@ func TestVWAPSnapshot(t *testing.T) {
 	assert.Equal(t, vwapSnapshot.start.Load(), 2)
 	assert.Equal(t, len(vwapSnapshot.data), int(size))
 
-	// Ensure vwap entries can be fetched by their associated date times.
+	// Ensure vwap entries can be fetched by their associated timestamps.
 	vwapAtTime := vwapSnapshot.At(now)
 	assert.NotNil(t, vwapAtTime)
 }

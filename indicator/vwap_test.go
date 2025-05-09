@@ -7,11 +7,11 @@ import (
 	"github.com/peterldowns/testy/assert"
 )
 
-func TestVWAP(t *testing.T) {
+func TestVWAPGenerator(t *testing.T) {
 	// Ensure vwap can be created.
 	market := "^GSPC"
 	timeframe := shared.FiveMinute
-	vwapgen := NewVWAPGenerator(market, timeframe)
+	vwap := NewVWAP(market, timeframe)
 
 	// Ensure vwap generator ignores update candles that are not of the expected timeframe.
 	ignoredCandle := &shared.Candlestick{
@@ -25,7 +25,7 @@ func TestVWAP(t *testing.T) {
 		Timeframe: shared.OneHour,
 	}
 
-	_, err := vwapgen.Update(ignoredCandle)
+	_, err := vwap.Update(ignoredCandle)
 	assert.Error(t, err)
 
 	// Ensure vwap can be zero.
@@ -40,7 +40,7 @@ func TestVWAP(t *testing.T) {
 		Timeframe: timeframe,
 	}
 
-	vwp, err := vwapgen.Update(candle)
+	vwp, err := vwap.Update(candle)
 	assert.NoError(t, err)
 	assert.Equal(t, vwp.Value, 0)
 
@@ -56,14 +56,14 @@ func TestVWAP(t *testing.T) {
 		Timeframe: timeframe,
 	}
 
-	vwp, err = vwapgen.Update(candle)
+	vwp, err = vwap.Update(candle)
 	assert.NoError(t, err)
 	assert.GreaterThan(t, vwp.Value, 0)
-	assert.GreaterThan(t, vwapgen.TypicalPriceVolume.Load(), 0)
-	assert.GreaterThan(t, vwapgen.Volume.Load(), 0)
+	assert.GreaterThan(t, vwap.TypicalPriceVolume.Load(), 0)
+	assert.GreaterThan(t, vwap.Volume.Load(), 0)
 
 	// Ensure vwap indicator can be reset.
-	vwapgen.Reset()
-	assert.Equal(t, vwapgen.Volume.Load(), 0)
-	assert.Equal(t, vwapgen.TypicalPriceVolume.Load(), 0)
+	vwap.Reset()
+	assert.Equal(t, vwap.Volume.Load(), 0)
+	assert.Equal(t, vwap.TypicalPriceVolume.Load(), 0)
 }
