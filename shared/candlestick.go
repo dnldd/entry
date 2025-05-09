@@ -101,7 +101,6 @@ type Candlestick struct {
 	// Metadata and derived fields.
 	Market    string
 	Timeframe Timeframe
-	VWAP      float64
 	Status    chan StatusCode
 }
 
