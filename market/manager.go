@@ -333,6 +333,8 @@ func (m *Manager) handleVWAPRequest(req *shared.VWAPRequest) error {
 			}
 			continue
 		}
+
+		match = true
 	}
 
 	req.Response <- vwap
