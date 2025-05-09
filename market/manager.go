@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dnldd/entry/indicator"
 	"github.com/dnldd/entry/shared"
 	"github.com/go-co-op/gocron"
 	"github.com/rs/zerolog"
@@ -23,6 +22,8 @@ const (
 	averageVolumeRange = 30
 	// fiveMinutesInSeconds is five minutes in seconds.
 	fiveMinutesInSeconds = 300
+	// maxRetries is the maximum number of retries allowed.
+	maxRetries = 3
 )
 
 // ManagerConfig represents the market manager configuration.
@@ -137,6 +138,17 @@ func (m *Manager) SendVWAPDataRequest(request shared.VWAPDataRequest) {
 	default:
 		m.cfg.Logger.Error().Msgf("vwap data requests channel at capacity: %d/%d",
 			len(m.vwapDataRequests), bufferSize)
+	}
+}
+
+// SendVWAPRequest relays the provided vwap request for processing.
+func (m *Manager) SendVWAPRequest(request shared.VWAPRequest) {
+	select {
+	case m.vwapRequests <- request:
+		// do nothing.
+	default:
+		m.cfg.Logger.Error().Msgf("current vwap requests channel at capacity: %d/%d",
+			len(m.vwapRequests), bufferSize)
 	}
 }
 
@@ -278,6 +290,43 @@ func (m *Manager) handleVWAPDataRequest(req *shared.VWAPDataRequest) error {
 	return nil
 }
 
+// handleVWAPRequest processes the provided current vwap request.
+func (m *Manager) handleVWAPRequest(req *shared.VWAPRequest) error {
+	m.marketsMtx.RLock()
+	mkt, ok := m.markets[req.Market]
+	m.marketsMtx.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("no market found with name %s", req.Market)
+	}
+
+	if !mkt.CaughtUp() {
+		return fmt.Errorf("%s is not caught up to current market data", req.Market)
+	}
+
+	match := false
+	count := uint32(0)
+	var vwap *shared.VWAP
+	for !match {
+		vwap = mkt.vwapSnapshot.At(req.At)
+		if vwap == nil {
+			time.Sleep(time.Millisecond * 200)
+			count++
+
+			if count >= maxRetries {
+				// Send a nil response when max retries are exhausted.
+				req.Response <- nil
+				return fmt.Errorf("no vwap found for time %s", req.At)
+			}
+			continue
+		}
+	}
+
+	req.Response <- vwap
+
+	return nil
+}
+
 // catchup signals a catch up for all tracked markets.
 func (m *Manager) catchUp() error {
 	m.marketsMtx.RLock()
@@ -354,6 +403,17 @@ func (m *Manager) Run(ctx context.Context) {
 			m.requestWorkers <- struct{}{}
 			go func(req shared.VWAPDataRequest) {
 				err := m.handleVWAPDataRequest(&req)
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+					return
+				}
+				<-m.requestWorkers
+			}(req)
+		case req := <-m.vwapRequests:
+			// handle vwap requests concurrently.
+			m.requestWorkers <- struct{}{}
+			go func(req shared.VWAPRequest) {
+				err := m.handleVWAPRequest(&req)
 				if err != nil {
 					m.cfg.Logger.Error().Err(err).Send()
 					return
