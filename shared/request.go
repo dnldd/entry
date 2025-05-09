@@ -8,6 +8,9 @@ const (
 	// MaxPriceDataRequestInterval is the maximum update intervals to wait before triggering a
 	// price data request.
 	MaxPriceDataRequestInterval = 3
+	// MaxVWAPDataRequestInterval is the maximum update intervals to wait before triggering a
+	// vwap data request.
+	MaxVWAPDataRequestInterval = 3
 	// TimeoutDuration is the maximum time to wait before timing out.
 	TimeoutDuration = time.Second * 4
 )

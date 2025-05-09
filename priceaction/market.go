@@ -18,8 +18,11 @@ type Market struct {
 	levelSnapshot       *LevelSnapshot
 	candleSnapshot      *shared.CandlestickSnapshot
 	taggedLevels        atomic.Bool
-	updateCounter       atomic.Uint32
+	taggedVWAP          atomic.Bool
+	levelUpdateCounter  atomic.Uint32
+	vwapUpdateCounter   atomic.Uint32
 	requestingPriceData atomic.Bool
+	requestingVWAPData  atomic.Bool
 }
 
 // NewMarket initializes a new market.
@@ -55,19 +58,38 @@ func (m *Market) Update(candle *shared.Candlestick) {
 
 	filteredLevels := m.FilterTaggedLevels(candle)
 
+	// TODO: refactor into func.
 	switch {
-	case len(filteredLevels) > 0 && !m.taggedLevels.Load() && m.updateCounter.Load() == 0:
+	case len(filteredLevels) > 0 && !m.taggedLevels.Load() && m.levelUpdateCounter.Load() == 0:
 		// Set the tagged levels flag to true if there is no pending price data request.
 		m.taggedLevels.Store(true)
 
-	case m.taggedLevels.Load() && m.updateCounter.Load() < shared.MaxPriceDataRequestInterval:
+	case m.taggedLevels.Load() && m.levelUpdateCounter.Load() < shared.MaxPriceDataRequestInterval:
 		// Increment the update counter while its below the price data request interval and set
 		// the price data request flag to true once the data request interval is reached.
-		counter := m.updateCounter.Add(1)
+		counter := m.levelUpdateCounter.Add(1)
 		if counter == shared.MaxPriceDataRequestInterval && !m.requestingPriceData.Load() {
 			// NB: once a level is tagged it will take MaxPriceDataRequestInterval worth (3) of
 			// market updates before the market signals requesting for price data.
 			m.requestingPriceData.Store(true)
+		}
+	}
+
+	vwapTagged := m.taggedCurrentVWAP(candle)
+
+	switch {
+	case vwapTagged && !m.taggedVWAP.Load() && m.vwapUpdateCounter.Load() == 0:
+		// Set the tagged vwap flag to true if there is no pending vwap data request.
+		m.taggedVWAP.Store(true)
+
+	case m.taggedVWAP.Load() && m.vwapUpdateCounter.Load() < shared.MaxVWAPDataRequestInterval:
+		// Increment the update counter while its below the vwap data request interval and set
+		// the price data request flag to true once the data request interval is reached.
+		counter := m.vwapUpdateCounter.Add(1)
+		if counter == shared.MaxVWAPDataRequestInterval && !m.requestingPriceData.Load() {
+			// NB: once the vwap is tagged it will take MaxVWAPDataRequestInterval worth (3) of
+			// market updates before the market signals requesting for vwap data.
+			m.requestingVWAPData.Store(true)
 		}
 	}
 }
@@ -82,8 +104,32 @@ func (m *Market) AddLevel(level *shared.Level) {
 	m.levelSnapshot.Add(level)
 }
 
-// tagged checks whether the provided level is tagged by the provided candlestick.
-func (m *Market) tagged(level *shared.Level, candle *shared.Candlestick) bool {
+// taggedCurrentVWAP checks whether the provided vwap was tagged by the provided candlestick.
+func (m *Market) taggedCurrentVWAP(candle *shared.Candlestick) bool {
+	var kind shared.LevelKind
+	switch {
+	case candle.VWAP > candle.Close:
+		kind = shared.Resistance
+	case candle.VWAP < candle.Close:
+		kind = shared.Support
+	}
+
+	switch kind {
+	case shared.Support:
+		if candle.Low <= candle.VWAP {
+			return true
+		}
+	case shared.Resistance:
+		if candle.High >= candle.VWAP {
+			return true
+		}
+	}
+
+	return false
+}
+
+// taggedLevel checks whether the provided level was tagged by the provided candlestick.
+func (m *Market) taggedLevel(level *shared.Level, candle *shared.Candlestick) bool {
 	if level.Invalidated.Load() {
 		return false
 	}
@@ -104,7 +150,7 @@ func (m *Market) tagged(level *shared.Level, candle *shared.Candlestick) bool {
 
 // FilterTaggedLevels filters levels tagged by the provided candle.
 func (m *Market) FilterTaggedLevels(candle *shared.Candlestick) []*shared.Level {
-	taggedLevels := m.levelSnapshot.Filter(candle, m.tagged)
+	taggedLevels := m.levelSnapshot.Filter(candle, m.taggedLevel)
 	return taggedLevels
 }
 
@@ -138,6 +184,13 @@ func (m *Market) GenerateLevelReactions(data []*shared.Candlestick) ([]*shared.L
 // ResetPriceDataState resets the flags and counters associated with price data state for the market.
 func (m *Market) ResetPriceDataState() {
 	m.taggedLevels.Store(false)
-	m.updateCounter.Store(0)
+	m.levelUpdateCounter.Store(0)
 	m.requestingPriceData.Store(false)
+}
+
+// ResetVWAPDataState resets the flags and counters associated with vwap data state for the market.
+func (m *Market) ResetVWAPDataState() {
+	m.taggedVWAP.Store(false)
+	m.vwapUpdateCounter.Store(0)
+	m.requestingVWAPData.Store(false)
 }
