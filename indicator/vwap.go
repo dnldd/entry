@@ -11,12 +11,28 @@ import (
 const (
 	// VwapReset is the vwap reset time (in new york time).
 	VwapResetTime = "17:00:10"
+	// VWAPDataPayloadSize is the number of vwap data expected as payload for a vwap data request.
+	VWAPDataPayloadSize = 4
 )
 
 // VWAP represents a unit VWAP entry for a market.
 type VWAP struct {
 	Value float64
 	Date  time.Time
+}
+
+// VWAPDataRequest represents a VWAP data request for a market.
+type VWAPDataRequest struct {
+	Market   string
+	Response chan []*VWAP
+}
+
+// NewVWAPDataRequest initializes a new VWAP request.
+func NewVWAPDataRequest(market string) *VWAPDataRequest {
+	return &VWAPDataRequest{
+		Market:   market,
+		Response: make(chan []*VWAP, 1),
+	}
 }
 
 // VWAPGenerator represents the Volume Weighted Average Price Indicator.
@@ -58,6 +74,7 @@ func (v *VWAPGenerator) Update(candle *shared.Candlestick) (*VWAP, error) {
 
 	val := v.TypicalPriceVolume.Load() / v.Volume.Load()
 	vwap.Value = val
+	candle.VWAP = val
 	v.Current.Store(vwap)
 	v.LastUpdateTime.Store(&candle.Date)
 
