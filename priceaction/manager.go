@@ -34,6 +34,8 @@ type ManagerConfig struct {
 	RequestVWAP func(request shared.VWAPRequest)
 	// SignalLevelReaction relays a level reaction for processing.
 	SignalLevelReaction func(signal shared.LevelReaction)
+	// SignalVWAPReaction relays a vwap reaction for processing.
+	SignalVWAPReaction func(signal shared.VWAPReaction)
 	// FetchCaughtUpState returns the caught up statis of the provided market.
 	FetchCaughtUpState func(market string) (bool, error)
 	// Logger represents the application logger.
@@ -158,6 +160,39 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) error {
 		}
 
 		mkt.ResetPriceDataState()
+	}
+
+	if mkt.RequestingVWAPData() {
+		// Request price data and vwap data and generate price reactions from them.
+		priceReq := shared.NewPriceDataRequest(mkt.cfg.Market)
+		m.cfg.RequestPriceData(*priceReq)
+		var priceData []*shared.Candlestick
+		select {
+		case priceData = <-priceReq.Response:
+		case <-time.After(shared.TimeoutDuration):
+			return fmt.Errorf("timed out waiting for price data response")
+		}
+
+		vwapReq := shared.NewVWAPDataRequest(mkt.cfg.Market)
+		m.cfg.RequestVWAPData(*vwapReq)
+		var vwapData []*shared.VWAP
+		select {
+		case vwapData = <-vwapReq.Response:
+		case <-time.After(shared.TimeoutDuration):
+			return fmt.Errorf("timed out waiting for vwap data response")
+		}
+
+		vwapReaction, err := shared.NewVWAPReaction(mkt.cfg.Market, vwapData, priceData)
+		if err != nil {
+			return fmt.Errorf("creating vwap reaction: %v", err)
+		}
+
+		m.cfg.SignalVWAPReaction(*vwapReaction)
+		select {
+		case <-vwapReaction.Status:
+		case <-time.After(shared.TimeoutDuration):
+			return fmt.Errorf("timed out waiting for vwap reaction status")
+		}
 	}
 
 	return nil
