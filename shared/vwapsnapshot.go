@@ -2,6 +2,7 @@ package shared
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	"go.uber.org/atomic"
@@ -9,10 +10,11 @@ import (
 
 // VWAPSnapshot represents a snapshot of vwap data.
 type VWAPSnapshot struct {
-	data  []*VWAP
-	start atomic.Int32
-	count atomic.Int32
-	size  atomic.Int32
+	data    []*VWAP
+	dataMtx sync.RWMutex
+	start   atomic.Int32
+	count   atomic.Int32
+	size    atomic.Int32
 }
 
 // NewVWAPSnapshot initializes a new vwap snapshot.
@@ -34,6 +36,9 @@ func NewVWAPSnapshot(size int32) (*VWAPSnapshot, error) {
 
 // Update adds the provided vwap to the snapshot.
 func (s *VWAPSnapshot) Update(vwap *VWAP) {
+	s.dataMtx.Lock()
+	defer s.dataMtx.Unlock()
+
 	start := s.start.Load()
 	count := s.count.Load()
 	size := s.size.Load()
@@ -50,6 +55,9 @@ func (s *VWAPSnapshot) Update(vwap *VWAP) {
 
 // Last returns the last added entry for the snapshot.
 func (s *VWAPSnapshot) Last() *VWAP {
+	s.dataMtx.RLock()
+	defer s.dataMtx.RUnlock()
+
 	start := s.start.Load()
 	count := s.count.Load()
 	size := s.size.Load()
@@ -63,6 +71,9 @@ func (s *VWAPSnapshot) Last() *VWAP {
 
 // At returns the vwap entry at the provided time for the snapshot.
 func (s *VWAPSnapshot) At(t time.Time) *VWAP {
+	s.dataMtx.RLock()
+	defer s.dataMtx.RUnlock()
+
 	start := s.start.Load()
 	count := s.count.Load()
 	size := s.size.Load()
@@ -79,6 +90,9 @@ func (s *VWAPSnapshot) At(t time.Time) *VWAP {
 
 // LastN fetches the last n number of elements from the snapshot.
 func (s *VWAPSnapshot) LastN(n int32) []*VWAP {
+	s.dataMtx.RLock()
+	defer s.dataMtx.RUnlock()
+
 	if n <= 0 {
 		return nil
 	}

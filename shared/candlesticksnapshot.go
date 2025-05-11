@@ -2,6 +2,7 @@ package shared
 
 import (
 	"errors"
+	"sync"
 
 	"go.uber.org/atomic"
 )
@@ -13,10 +14,11 @@ const (
 
 // CandlestickSnapshot represents a snapshot of candlestick data.
 type CandlestickSnapshot struct {
-	data  []*Candlestick
-	start atomic.Int32
-	count atomic.Int32
-	size  atomic.Int32
+	data    []*Candlestick
+	dataMtx sync.RWMutex
+	start   atomic.Int32
+	count   atomic.Int32
+	size    atomic.Int32
 }
 
 // NewCandlestickSnapshot initializes a new candlestick snapshot.
@@ -38,6 +40,9 @@ func NewCandlestickSnapshot(size int32) (*CandlestickSnapshot, error) {
 
 // Update adds the provided candlestick to the snapshot.
 func (s *CandlestickSnapshot) Update(candle *Candlestick) {
+	s.dataMtx.Lock()
+	defer s.dataMtx.Unlock()
+
 	start := s.start.Load()
 	count := s.count.Load()
 	size := s.size.Load()
@@ -54,6 +59,9 @@ func (s *CandlestickSnapshot) Update(candle *Candlestick) {
 
 // Last returns the last added entry for the snapshot.
 func (s *CandlestickSnapshot) Last() *Candlestick {
+	s.dataMtx.RLock()
+	defer s.dataMtx.RUnlock()
+
 	start := s.start.Load()
 	count := s.count.Load()
 	size := s.size.Load()
@@ -67,6 +75,9 @@ func (s *CandlestickSnapshot) Last() *Candlestick {
 
 // LastN fetches the last n number of elements from the snapshot.
 func (s *CandlestickSnapshot) LastN(n int32) []*Candlestick {
+	s.dataMtx.RLock()
+	defer s.dataMtx.RUnlock()
+
 	if n <= 0 {
 		return nil
 	}
