@@ -120,6 +120,86 @@ func (m *Manager) SendCandleMetadataRequest(req shared.CandleMetadataRequest) {
 	}
 }
 
+// evaluateLevelReactionSignal determines whether a level reaction signal should be generated for
+// the provided market.
+func (m *Manager) evaluateLevelReactionSignal(mkt *Market) error {
+	if !mkt.RequestingPriceData() {
+		// Do nothing.
+		return nil
+	}
+
+	// Request price data and generate price reactions from them.
+	req := shared.NewPriceDataRequest(mkt.cfg.Market)
+	m.cfg.RequestPriceData(*req)
+	var data []*shared.Candlestick
+	select {
+	case data = <-req.Response:
+	case <-time.After(shared.TimeoutDuration):
+		return fmt.Errorf("timed out waiting for price data response")
+	}
+
+	levelReactions, err := mkt.GenerateLevelReactions(data)
+	if err != nil {
+		return fmt.Errorf("generating level reactions: %v", err)
+	}
+
+	for idx := range levelReactions {
+		levelReaction := levelReactions[idx]
+		m.cfg.SignalLevelReaction(*levelReaction)
+		select {
+		case <-levelReaction.Status:
+		case <-time.After(shared.TimeoutDuration):
+			return fmt.Errorf("timed out waiting for level reaction status")
+		}
+	}
+
+	mkt.ResetPriceDataState()
+
+	return nil
+}
+
+// evaluateVWAPReactionSignal determines whether a vwap reaction signal should be generated for
+// the provided market.
+func (m *Manager) evaluateVWAPReactionSignal(mkt *Market) error {
+	if !mkt.RequestingVWAPData() {
+		// Do nothing.
+		return nil
+	}
+
+	// Request price data and vwap data and generate price reactions from them.
+	priceReq := shared.NewPriceDataRequest(mkt.cfg.Market)
+	m.cfg.RequestPriceData(*priceReq)
+	var priceData []*shared.Candlestick
+	select {
+	case priceData = <-priceReq.Response:
+	case <-time.After(shared.TimeoutDuration):
+		return fmt.Errorf("timed out waiting for price data response")
+	}
+
+	vwapReq := shared.NewVWAPDataRequest(mkt.cfg.Market)
+	m.cfg.RequestVWAPData(*vwapReq)
+	var vwapData []*shared.VWAP
+	select {
+	case vwapData = <-vwapReq.Response:
+	case <-time.After(shared.TimeoutDuration):
+		return fmt.Errorf("timed out waiting for vwap data response")
+	}
+
+	vwapReaction, err := shared.NewVWAPReaction(mkt.cfg.Market, vwapData, priceData)
+	if err != nil {
+		return fmt.Errorf("creating vwap reaction: %v", err)
+	}
+
+	m.cfg.SignalVWAPReaction(*vwapReaction)
+	select {
+	case <-vwapReaction.Status:
+	case <-time.After(shared.TimeoutDuration):
+		return fmt.Errorf("timed out waiting for vwap reaction status")
+	}
+
+	return nil
+}
+
 // handleUpdateSignal processes the provided update signal.
 func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) error {
 	defer func() {
@@ -133,66 +213,15 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) error {
 
 	// Update price action concepts related to the market.
 	mkt.Update(candle)
-	if mkt.RequestingPriceData() {
-		// Request price data and generate price reactions from them.
-		req := shared.NewPriceDataRequest(mkt.cfg.Market)
-		m.cfg.RequestPriceData(*req)
-		var data []*shared.Candlestick
-		select {
-		case data = <-req.Response:
-		case <-time.After(shared.TimeoutDuration):
-			return fmt.Errorf("timed out waiting for price data response")
-		}
 
-		levelReactions, err := mkt.GenerateLevelReactions(data)
-		if err != nil {
-			return fmt.Errorf("generating level reactions: %v", err)
-		}
-
-		for idx := range levelReactions {
-			levelReaction := levelReactions[idx]
-			m.cfg.SignalLevelReaction(*levelReaction)
-			select {
-			case <-levelReaction.Status:
-			case <-time.After(shared.TimeoutDuration):
-				return fmt.Errorf("timed out waiting for level reaction status")
-			}
-		}
-
-		mkt.ResetPriceDataState()
+	err := m.evaluateLevelReactionSignal(mkt)
+	if err != nil {
+		return fmt.Errorf("evaluating level reaction signal: %v", err)
 	}
 
-	if mkt.RequestingVWAPData() {
-		// Request price data and vwap data and generate price reactions from them.
-		priceReq := shared.NewPriceDataRequest(mkt.cfg.Market)
-		m.cfg.RequestPriceData(*priceReq)
-		var priceData []*shared.Candlestick
-		select {
-		case priceData = <-priceReq.Response:
-		case <-time.After(shared.TimeoutDuration):
-			return fmt.Errorf("timed out waiting for price data response")
-		}
-
-		vwapReq := shared.NewVWAPDataRequest(mkt.cfg.Market)
-		m.cfg.RequestVWAPData(*vwapReq)
-		var vwapData []*shared.VWAP
-		select {
-		case vwapData = <-vwapReq.Response:
-		case <-time.After(shared.TimeoutDuration):
-			return fmt.Errorf("timed out waiting for vwap data response")
-		}
-
-		vwapReaction, err := shared.NewVWAPReaction(mkt.cfg.Market, vwapData, priceData)
-		if err != nil {
-			return fmt.Errorf("creating vwap reaction: %v", err)
-		}
-
-		m.cfg.SignalVWAPReaction(*vwapReaction)
-		select {
-		case <-vwapReaction.Status:
-		case <-time.After(shared.TimeoutDuration):
-			return fmt.Errorf("timed out waiting for vwap reaction status")
-		}
+	err = m.evaluateVWAPReactionSignal(mkt)
+	if err != nil {
+		return fmt.Errorf("evaluatiing vwap level reaction signal: %v", err)
 	}
 
 	return nil
