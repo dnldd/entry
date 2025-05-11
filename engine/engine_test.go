@@ -423,7 +423,8 @@ func TestEstimateStopLoss(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		sl, pr, err := eng.estimateStopLoss(test.meta, test.levelReaction)
+		sl, pr, err := eng.estimateStopLoss(test.meta, test.levelReaction.Level.Kind,
+			test.levelReaction.Reaction, test.levelReaction.CurrentPrice)
 		if test.wantErr && err == nil {
 			t.Errorf("%s: expected an error, got none", test.name)
 		}
@@ -597,7 +598,7 @@ func TestEvaluateCandleVolumeStrength(t *testing.T) {
 	assert.In(t, shared.BullishEngulfing, keys)
 }
 
-func TestEvaluatePriceReversalConfirmation(t *testing.T) {
+func TestEvaluatePriceReversalAtLevelConfirmation(t *testing.T) {
 	avgVolume := float64(10)
 	candleMeta := []*shared.CandleMetadata{}
 	marketSkew := shared.NeutralSkew
@@ -636,7 +637,7 @@ func TestEvaluatePriceReversalConfirmation(t *testing.T) {
 	}
 
 	// Ensure bullish price reactions can be confirmed.
-	err := eng.evaluatePriceReversalConfirmation(&supportLevelReaction, &confluence, &sentiment, reasons)
+	err := eng.evaluatePriceReversalAtLevelConfirmation(&supportLevelReaction, &confluence, &sentiment, reasons)
 	assert.NoError(t, err)
 	assert.Equal(t, confluence, uint32(1))
 	assert.Equal(t, sentiment, shared.Bullish)
@@ -649,7 +650,7 @@ func TestEvaluatePriceReversalConfirmation(t *testing.T) {
 	confluence = 0
 	reasons = map[shared.Reason]struct{}{}
 	sentiment = shared.Neutral
-	err = eng.evaluatePriceReversalConfirmation(&resistanceLevelReaction, &confluence, &sentiment, reasons)
+	err = eng.evaluatePriceReversalAtLevelConfirmation(&resistanceLevelReaction, &confluence, &sentiment, reasons)
 	assert.NoError(t, err)
 	assert.Equal(t, confluence, uint32(1))
 	assert.Equal(t, sentiment, shared.Bearish)
@@ -672,7 +673,7 @@ func TestEvaluatePriceReversalConfirmation(t *testing.T) {
 		CreatedOn:     asianSessionTime,
 	}
 
-	err = eng.evaluatePriceReversalConfirmation(&invalidReversalLevelReaction, &confluence, &sentiment, reasons)
+	err = eng.evaluatePriceReversalAtLevelConfirmation(&invalidReversalLevelReaction, &confluence, &sentiment, reasons)
 	assert.Error(t, err)
 
 }
@@ -770,7 +771,7 @@ func TestFetchMarketSkew(t *testing.T) {
 	assert.Equal(t, avgVol, shared.NeutralSkew)
 }
 
-func TestEvaluatePriceReversal(t *testing.T) {
+func TestEvaluatePriceReversalAtLevel(t *testing.T) {
 	avgVolume := float64(4)
 	asiaSessionTime, _ := generateSessionTimes(t)
 	candleMeta := []*shared.CandleMetadata{
@@ -832,11 +833,11 @@ func TestEvaluatePriceReversal(t *testing.T) {
 	}
 
 	// Ensure price reversal is not evaluated if the meta is an empty slice.
-	signal, _, _, err := eng.evaluatePriceReversal(levelReaction, []*shared.CandleMetadata{})
+	signal, _, _, err := eng.evaluatePriceReversalAtLevel(levelReaction, []*shared.CandleMetadata{})
 	assert.Error(t, err)
 
 	// Ensure price reversal is evualuated as expected with valid input.
-	signal, confluence, reasons, err := eng.evaluatePriceReversal(levelReaction, candleMeta)
+	signal, confluence, reasons, err := eng.evaluatePriceReversalAtLevel(levelReaction, candleMeta)
 	assert.NoError(t, err)
 	assert.In(t, shared.ReversalAtSupport, reasons)
 	assert.In(t, shared.StrongMove, reasons)

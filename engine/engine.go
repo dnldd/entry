@@ -132,8 +132,8 @@ func (e *Engine) evaluateCandleMetadataStrength(candleMeta shared.CandleMetadata
 	return nil
 }
 
-// evaluatePriceReversalConfirmation awards confluence points based on confirmation of the level reaction being a reversal.
-func (e *Engine) evaluatePriceReversalConfirmation(levelReaction *shared.LevelReaction, confluence *uint32, reactionSentiment *shared.Sentiment, reasons map[shared.Reason]struct{}) error {
+// evaluatePriceReversalAtLevelConfirmation awards confluence points based on confirmation of the level reaction being a reversal.
+func (e *Engine) evaluatePriceReversalAtLevelConfirmation(levelReaction *shared.LevelReaction, confluence *uint32, reactionSentiment *shared.Sentiment, reasons map[shared.Reason]struct{}) error {
 	if levelReaction.Reaction != shared.Reversal {
 		return fmt.Errorf("level reaction is not a reversal, got %s", levelReaction.Reaction.String())
 	}
@@ -204,8 +204,8 @@ func (e *Engine) fetchCandleMetadata(market string) ([]*shared.CandleMetadata, e
 	}
 }
 
-// evaluatePriceReversal determines whether an actionable price reversal has occured.
-func (e *Engine) evaluatePriceReversal(levelReaction *shared.LevelReaction, meta []*shared.CandleMetadata) (bool, uint32, []shared.Reason, error) {
+// evaluatePriceReversalAtLevel determines whether an actionable price reversal has occured.
+func (e *Engine) evaluatePriceReversalAtLevel(levelReaction *shared.LevelReaction, meta []*shared.CandleMetadata) (bool, uint32, []shared.Reason, error) {
 	if len(meta) == 0 {
 		return false, 0, nil, fmt.Errorf("candle metadata is empty")
 	}
@@ -215,7 +215,7 @@ func (e *Engine) evaluatePriceReversal(levelReaction *shared.LevelReaction, meta
 	reasonsKV := make(map[shared.Reason]struct{})
 
 	// Confirmed price reactions at key levels indicate strength.
-	err := e.evaluatePriceReversalConfirmation(levelReaction, &confluence, &reactionSentiment, reasonsKV)
+	err := e.evaluatePriceReversalAtLevelConfirmation(levelReaction, &confluence, &reactionSentiment, reasonsKV)
 	if err != nil {
 		return false, 0, nil, fmt.Errorf("evaluating price reversal confirmation: %v", err)
 	}
@@ -327,16 +327,16 @@ func (e *Engine) evaluateLevelBreak(levelReaction *shared.LevelReaction, meta []
 
 // estimateStopLoss calculates the stoploss and the point range from entry for a position using
 // the provided candle metadata.
-func (e *Engine) estimateStopLoss(meta []*shared.CandleMetadata, levelReaction *shared.LevelReaction) (float64, float64, error) {
+func (e *Engine) estimateStopLoss(meta []*shared.CandleMetadata, LevelKind shared.LevelKind, reaction shared.Reaction, currentPrice float64) (float64, float64, error) {
 	if len(meta) == 0 {
 		return 0, 0, fmt.Errorf("no candle metadata provided")
 	}
 
 	// Derive the directional sentiment from the level reaction.
 	var sentiment shared.Sentiment
-	switch levelReaction.Level.Kind {
+	switch LevelKind {
 	case shared.Support:
-		switch levelReaction.Reaction {
+		switch reaction {
 		case shared.Break:
 			sentiment = shared.Bearish
 		case shared.Reversal:
@@ -345,7 +345,7 @@ func (e *Engine) estimateStopLoss(meta []*shared.CandleMetadata, levelReaction *
 			return 0, 0, fmt.Errorf("no stop loss set for chop level reaction")
 		}
 	case shared.Resistance:
-		switch levelReaction.Reaction {
+		switch reaction {
 		case shared.Break:
 			sentiment = shared.Bullish
 		case shared.Reversal:
@@ -378,7 +378,7 @@ func (e *Engine) estimateStopLoss(meta []*shared.CandleMetadata, levelReaction *
 		}
 	}
 
-	pointsRange := math.Abs(levelReaction.CurrentPrice - stopLoss)
+	pointsRange := math.Abs(currentPrice - stopLoss)
 
 	if stopLoss <= 0 {
 		return 0, 0, fmt.Errorf("stop loss cannot be less than or equal to zero")
@@ -391,7 +391,7 @@ func (e *Engine) estimateStopLoss(meta []*shared.CandleMetadata, levelReaction *
 // be classified as strong. An associated entry or exit signal is generated and relayed for it based on
 // the skew of the associated market.
 func (e *Engine) evaluatePriceReversalStrength(levelReaction *shared.LevelReaction, meta []*shared.CandleMetadata) error {
-	signal, confluence, reasons, err := e.evaluatePriceReversal(levelReaction, meta)
+	signal, confluence, reasons, err := e.evaluatePriceReversalAtLevel(levelReaction, meta)
 	if err != nil {
 		return fmt.Errorf("evaluating price reversal reaction: %v", err)
 	}
@@ -409,7 +409,8 @@ func (e *Engine) evaluatePriceReversalStrength(levelReaction *shared.LevelReacti
 			// Signal a long position on a confirmed support level reversal if the market is
 			// neutral skewed or already long skewed.
 			direction := shared.Long
-			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction)
+			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction.Level.Kind,
+				levelReaction.Reaction, levelReaction.CurrentPrice)
 			if err != nil {
 				return fmt.Errorf("estimating stop loss: %v", err)
 			}
@@ -439,7 +440,8 @@ func (e *Engine) evaluatePriceReversalStrength(levelReaction *shared.LevelReacti
 			// Signal a short position on a confirmed resistance reversal if the market is
 			// neutral skewed or already short skewed.
 			direction := shared.Short
-			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction)
+			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction.Level.Kind,
+				levelReaction.Reaction, levelReaction.CurrentPrice)
 			if err != nil {
 				return fmt.Errorf("estimating stop loss: %v", err)
 			}
@@ -492,7 +494,8 @@ func (e *Engine) evaluateLevelBreakStrength(levelReaction *shared.LevelReaction,
 			// Signal a long position on a confirmed resistance level break if the market is
 			// neutral skewed or already long skewed.
 			direction := shared.Long
-			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction)
+			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction.Level.Kind,
+				levelReaction.Reaction, levelReaction.CurrentPrice)
 			if err != nil {
 				return fmt.Errorf("estimating stop loss: %v", err)
 			}
@@ -510,7 +513,8 @@ func (e *Engine) evaluateLevelBreakStrength(levelReaction *shared.LevelReaction,
 			// Signal a short position on a confirmed support break if the market is
 			// neutral skewed or already short skewed.
 			direction := shared.Short
-			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction)
+			stopLoss, pointsRange, err := e.estimateStopLoss(meta, levelReaction.Level.Kind,
+				levelReaction.Reaction, levelReaction.CurrentPrice)
 			if err != nil {
 				return fmt.Errorf("estimating stop loss: %v", err)
 			}
