@@ -54,11 +54,11 @@ func TestLevel(t *testing.T) {
 
 	// Ensure a level can be updated.
 	reversalReaction := Reversal
-	lvl.ApplyReaction(reversalReaction)
+	lvl.ApplyPriceReaction(reversalReaction)
 	assert.Equal(t, lvl.Reversals.Load(), uint32(1))
 
 	breakReaction := Break
-	lvl.ApplyReaction(breakReaction)
+	lvl.ApplyPriceReaction(breakReaction)
 	assert.True(t, lvl.Breaking.Load())
 
 	// Ensure a level can be invalidated.
@@ -72,14 +72,14 @@ func TestLevel(t *testing.T) {
 	assert.Equal(t, lvl.Breaks.Load(), uint32(1))
 	assert.Equal(t, lvl.Kind, Support)
 
-	lvl.ApplyReaction(breakReaction)
+	lvl.ApplyPriceReaction(breakReaction)
 	assert.True(t, lvl.Breaking.Load())
 
 	lvl.Update(firstCandle)
 	assert.Equal(t, lvl.Breaks.Load(), uint32(2))
 	assert.Equal(t, lvl.Kind, Resistance)
 
-	lvl.ApplyReaction(breakReaction)
+	lvl.ApplyPriceReaction(breakReaction)
 	assert.True(t, lvl.Breaking.Load())
 
 	lvl.Update(secondCandle)
@@ -89,7 +89,7 @@ func TestLevel(t *testing.T) {
 	assert.True(t, lvl.IsInvalidated())
 }
 
-func TestNewLevelReaction(t *testing.T) {
+func TestNewReactionAtLevel(t *testing.T) {
 	price := float64(12)
 	market := "^GSPC"
 	resistanceCandle := &Candlestick{
@@ -110,8 +110,8 @@ func TestNewLevelReaction(t *testing.T) {
 		name              string
 		level             *Level
 		data              []*Candlestick
-		wantReaction      Reaction
-		wantPriceMovement []Movement
+		wantReaction      PriceReaction
+		wantPriceMovement []PriceMovement
 		wantErr           bool
 	}{
 		{
@@ -171,7 +171,7 @@ func TestNewLevelReaction(t *testing.T) {
 				},
 			},
 			wantReaction:      Reversal,
-			wantPriceMovement: []Movement{Below, Below, Below, Below},
+			wantPriceMovement: []PriceMovement{Below, Below, Below, Below},
 			wantErr:           false,
 		},
 		{
@@ -208,7 +208,7 @@ func TestNewLevelReaction(t *testing.T) {
 				},
 			},
 			wantReaction:      Reversal,
-			wantPriceMovement: []Movement{Above, Above, Above, Above},
+			wantPriceMovement: []PriceMovement{Above, Above, Above, Above},
 			wantErr:           false,
 		},
 		{
@@ -245,7 +245,7 @@ func TestNewLevelReaction(t *testing.T) {
 				},
 			},
 			wantReaction:      Break,
-			wantPriceMovement: []Movement{Below, Above, Above, Above},
+			wantPriceMovement: []PriceMovement{Below, Above, Above, Above},
 			wantErr:           false,
 		},
 		{
@@ -282,7 +282,7 @@ func TestNewLevelReaction(t *testing.T) {
 				},
 			},
 			wantReaction:      Break,
-			wantPriceMovement: []Movement{Above, Below, Below, Below},
+			wantPriceMovement: []PriceMovement{Above, Below, Below, Below},
 			wantErr:           false,
 		},
 		{
@@ -319,7 +319,7 @@ func TestNewLevelReaction(t *testing.T) {
 				},
 			},
 			wantReaction:      Chop,
-			wantPriceMovement: []Movement{Above, Below, Above, Below},
+			wantPriceMovement: []PriceMovement{Above, Below, Above, Below},
 			wantErr:           false,
 		},
 		{
@@ -356,7 +356,7 @@ func TestNewLevelReaction(t *testing.T) {
 				},
 			},
 			wantReaction:      Reversal,
-			wantPriceMovement: []Movement{Above, Above, Above, Above},
+			wantPriceMovement: []PriceMovement{Above, Above, Above, Above},
 			wantErr:           false,
 		},
 		{
@@ -393,7 +393,7 @@ func TestNewLevelReaction(t *testing.T) {
 				},
 			},
 			wantReaction:      Break,
-			wantPriceMovement: []Movement{Above, Above, Above, Below},
+			wantPriceMovement: []PriceMovement{Above, Above, Above, Below},
 			wantErr:           false,
 		},
 		{
@@ -430,7 +430,7 @@ func TestNewLevelReaction(t *testing.T) {
 				},
 			},
 			wantReaction:      Reversal,
-			wantPriceMovement: []Movement{Above, Below, Above, Above},
+			wantPriceMovement: []PriceMovement{Above, Below, Above, Above},
 			wantErr:           false,
 		},
 		{
@@ -467,7 +467,7 @@ func TestNewLevelReaction(t *testing.T) {
 				},
 			},
 			wantReaction:      Chop,
-			wantPriceMovement: []Movement{Equal, Equal, Equal, Equal},
+			wantPriceMovement: []PriceMovement{Equal, Equal, Equal, Equal},
 			wantErr:           false,
 		},
 		{
@@ -504,7 +504,7 @@ func TestNewLevelReaction(t *testing.T) {
 				},
 			},
 			wantReaction:      Chop,
-			wantPriceMovement: []Movement{Equal, Equal, Equal, Equal},
+			wantPriceMovement: []PriceMovement{Equal, Equal, Equal, Equal},
 			wantErr:           false,
 		},
 		{
@@ -541,7 +541,7 @@ func TestNewLevelReaction(t *testing.T) {
 				},
 			},
 			wantReaction:      Break,
-			wantPriceMovement: []Movement{Below, Below, Below, Above},
+			wantPriceMovement: []PriceMovement{Below, Below, Below, Above},
 			wantErr:           false,
 		},
 		{
@@ -578,7 +578,7 @@ func TestNewLevelReaction(t *testing.T) {
 				},
 			},
 			wantReaction:      Reversal,
-			wantPriceMovement: []Movement{Below, Above, Above, Below},
+			wantPriceMovement: []PriceMovement{Below, Above, Above, Below},
 			wantErr:           false,
 		},
 		{
@@ -615,7 +615,7 @@ func TestNewLevelReaction(t *testing.T) {
 				},
 			},
 			wantReaction:      Chop,
-			wantPriceMovement: []Movement{Below, Above, Below, Above},
+			wantPriceMovement: []PriceMovement{Below, Above, Below, Above},
 			wantErr:           false,
 		},
 		{
@@ -627,7 +627,7 @@ func TestNewLevelReaction(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		reaction, err := NewLevelReaction(market, test.level, test.data)
+		reaction, err := NewReactionAtLevel(market, test.level, test.data)
 		if err == nil && test.wantErr {
 			t.Errorf("%s: expected an error, got none", test.name)
 		}

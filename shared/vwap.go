@@ -11,16 +11,10 @@ type VWAP struct {
 	Date  time.Time
 }
 
-// VWAPReaction describes the reaction of price relative to vwap.
-type VWAPReaction struct {
-	Market        string
-	Timeframe     Timeframe
-	PriceMovement []Movement
-	VWAPData      []*VWAP
-	CurrentPrice  float64
-	Reaction      Reaction
-	Status        chan StatusCode
-	CreatedOn     time.Time
+// ReactionAtVWAP describes the reaction of price relative to vwap.
+type ReactionAtVWAP struct {
+	ReactionAtFocus
+	VWAPData []*VWAP
 }
 
 // fetchVWAPLevelKind returns the level kind status of the provided vwap.
@@ -35,9 +29,8 @@ func fetchVWAPLevelKind(vwap *VWAP, candle *Candlestick) LevelKind {
 	return levelKind
 }
 
-// NewVWAPReaction initializes a new vwap reaction from the provided vwap data and
-// candlestick data.
-func NewVWAPReaction(market string, vwapData []*VWAP, priceData []*Candlestick) (*VWAPReaction, error) {
+// NewReactionAtVWAP initializes a new reaction from the provided vwap and candlestick data.
+func NewReactionAtVWAP(market string, vwapData []*VWAP, priceData []*Candlestick) (*ReactionAtVWAP, error) {
 	if len(vwapData) != VWAPDataPayloadSize {
 		return nil, fmt.Errorf("vwap data is not the expected size: %d != expected(%d)",
 			len(vwapData), VWAPDataPayloadSize)
@@ -52,14 +45,18 @@ func NewVWAPReaction(market string, vwapData []*VWAP, priceData []*Candlestick) 
 		return nil, fmt.Errorf("data length mismatch, %d != %d", len(vwapData), len(priceData))
 	}
 
-	vr := &VWAPReaction{
-		Market:        market,
-		VWAPData:      vwapData,
-		Timeframe:     priceData[len(priceData)-1].Timeframe,
-		PriceMovement: make([]Movement, 0, len(priceData)),
-		Status:        make(chan StatusCode, 1),
-		CurrentPrice:  priceData[len(priceData)-1].Close,
-		CreatedOn:     priceData[len(priceData)-1].Date,
+	levelKind := fetchVWAPLevelKind(vwapData[0], priceData[0])
+	vr := &ReactionAtVWAP{
+		ReactionAtFocus: ReactionAtFocus{
+			Market:        market,
+			LevelKind:     levelKind,
+			Timeframe:     priceData[len(priceData)-1].Timeframe,
+			PriceMovement: make([]PriceMovement, 0, len(priceData)),
+			Status:        make(chan StatusCode, 1),
+			CurrentPrice:  priceData[len(priceData)-1].Close,
+			CreatedOn:     priceData[len(priceData)-1].Date,
+		},
+		VWAPData: vwapData,
 	}
 
 	// Generate price movement data from the level and provided price data.
@@ -97,7 +94,6 @@ func NewVWAPReaction(market string, vwapData []*VWAP, priceData []*Candlestick) 
 	third := vr.PriceMovement[2]
 	fourth := vr.PriceMovement[3]
 
-	levelKind := fetchVWAPLevelKind(vwapData[0], priceData[0])
 	switch levelKind {
 	case Support:
 		switch {

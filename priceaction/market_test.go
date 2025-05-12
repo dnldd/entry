@@ -146,12 +146,12 @@ func TestMarket(t *testing.T) {
 		},
 	}
 
-	reactions, err := mkt.GenerateLevelReactions(data)
+	reactions, err := mkt.GenerateReactionsAtTaggedLevels(data)
 	assert.NoError(t, err)
 	assert.Equal(t, len(reactions), 1)
 	assert.Equal(t, reactions[0].Reaction, shared.Reversal)
 	assert.Equal(t, reactions[0].PriceMovement,
-		[]shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above})
+		[]shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above})
 
 	// Ensure the price data state of a market can be reset.
 	mkt.ResetPriceDataState()

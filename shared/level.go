@@ -2,7 +2,6 @@ package shared
 
 import (
 	"fmt"
-	"time"
 
 	"go.uber.org/atomic"
 )
@@ -104,34 +103,31 @@ func (l *Level) IsInvalidated() bool {
 	return l.Invalidated.Load()
 }
 
-// LevelReaction describes the reaction of price at a level.
-type LevelReaction struct {
-	Market        string
-	Level         *Level
-	Timeframe     Timeframe
-	PriceMovement []Movement
-	CurrentPrice  float64
-	Reaction      Reaction
-	Status        chan StatusCode
-	CreatedOn     time.Time
+// ReactionAtLevel describes the reaction of price at a level.
+type ReactionAtLevel struct {
+	ReactionAtFocus
+	Level *Level
 }
 
-// NewLevelReaction initializes a new level reaction from the provided level and
+// NewReactionAtLevel initializes a new reaction from the provided level and
 // candlestick data.
-func NewLevelReaction(market string, level *Level, data []*Candlestick) (*LevelReaction, error) {
+func NewReactionAtLevel(market string, level *Level, data []*Candlestick) (*ReactionAtLevel, error) {
 	if len(data) != PriceDataPayloadSize {
 		return nil, fmt.Errorf("price data is not the expected size: %d != expected(%d)",
 			len(data), PriceDataPayloadSize)
 	}
 
-	plr := &LevelReaction{
-		Market:        market,
-		Level:         level,
-		Timeframe:     data[len(data)-1].Timeframe,
-		PriceMovement: make([]Movement, 0, len(data)),
-		Status:        make(chan StatusCode, 1),
-		CurrentPrice:  data[len(data)-1].Close,
-		CreatedOn:     data[len(data)-1].Date,
+	plr := &ReactionAtLevel{
+		ReactionAtFocus: ReactionAtFocus{
+			Market:        market,
+			LevelKind:     level.Kind,
+			Timeframe:     data[len(data)-1].Timeframe,
+			PriceMovement: make([]PriceMovement, 0, len(data)),
+			Status:        make(chan StatusCode, 1),
+			CurrentPrice:  data[len(data)-1].Close,
+			CreatedOn:     data[len(data)-1].Date,
+		},
+		Level: level,
 	}
 
 	// Generate price movement data from the level and provided price data.
@@ -228,7 +224,7 @@ func NewLevelReaction(market string, level *Level, data []*Candlestick) (*LevelR
 	return plr, nil
 }
 
-// ApplyReaction applies the level reaction to the associated level.
-func (l *LevelReaction) ApplyReaction() {
-	l.Level.ApplyReaction(l.Reaction)
+// ApplyPriceReaction applies the price reaction to the associated level.
+func (l *ReactionAtLevel) ApplyPriceReaction() {
+	l.Level.ApplyPriceReaction(l.Reaction)
 }
