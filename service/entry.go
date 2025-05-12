@@ -149,19 +149,26 @@ func NewEntry(cfg *EntryConfig) (*Entry, error) {
 		Logger:       &positionMgrLogger,
 	})
 
-	levelReactionFunc := func(signal shared.LevelReaction) {
+	levelReactionFunc := func(signal shared.ReactionAtLevel) {
 		if entryEngine != nil {
-			entryEngine.SignalLevelReaction(signal)
+			entryEngine.SignalReactionAtLevel(signal)
+		}
+	}
+
+	vwapReactionFunc := func(signal shared.ReactionAtVWAP) {
+		if entryEngine != nil {
+			entryEngine.SignalReactionAtVWAP(signal)
 		}
 	}
 
 	priceActionMgrLogger := logger.With().Str("component", "priceactionmanager").Logger()
 	priceActionMgr, err = priceaction.NewManager(&priceaction.ManagerConfig{
-		Markets:             cfg.Markets,
-		Subscribe:           fetchMgr.Subscribe,
-		RequestPriceData:    marketMgr.SendPriceDataRequest,
-		SignalLevelReaction: levelReactionFunc,
-		Logger:              &priceActionMgrLogger,
+		Markets:               cfg.Markets,
+		Subscribe:             fetchMgr.Subscribe,
+		RequestPriceData:      marketMgr.SendPriceDataRequest,
+		SignalReactionAtLevel: levelReactionFunc,
+		SignalReactionAtVWAP:  vwapReactionFunc,
+		Logger:                &priceActionMgrLogger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating price action manager: %v", err)

@@ -32,10 +32,10 @@ type ManagerConfig struct {
 	RequestVWAPData func(request shared.VWAPDataRequest)
 	// RequestVWAP relays the provided vwap request for processing.
 	RequestVWAP func(request shared.VWAPRequest)
-	// SignalLevelReaction relays a level reaction for processing.
-	SignalLevelReaction func(signal shared.LevelReaction)
+	// SignalReactionAtLevel relays a reaction at a level for processing.
+	SignalReactionAtLevel func(signal shared.ReactionAtLevel)
 	// SignalVWAPReaction relays a vwap reaction for processing.
-	SignalVWAPReaction func(signal shared.VWAPReaction)
+	SignalReactionAtVWAP func(signal shared.ReactionAtVWAP)
 	// FetchCaughtUpState returns the caught up statis of the provided market.
 	FetchCaughtUpState func(market string) (bool, error)
 	// Logger represents the application logger.
@@ -120,9 +120,9 @@ func (m *Manager) SendCandleMetadataRequest(req shared.CandleMetadataRequest) {
 	}
 }
 
-// evaluateLevelReactionSignal determines whether a level reaction signal should be generated for
+// evaluateReactionAtLevelSignal determines whether a reaction at level signal should be generated for
 // the provided market.
-func (m *Manager) evaluateLevelReactionSignal(mkt *Market) error {
+func (m *Manager) evaluateReactionAtLevelSignal(mkt *Market) error {
 	if !mkt.RequestingPriceData() {
 		// Do nothing.
 		return nil
@@ -138,18 +138,18 @@ func (m *Manager) evaluateLevelReactionSignal(mkt *Market) error {
 		return fmt.Errorf("timed out waiting for price data response")
 	}
 
-	levelReactions, err := mkt.GenerateLevelReactions(data)
+	reactions, err := mkt.GenerateReactionsAtTaggedLevels(data)
 	if err != nil {
 		return fmt.Errorf("generating level reactions: %v", err)
 	}
 
-	for idx := range levelReactions {
-		levelReaction := levelReactions[idx]
-		m.cfg.SignalLevelReaction(*levelReaction)
+	for idx := range reactions {
+		reaction := reactions[idx]
+		m.cfg.SignalReactionAtLevel(*reaction)
 		select {
-		case <-levelReaction.Status:
+		case <-reaction.Status:
 		case <-time.After(shared.TimeoutDuration):
-			return fmt.Errorf("timed out waiting for level reaction status")
+			return fmt.Errorf("timed out waiting for reaction at level status")
 		}
 	}
 
@@ -158,9 +158,9 @@ func (m *Manager) evaluateLevelReactionSignal(mkt *Market) error {
 	return nil
 }
 
-// evaluateVWAPReactionSignal determines whether a vwap reaction signal should be generated for
+// evaluateReactionAtVWAPSignal determines whether a reaction at vwap signal should be generated for
 // the provided market.
-func (m *Manager) evaluateVWAPReactionSignal(mkt *Market) error {
+func (m *Manager) evaluateReactionAtVWAPSignal(mkt *Market) error {
 	if !mkt.RequestingVWAPData() {
 		// Do nothing.
 		return nil
@@ -185,16 +185,16 @@ func (m *Manager) evaluateVWAPReactionSignal(mkt *Market) error {
 		return fmt.Errorf("timed out waiting for vwap data response")
 	}
 
-	vwapReaction, err := shared.NewVWAPReaction(mkt.cfg.Market, vwapData, priceData)
+	reaction, err := shared.NewReactionAtVWAP(mkt.cfg.Market, vwapData, priceData)
 	if err != nil {
 		return fmt.Errorf("creating vwap reaction: %v", err)
 	}
 
-	m.cfg.SignalVWAPReaction(*vwapReaction)
+	m.cfg.SignalReactionAtVWAP(*reaction)
 	select {
-	case <-vwapReaction.Status:
+	case <-reaction.Status:
 	case <-time.After(shared.TimeoutDuration):
-		return fmt.Errorf("timed out waiting for vwap reaction status")
+		return fmt.Errorf("timed out waiting for reaction at vwap status")
 	}
 
 	return nil
@@ -214,14 +214,14 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) error {
 	// Update price action concepts related to the market.
 	mkt.Update(candle)
 
-	err := m.evaluateLevelReactionSignal(mkt)
+	err := m.evaluateReactionAtLevelSignal(mkt)
 	if err != nil {
-		return fmt.Errorf("evaluating level reaction signal: %v", err)
+		return fmt.Errorf("evaluating reaction at level signal: %v", err)
 	}
 
-	err = m.evaluateVWAPReactionSignal(mkt)
+	err = m.evaluateReactionAtVWAPSignal(mkt)
 	if err != nil {
-		return fmt.Errorf("evaluatiing vwap level reaction signal: %v", err)
+		return fmt.Errorf("evaluatiing reaction at vwap signal: %v", err)
 	}
 
 	return nil

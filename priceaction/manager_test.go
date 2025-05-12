@@ -36,8 +36,8 @@ func setupManager(t *testing.T, market string) *Manager {
 
 		go func() { req.Response <- data }()
 	}
-	levelReactionSignals := make(chan shared.LevelReaction, 5)
-	signalLevelReaction := func(reaction shared.LevelReaction) {
+	levelReactionSignals := make(chan shared.ReactionAtLevel, 5)
+	signalLevelReaction := func(reaction shared.ReactionAtLevel) {
 		levelReactionSignals <- reaction
 		reaction.Status <- shared.Processed
 	}
@@ -73,12 +73,15 @@ func setupManager(t *testing.T, market string) *Manager {
 		}
 	}
 	cfg := &ManagerConfig{
-		Markets:             []string{market},
-		Subscribe:           subscribe,
-		RequestPriceData:    requestPriceData,
-		SignalLevelReaction: signalLevelReaction,
-		RequestVWAPData:     requestVWAPData,
-		RequestVWAP:         requestVWAP,
+		Markets:               []string{market},
+		Subscribe:             subscribe,
+		RequestPriceData:      requestPriceData,
+		SignalReactionAtLevel: signalLevelReaction,
+		SignalReactionAtVWAP: func(signal shared.ReactionAtVWAP) {
+			// TODO.
+		},
+		RequestVWAPData: requestVWAPData,
+		RequestVWAP:     requestVWAP,
 		FetchCaughtUpState: func(market string) (bool, error) {
 			return true, nil
 		},

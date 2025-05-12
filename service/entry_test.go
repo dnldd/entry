@@ -18,7 +18,7 @@ import (
 	"github.com/rs/zerolog/pkgerrors"
 )
 
-func setupEntry() (*Entry, chan shared.LevelSignal, chan shared.LevelReaction, chan shared.EntrySignal, error) {
+func setupEntry() (*Entry, chan shared.LevelSignal, chan shared.ReactionAtLevel, chan shared.EntrySignal, error) {
 	var err error
 	var marketMgr *market.Manager
 	var fetchMgr *fetch.Manager
@@ -133,24 +133,33 @@ func setupEntry() (*Entry, chan shared.LevelSignal, chan shared.LevelReaction, c
 		Logger:       &positionMgrLogger,
 	})
 
-	levelReactionLeak := make(chan shared.LevelReaction, 10)
-	levelReactionFunc := func(signal shared.LevelReaction) {
+	levelReactionLeak := make(chan shared.ReactionAtLevel, 10)
+	levelReactionFunc := func(signal shared.ReactionAtLevel) {
 		if entryEngine != nil {
 			levelReactionLeak <- signal
-			entryEngine.SignalLevelReaction(signal)
+			entryEngine.SignalReactionAtLevel(signal)
+		}
+	}
+
+	vwapReactionLeak := make(chan shared.ReactionAtVWAP, 10)
+	vwapReactionFunc := func(signal shared.ReactionAtVWAP) {
+		if entryEngine != nil {
+			vwapReactionLeak <- signal
+			entryEngine.SignalReactionAtVWAP(signal)
 		}
 	}
 
 	priceActionMgrLogger := logger.With().Str("component", "priceactionmanager").Logger()
 	priceActionMgr, err = priceaction.NewManager(&priceaction.ManagerConfig{
-		Markets:             cfg.Markets,
-		Subscribe:           fetchMgr.Subscribe,
-		RequestPriceData:    marketMgr.SendPriceDataRequest,
-		RequestVWAPData:     marketMgr.SendVWAPDataRequest,
-		RequestVWAP:         marketMgr.SendVWAPRequest,
-		FetchCaughtUpState:  marketMgr.FetchCaughtUpState,
-		SignalLevelReaction: levelReactionFunc,
-		Logger:              &priceActionMgrLogger,
+		Markets:               cfg.Markets,
+		Subscribe:             fetchMgr.Subscribe,
+		RequestPriceData:      marketMgr.SendPriceDataRequest,
+		RequestVWAPData:       marketMgr.SendVWAPDataRequest,
+		RequestVWAP:           marketMgr.SendVWAPRequest,
+		FetchCaughtUpState:    marketMgr.FetchCaughtUpState,
+		SignalReactionAtLevel: levelReactionFunc,
+		SignalReactionAtVWAP:  vwapReactionFunc,
+		Logger:                &priceActionMgrLogger,
 	})
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("creating price action manager: %v", err)
