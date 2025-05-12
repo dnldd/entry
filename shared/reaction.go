@@ -47,3 +47,15 @@ func (m PriceReaction) String() string {
 		return "unknown"
 	}
 }
+
+// ReactionAtFocus describes the base struct for a reaction of price relative to a key focus – a static or dynamic level.
+type ReactionAtFocus struct {
+	Market        string
+	Timeframe     Timeframe
+	LevelKind     LevelKind
+	CurrentPrice  float64
+	Reaction      PriceReaction
+	PriceMovement []PriceMovement
+	Status        chan StatusCode
+	CreatedOn     time.Time
+}
