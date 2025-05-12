@@ -1,16 +1,18 @@
 package shared
 
-// Movement represents price movement relative to a point of interest.
-type Movement int
+import "time"
+
+// PriceMovement represents price movement relative to a point of interest.
+type PriceMovement int
 
 const (
-	Above Movement = iota
+	Above PriceMovement = iota
 	Below
 	Equal
 )
 
 // String stringifies the provided price movement.
-func (m Movement) String() string {
+func (m PriceMovement) String() string {
 	switch m {
 	case Above:
 		return "above"
@@ -23,17 +25,17 @@ func (m Movement) String() string {
 	}
 }
 
-// Reaction represents price reaction relative to a point of interest.
-type Reaction int
+// PriceReaction represents price reaction relative to a point of interest.
+type PriceReaction int
 
 const (
-	Chop Reaction = iota
+	Chop PriceReaction = iota
 	Reversal
 	Break
 )
 
-// String stringifies the provided price movement.
-func (m Reaction) String() string {
+// String stringifies the provided reaction.
+func (m PriceReaction) String() string {
 	switch m {
 	case Chop:
 		return "chop"

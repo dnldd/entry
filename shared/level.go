@@ -60,8 +60,8 @@ func NewLevel(market string, price float64, candle *Candlestick) *Level {
 	return lvl
 }
 
-// ApplyReaction applies the level reaction to the provided level.
-func (l *Level) ApplyReaction(reaction Reaction) {
+// ApplyReaction applies the price reaction to the provided level.
+func (l *Level) ApplyPriceReaction(reaction PriceReaction) {
 	switch reaction {
 	case Chop:
 		// do nothing.

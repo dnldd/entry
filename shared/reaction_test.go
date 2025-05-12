@@ -2,30 +2,30 @@ package shared
 
 import "testing"
 
-func TestMovementString(t *testing.T) {
+func TestPriceMovementString(t *testing.T) {
 	tests := []struct {
 		name     string
-		movement Movement
+		movement PriceMovement
 		want     string
 	}{
 		{
-			"above movement",
+			"above price movement",
 			Above,
 			"above",
 		},
 		{
-			"below movement",
+			"below price movement",
 			Below,
 			"below",
 		},
 		{
-			"equal movement",
+			"equal price movement",
 			Equal,
 			"equal",
 		},
 		{
-			"unknown movement",
-			Movement(999),
+			"unknown price movement",
+			PriceMovement(999),
 			"unknown",
 		},
 	}
@@ -38,30 +38,30 @@ func TestMovementString(t *testing.T) {
 	}
 }
 
-func TestReactionString(t *testing.T) {
+func TestPriceReactionString(t *testing.T) {
 	tests := []struct {
 		name     string
-		reaction Reaction
+		reaction PriceReaction
 		want     string
 	}{
 		{
-			"chop reaction",
+			"chop price reaction",
 			Chop,
 			"chop",
 		},
 		{
-			"reversal reaction",
+			"reversal price reaction",
 			Reversal,
 			"reversal",
 		},
 		{
-			"break reaction",
+			"break price reaction",
 			Break,
 			"break",
 		},
 		{
-			"unknown reaction",
-			Reaction(999),
+			"unknown price reaction",
+			PriceReaction(999),
 			"unknown",
 		},
 	}
