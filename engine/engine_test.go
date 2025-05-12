@@ -69,21 +69,24 @@ func TestEngine(t *testing.T) {
 
 	// Ensure the engine can handle a level reaction signal.
 	market := "^GSPC"
-	levelReaction := shared.LevelReaction{
-		Market: market,
+	levelReaction := shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asiaSessionTime,
+			Status:        make(chan shared.StatusCode, 1),
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(2),
 			Kind:   shared.Support,
 		},
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above},
-		Reaction:      shared.Reversal,
-		CreatedOn:     asiaSessionTime,
-		Status:        make(chan shared.StatusCode, 1),
 	}
 
-	eng.SignalLevelReaction(levelReaction)
+	eng.SignalReactionAtLevel(levelReaction)
 	<-levelReaction.Status
 
 	time.Sleep(time.Millisecond * 400)
@@ -115,23 +118,26 @@ func TestFillManagerChannels(t *testing.T) {
 
 	levelPrice := float64(8)
 	level := shared.NewLevel(market, levelPrice, &candle)
-	levelReaction := shared.LevelReaction{
-		Market:        market,
-		Timeframe:     shared.FiveMinute,
-		Level:         level,
-		PriceMovement: []shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above},
-		CurrentPrice:  10,
-		Reaction:      shared.Reversal,
-		CreatedOn:     now,
-		Status:        make(chan shared.StatusCode, 1),
+	levelReaction := shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     level.Kind,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			CurrentPrice:  10,
+			Reaction:      shared.Reversal,
+			CreatedOn:     now,
+			Status:        make(chan shared.StatusCode, 1),
+		},
+		Level: level,
 	}
 
 	// Fill all the channels used by the manager.
 	for range bufferSize + 1 {
-		eng.SignalLevelReaction(levelReaction)
+		eng.SignalReactionAtLevel(levelReaction)
 	}
 
-	assert.Equal(t, len(eng.levelReactionSignals), bufferSize)
+	assert.Equal(t, len(eng.reactionAtLevelSignals), bufferSize)
 }
 
 func TestHandleLevelReaction(t *testing.T) {
@@ -143,58 +149,67 @@ func TestHandleLevelReaction(t *testing.T) {
 	asiaSessionTime, _ := generateSessionTimes(t)
 
 	market := "^GSPC"
-	priceReversalReaction := &shared.LevelReaction{
-		Market: market,
+	priceReversalReaction := &shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asiaSessionTime,
+			Status:        make(chan shared.StatusCode, 1),
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(2),
 			Kind:   shared.Support,
 		},
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above},
-		Reaction:      shared.Reversal,
-		CreatedOn:     asiaSessionTime,
-		Status:        make(chan shared.StatusCode, 1),
 	}
 
 	// Ensure the engine can handle a price reversal level reaction signal.
-	eng.handleLevelReaction(priceReversalReaction)
+	eng.handleReactionAtLevel(priceReversalReaction)
 	<-priceReversalReaction.Status
 
-	breakLevelReaction := &shared.LevelReaction{
-		Market: market,
+	breakLevelReaction := &shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Resistance,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Break,
+			CreatedOn:     asiaSessionTime,
+			Status:        make(chan shared.StatusCode, 1),
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(2),
 			Kind:   shared.Resistance,
 		},
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above},
-		Reaction:      shared.Break,
-		CreatedOn:     asiaSessionTime,
-		Status:        make(chan shared.StatusCode, 1),
 	}
 
 	// Ensure the engine can handle a break level reaction signal.
-	eng.handleLevelReaction(breakLevelReaction)
+	eng.handleReactionAtLevel(breakLevelReaction)
 	<-breakLevelReaction.Status
 
-	chopLevelReaction := &shared.LevelReaction{
-		Market: market,
+	chopLevelReaction := &shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Resistance,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Below, shared.Above, shared.Below},
+			Reaction:      shared.Chop,
+			CreatedOn:     asiaSessionTime,
+			Status:        make(chan shared.StatusCode, 1),
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(2),
 			Kind:   shared.Resistance,
 		},
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Above, shared.Below, shared.Above, shared.Below},
-		Reaction:      shared.Chop,
-		CreatedOn:     asiaSessionTime,
-		Status:        make(chan shared.StatusCode, 1),
 	}
 
 	// Ensure the engine can handle a break chop level reaction signal.
-	eng.handleLevelReaction(chopLevelReaction)
+	eng.handleReactionAtLevel(chopLevelReaction)
 	<-chopLevelReaction.Status
 }
 
@@ -350,40 +365,46 @@ func TestEstimateStopLoss(t *testing.T) {
 	eng, _, _ := setupEngine(&avgVolume, []*shared.CandleMetadata{}, &marketSkew)
 
 	market := "^GSPC"
-	supportLevelReaction := &shared.LevelReaction{
-		Market: market,
+	supportLevelReaction := &shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asianSessionTime,
+			CurrentPrice:  float64(16),
+			Status:        make(chan shared.StatusCode, 1),
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(5),
 			Kind:   shared.Support,
 		},
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above},
-		Reaction:      shared.Reversal,
-		CreatedOn:     asianSessionTime,
-		CurrentPrice:  float64(16),
-		Status:        make(chan shared.StatusCode, 1),
 	}
 
-	resistanceLevelReaction := &shared.LevelReaction{
-		Market: market,
+	resistanceLevelReaction := &shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Resistance,
+			PriceMovement: []shared.PriceMovement{shared.Below, shared.Below, shared.Below, shared.Below},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asianSessionTime,
+			CurrentPrice:  float64(4),
+			Status:        make(chan shared.StatusCode, 1),
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(9),
 			Kind:   shared.Resistance,
 		},
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Below, shared.Below, shared.Below, shared.Below},
-		Reaction:      shared.Reversal,
-		CreatedOn:     asianSessionTime,
-		CurrentPrice:  float64(4),
-		Status:        make(chan shared.StatusCode, 1),
 	}
 
 	tests := []struct {
 		name          string
 		meta          []*shared.CandleMetadata
-		levelReaction *shared.LevelReaction
+		levelReaction *shared.ReactionAtLevel
 		wantErr       bool
 		stoploss      float64
 		pointsRange   float64
@@ -423,8 +444,7 @@ func TestEstimateStopLoss(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		sl, pr, err := eng.estimateStopLoss(test.meta, test.levelReaction.Level.Kind,
-			test.levelReaction.Reaction, test.levelReaction.CurrentPrice)
+		sl, pr, err := eng.estimateStopLoss(&test.levelReaction.ReactionAtFocus, test.meta)
 		if test.wantErr && err == nil {
 			t.Errorf("%s: expected an error, got none", test.name)
 		}
@@ -453,23 +473,26 @@ func TestEvaluateHighVolumeSession(t *testing.T) {
 
 	asianSessionTime, londonSessionTime := generateSessionTimes(t)
 	market := "^GSPC"
-	levelReaction := shared.LevelReaction{
-		Market: market,
+	levelReaction := shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asianSessionTime,
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(4),
 			Kind:   shared.Support,
 		},
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above},
-		Reaction:      shared.Reversal,
-		CreatedOn:     asianSessionTime,
 	}
 
 	// Ensure confluence points are not awarded for asian session.
 	confluence := uint32(0)
 	reasons := map[shared.Reason]struct{}{}
-	err := eng.evaluateHighVolumeSession(&levelReaction, &confluence, reasons)
+	err := eng.evaluateHighVolumeSession(&levelReaction.ReactionAtFocus, &confluence, reasons)
 	assert.NoError(t, err)
 	assert.Equal(t, confluence, uint32(0))
 	assert.Equal(t, len(reasons), 0)
@@ -477,7 +500,7 @@ func TestEvaluateHighVolumeSession(t *testing.T) {
 	// Ensure confluence points are awarded for times within the high volume  window (london & new york)
 	levelReaction.CreatedOn = londonSessionTime
 
-	err = eng.evaluateHighVolumeSession(&levelReaction, &confluence, reasons)
+	err = eng.evaluateHighVolumeSession(&levelReaction.ReactionAtFocus, &confluence, reasons)
 	assert.NoError(t, err)
 	assert.Equal(t, confluence, uint32(1))
 	assert.Equal(t, len(reasons), 1)
@@ -610,34 +633,40 @@ func TestEvaluatePriceReversalAtLevelConfirmation(t *testing.T) {
 	reasons := map[shared.Reason]struct{}{}
 	sentiment := shared.Neutral
 	market := "^GSPC"
-	supportLevelReaction := shared.LevelReaction{
-		Market: market,
+	supportLevelReaction := shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asianSessionTime,
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(4),
 			Kind:   shared.Support,
 		},
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above},
-		Reaction:      shared.Reversal,
-		CreatedOn:     asianSessionTime,
 	}
 
-	resistanceLevelReaction := shared.LevelReaction{
-		Market: market,
+	resistanceLevelReaction := shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Resistance,
+			PriceMovement: []shared.PriceMovement{shared.Below, shared.Below, shared.Below, shared.Below},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asianSessionTime,
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(4),
 			Kind:   shared.Resistance,
 		},
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Below, shared.Below, shared.Below, shared.Below},
-		Reaction:      shared.Reversal,
-		CreatedOn:     asianSessionTime,
 	}
 
 	// Ensure bullish price reactions can be confirmed.
-	err := eng.evaluatePriceReversalAtLevelConfirmation(&supportLevelReaction, &confluence, &sentiment, reasons)
+	err := eng.evaluatePriceReversalConfirmation(&supportLevelReaction.ReactionAtFocus, &confluence, &sentiment, reasons)
 	assert.NoError(t, err)
 	assert.Equal(t, confluence, uint32(1))
 	assert.Equal(t, sentiment, shared.Bullish)
@@ -650,7 +679,7 @@ func TestEvaluatePriceReversalAtLevelConfirmation(t *testing.T) {
 	confluence = 0
 	reasons = map[shared.Reason]struct{}{}
 	sentiment = shared.Neutral
-	err = eng.evaluatePriceReversalAtLevelConfirmation(&resistanceLevelReaction, &confluence, &sentiment, reasons)
+	err = eng.evaluatePriceReversalConfirmation(&resistanceLevelReaction.ReactionAtFocus, &confluence, &sentiment, reasons)
 	assert.NoError(t, err)
 	assert.Equal(t, confluence, uint32(1))
 	assert.Equal(t, sentiment, shared.Bearish)
@@ -660,20 +689,23 @@ func TestEvaluatePriceReversalAtLevelConfirmation(t *testing.T) {
 	assert.Equal(t, slice[0], shared.ReversalAtResistance)
 
 	// Ensure the reversal confirmation errors if the level reaction is not a reversal.
-	invalidReversalLevelReaction := shared.LevelReaction{
-		Market: market,
+	invalidReversalLevelReaction := shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Break,
+			CreatedOn:     asianSessionTime,
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(4),
 			Kind:   shared.Support,
 		},
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above},
-		Reaction:      shared.Break,
-		CreatedOn:     asianSessionTime,
 	}
 
-	err = eng.evaluatePriceReversalAtLevelConfirmation(&invalidReversalLevelReaction, &confluence, &sentiment, reasons)
+	err = eng.evaluatePriceReversalConfirmation(&invalidReversalLevelReaction.ReactionAtFocus, &confluence, &sentiment, reasons)
 	assert.Error(t, err)
 
 }
@@ -819,25 +851,28 @@ func TestEvaluatePriceReversalAtLevel(t *testing.T) {
 	marketSkew := shared.NeutralSkew
 	eng, _, _ := setupEngine(&avgVolume, candleMeta, &marketSkew)
 	market := "^GSPC"
-	levelReaction := &shared.LevelReaction{
-		Market: market,
+	levelReaction := &shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asiaSessionTime,
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(2),
 			Kind:   shared.Support,
 		},
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above},
-		Reaction:      shared.Reversal,
-		CreatedOn:     asiaSessionTime,
 	}
 
 	// Ensure price reversal is not evaluated if the meta is an empty slice.
-	signal, _, _, err := eng.evaluatePriceReversalAtLevel(levelReaction, []*shared.CandleMetadata{})
+	signal, _, _, err := eng.evaluatePriceReversal(&levelReaction.ReactionAtFocus, []*shared.CandleMetadata{}, minLevelReversalConfluence)
 	assert.Error(t, err)
 
 	// Ensure price reversal is evualuated as expected with valid input.
-	signal, confluence, reasons, err := eng.evaluatePriceReversalAtLevel(levelReaction, candleMeta)
+	signal, confluence, reasons, err := eng.evaluatePriceReversal(&levelReaction.ReactionAtFocus, candleMeta, minLevelReversalConfluence)
 	assert.NoError(t, err)
 	assert.In(t, shared.ReversalAtSupport, reasons)
 	assert.In(t, shared.StrongMove, reasons)
@@ -894,26 +929,29 @@ func TestEvaluateLevelBreak(t *testing.T) {
 	marketSkew := shared.NeutralSkew
 	eng, _, _ := setupEngine(&avgVolume, candleMeta, &marketSkew)
 	market := "^GSPC"
-	levelReaction := &shared.LevelReaction{
-		Market: market,
+	levelReaction := &shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			CurrentPrice:  float64(18),
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Resistance,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Break,
+			CreatedOn:     asiaSessionTime,
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(5),
 			Kind:   shared.Resistance,
 		},
-		CurrentPrice:  float64(18),
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above},
-		Reaction:      shared.Break,
-		CreatedOn:     asiaSessionTime,
 	}
 
 	// Ensure price break is not evaluated if the meta is an empty slice.
-	signal, _, _, err := eng.evaluateLevelBreak(levelReaction, []*shared.CandleMetadata{})
+	signal, _, _, err := eng.evaluateLevelBreak(&levelReaction.ReactionAtFocus, []*shared.CandleMetadata{}, minLevelBreakConfluence)
 	assert.Error(t, err)
 
 	// Ensure price reversal is evualuated as expected with valid input.
-	signal, confluence, reasons, err := eng.evaluateLevelBreak(levelReaction, candleMeta)
+	signal, confluence, reasons, err := eng.evaluateLevelBreak(&levelReaction.ReactionAtFocus, candleMeta, minLevelBreakConfluence)
 	assert.NoError(t, err)
 	assert.In(t, shared.BreakAboveResistance, reasons)
 	assert.In(t, shared.StrongMove, reasons)
@@ -1017,43 +1055,49 @@ func TestEvaluatePriceReversalStrength(t *testing.T) {
 	marketSkew := longSkew
 	eng, entrySignals, exitSignals := setupEngine(&avgVolume, candleMeta, &marketSkew)
 	market := "^GSPC"
-	supportLevelReaction := &shared.LevelReaction{
-		Market: market,
+	supportLevelReaction := &shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			LevelKind:     shared.Support,
+			CurrentPrice:  float64(14),
+			Timeframe:     shared.FiveMinute,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asiaSessionTime,
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(3),
 			Kind:   shared.Support,
 		},
-		CurrentPrice:  float64(14),
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above},
-		Reaction:      shared.Reversal,
-		CreatedOn:     asiaSessionTime,
 	}
 
-	resistanceLevelReaction := &shared.LevelReaction{
-		Market: market,
+	resistanceLevelReaction := &shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			CurrentPrice:  float64(1),
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Resistance,
+			PriceMovement: []shared.PriceMovement{shared.Below, shared.Below, shared.Below, shared.Below},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asiaSessionTime,
+		},
 		Level: &shared.Level{
 			Market: market,
 			Price:  float64(10),
 			Kind:   shared.Resistance,
 		},
-		CurrentPrice:  float64(1),
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Below, shared.Below, shared.Below, shared.Below},
-		Reaction:      shared.Reversal,
-		CreatedOn:     asiaSessionTime,
 	}
 
 	// Ensure a support price reversal triggers a long entry signal for a market long or neutral skewed.
-	err := eng.evaluatePriceReversalStrength(supportLevelReaction, candleMeta)
+	err := eng.evaluatePriceReversalStrength(&supportLevelReaction.ReactionAtFocus, candleMeta, minLevelReversalConfluence)
 	assert.NoError(t, err)
 	entrySignal := <-entrySignals
 	assert.Equal(t, entrySignal.Direction, shared.Long)
 
 	// Ensure a support price reversal triggers a short exit signal for a market short skewed.
 	marketSkew = shortSkew
-	err = eng.evaluatePriceReversalStrength(supportLevelReaction, candleMeta)
+	err = eng.evaluatePriceReversalStrength(&supportLevelReaction.ReactionAtFocus, candleMeta, minLevelReversalConfluence)
 	assert.NoError(t, err)
 	exitSignal := <-exitSignals
 	assert.Equal(t, exitSignal.Direction, shared.Short)
@@ -1061,7 +1105,7 @@ func TestEvaluatePriceReversalStrength(t *testing.T) {
 	// Ensure a resistance price reversal triggers a long exit signal for a market long skewed.
 	marketSkew = longSkew
 	candleMeta = resistanceCandleMeta
-	err = eng.evaluatePriceReversalStrength(resistanceLevelReaction, candleMeta)
+	err = eng.evaluatePriceReversalStrength(&resistanceLevelReaction.ReactionAtFocus, candleMeta, minLevelReversalConfluence)
 	assert.NoError(t, err)
 	exitSignal = <-exitSignals
 	assert.Equal(t, exitSignal.Direction, shared.Long)
@@ -1069,7 +1113,7 @@ func TestEvaluatePriceReversalStrength(t *testing.T) {
 	// Ensure a resistance price reversal triggers a short entry signal for a market short or neutral skewed.
 	marketSkew = shortSkew
 	candleMeta = resistanceCandleMeta
-	err = eng.evaluatePriceReversalStrength(resistanceLevelReaction, candleMeta)
+	err = eng.evaluatePriceReversalStrength(&resistanceLevelReaction.ReactionAtFocus, candleMeta, minLevelReversalConfluence)
 	assert.NoError(t, err)
 	entrySignal = <-entrySignals
 	assert.Equal(t, entrySignal.Direction, shared.Short)
@@ -1170,57 +1214,53 @@ func TestEvaluateLevelBreakStrength(t *testing.T) {
 	marketSkew := shortSkew
 	eng, entrySignals, exitSignals := setupEngine(&avgVolume, candleMeta, &marketSkew)
 	market := "^GSPC"
-	supportLevelReaction := &shared.LevelReaction{
-		Market: market,
-		Level: &shared.Level{
-			Market: market,
-			Price:  float64(10),
-			Kind:   shared.Support,
+	supportLevelReaction := &shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			CurrentPrice:  float64(1),
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Below, shared.Below, shared.Below, shared.Below},
+			Reaction:      shared.Break,
+			CreatedOn:     asiaSessionTime,
 		},
-		CurrentPrice:  float64(1),
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Below, shared.Below, shared.Below, shared.Below},
-		Reaction:      shared.Break,
-		CreatedOn:     asiaSessionTime,
 	}
 
-	resistanceLevelReaction := &shared.LevelReaction{
-		Market: market,
-		Level: &shared.Level{
-			Market: market,
-			Price:  float64(5),
-			Kind:   shared.Resistance,
+	resistanceLevelReaction := &shared.ReactionAtLevel{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			CurrentPrice:  float64(18),
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Resistance,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Break,
+			CreatedOn:     asiaSessionTime,
 		},
-		CurrentPrice:  float64(18),
-		Timeframe:     shared.FiveMinute,
-		PriceMovement: []shared.Movement{shared.Above, shared.Above, shared.Above, shared.Above},
-		Reaction:      shared.Break,
-		CreatedOn:     asiaSessionTime,
 	}
 
 	// Ensure a support price break triggers a short entry signal for a market short or neutral skewed.
-	err := eng.evaluateLevelBreakStrength(supportLevelReaction, candleMeta)
+	err := eng.evaluateBreakStrength(&supportLevelReaction.ReactionAtFocus, candleMeta, minLevelBreakConfluence)
 	assert.NoError(t, err)
 	entrySignal := <-entrySignals
 	assert.Equal(t, entrySignal.Direction, shared.Short)
 
 	// Ensure a support price break triggers a short exit signal for a market long skewed.
 	marketSkew = longSkew
-	err = eng.evaluateLevelBreakStrength(supportLevelReaction, candleMeta)
+	err = eng.evaluateBreakStrength(&supportLevelReaction.ReactionAtFocus, candleMeta, minLevelBreakConfluence)
 	assert.NoError(t, err)
 	exitSignal := <-exitSignals
 	assert.Equal(t, exitSignal.Direction, shared.Long)
 
 	// Ensure a resistance level break triggers a long entry signal for a market long skewed.
 	candleMeta = resistanceBreakCandleMeta
-	err = eng.evaluateLevelBreakStrength(resistanceLevelReaction, candleMeta)
+	err = eng.evaluateBreakStrength(&resistanceLevelReaction.ReactionAtFocus, candleMeta, minLevelBreakConfluence)
 	assert.NoError(t, err)
 	entrySignal = <-entrySignals
 	assert.Equal(t, entrySignal.Direction, shared.Long)
 
 	// Ensure a resistance level break triggers a short exit signal for a market short skewed.
 	marketSkew = shortSkew
-	err = eng.evaluateLevelBreakStrength(resistanceLevelReaction, candleMeta)
+	err = eng.evaluateBreakStrength(&resistanceLevelReaction.ReactionAtFocus, candleMeta, minLevelBreakConfluence)
 	assert.NoError(t, err)
 	exitSignal = <-exitSignals
 	assert.Equal(t, exitSignal.Direction, shared.Short)
