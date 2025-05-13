@@ -29,6 +29,8 @@ func TestMarket(t *testing.T) {
 	now, _, err := shared.NewYorkTime()
 	assert.NoError(t, err)
 
+	oneYearAgo := now.AddDate(-1, 0, 0)
+
 	// Ensure adding a nil position returns an error.
 	err = mkt.AddPosition(nil)
 	assert.Error(t, err)
@@ -41,7 +43,7 @@ func TestMarket(t *testing.T) {
 		Price:     10,
 		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
 		StopLoss:  8,
-		CreatedOn: now,
+		CreatedOn: oneYearAgo,
 		Status:    make(chan shared.StatusCode, 1),
 	}
 
@@ -59,7 +61,7 @@ func TestMarket(t *testing.T) {
 		Price:     10,
 		Reasons:   []shared.Reason{shared.BullishEngulfing, shared.StrongVolume},
 		StopLoss:  8,
-		CreatedOn: now,
+		CreatedOn: oneYearAgo,
 		Status:    make(chan shared.StatusCode, 1),
 	}
 
@@ -85,13 +87,12 @@ func TestMarket(t *testing.T) {
 
 	// Ensure tracked positions can be updated.
 	candle := &shared.Candlestick{
-		Open:   12,
-		Close:  15,
-		High:   16,
-		Low:    8,
-		Volume: 3,
-		Date:   now,
-
+		Open:      12,
+		Close:     15,
+		High:      16,
+		Low:       8,
+		Volume:    3,
+		Date:      oneYearAgo,
 		Market:    market,
 		Timeframe: shared.FiveMinute,
 		Status:    make(chan shared.StatusCode, 1),
@@ -110,7 +111,7 @@ func TestMarket(t *testing.T) {
 		Price:     10,
 		Reasons:   []shared.Reason{shared.BearishEngulfing, shared.StrongVolume},
 		StopLoss:  12,
-		CreatedOn: now,
+		CreatedOn: oneYearAgo,
 		Status:    make(chan shared.StatusCode, 1),
 	}
 
@@ -134,14 +135,14 @@ func TestMarket(t *testing.T) {
 		Price:      18,
 		Reasons:    []shared.Reason{shared.BearishEngulfing},
 		Confluence: 8,
-		CreatedOn:  now,
+		CreatedOn:  oneYearAgo,
 		Status:     make(chan shared.StatusCode, 1),
 	}
 
 	closedPos, err := mkt.ClosePositions(wrongMarketExitSignal)
 	assert.Error(t, err)
 
-	// Ensure a tracked market positions can be closed.
+	// Ensure a tracked market position can be closed.
 	longExitSignal := &shared.ExitSignal{
 		Market:     market,
 		Timeframe:  shared.FiveMinute,
@@ -149,7 +150,7 @@ func TestMarket(t *testing.T) {
 		Price:      18,
 		Reasons:    []shared.Reason{shared.BearishEngulfing},
 		Confluence: 8,
-		CreatedOn:  now,
+		CreatedOn:  oneYearAgo,
 		Status:     make(chan shared.StatusCode, 1),
 	}
 	closedPos, err = mkt.ClosePositions(longExitSignal)
@@ -195,7 +196,7 @@ func TestMarket(t *testing.T) {
 		Price:      12,
 		Reasons:    []shared.Reason{shared.BullishEngulfing},
 		Confluence: 8,
-		CreatedOn:  now,
+		CreatedOn:  oneYearAgo,
 		Status:     make(chan shared.StatusCode, 1),
 	}
 	closedPos, err = mkt.ClosePositions(shortExitSignal)
@@ -204,4 +205,19 @@ func TestMarket(t *testing.T) {
 
 	// Ensure the market's skew resets once all positions are closed.
 	assert.Equal(t, shared.MarketSkew(mkt.skew.Load()), shared.NeutralSkew)
+
+	mkt.positionMtx.RLock()
+	sizeBefore = len(mkt.positions)
+	mkt.positionMtx.RUnlock()
+
+	// Ensure old closed positions can be purged.
+	err = mkt.PurgeClosedPositionsJob()
+	assert.NoError(t, err)
+
+	mkt.positionMtx.RLock()
+	sizeAfter = len(mkt.positions)
+	mkt.positionMtx.RUnlock()
+
+	assert.NotEqual(t, sizeBefore, sizeAfter)
+
 }

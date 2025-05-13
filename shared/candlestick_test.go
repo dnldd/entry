@@ -463,6 +463,293 @@ func TestSentimentString(t *testing.T) {
 	}
 }
 
+func TestCandlestickStrength(t *testing.T) {
+	tests := []struct {
+		name       string
+		candleMeta CandleMetadata
+		score      uint32
+	}{
+		{
+			"doji candle - low strength",
+			CandleMetadata{
+				Kind:      Doji,
+				Sentiment: Bullish,
+				Momentum:  Low,
+				Volume:    6,
+				Engulfing: false,
+				High:      9,
+				Low:       1,
+				Date:      time.Time{},
+			},
+			0,
+		},
+		{
+			"doji candle - medium strength",
+			CandleMetadata{
+				Kind:      Doji,
+				Sentiment: Bullish,
+				Momentum:  Medium,
+				Volume:    6,
+				Engulfing: false,
+				High:      9,
+				Low:       1,
+				Date:      time.Time{},
+			},
+			0,
+		},
+		{
+			"pinbar candle - low strength",
+			CandleMetadata{
+				Kind:      Pinbar,
+				Sentiment: Bullish,
+				Momentum:  Low,
+				Volume:    6,
+				Engulfing: false,
+				High:      9,
+				Low:       1,
+				Date:      time.Time{},
+			},
+			0,
+		},
+		{
+			"pinbar candle - medium strength",
+			CandleMetadata{
+				Kind:      Pinbar,
+				Sentiment: Bullish,
+				Momentum:  Medium,
+				Volume:    6,
+				Engulfing: false,
+				High:      9,
+				Low:       1,
+				Date:      time.Time{},
+			},
+			3,
+		},
+		{
+			"pinbar candle - high strength",
+			CandleMetadata{
+				Kind:      Pinbar,
+				Sentiment: Bullish,
+				Momentum:  Medium,
+				Volume:    6,
+				Engulfing: false,
+				High:      9,
+				Low:       1,
+				Date:      time.Time{},
+			},
+			3,
+		},
+		{
+			"marubozu candle - low strength",
+			CandleMetadata{
+				Kind:      Marubozu,
+				Sentiment: Bearish,
+				Momentum:  Low,
+				Volume:    6,
+				Engulfing: false,
+				High:      9,
+				Low:       1,
+				Date:      time.Time{},
+			},
+			0,
+		},
+		{
+			"marubozu candle - medium strength",
+			CandleMetadata{
+				Kind:      Marubozu,
+				Sentiment: Bearish,
+				Momentum:  Medium,
+				Volume:    6,
+				Engulfing: false,
+				High:      9,
+				Low:       1,
+				Date:      time.Time{},
+			},
+			2,
+		},
+		{
+			"marubozu candle - high strength",
+			CandleMetadata{
+				Kind:      Marubozu,
+				Sentiment: Bearish,
+				Momentum:  Medium,
+				Volume:    6,
+				Engulfing: false,
+				High:      9,
+				Low:       1,
+				Date:      time.Time{},
+			},
+			2,
+		},
+		{
+			"marubozu candle - high strength, engulfing",
+			CandleMetadata{
+				Kind:      Marubozu,
+				Sentiment: Bearish,
+				Momentum:  Medium,
+				Volume:    6,
+				Engulfing: true,
+				High:      9,
+				Low:       1,
+				Date:      time.Time{},
+			},
+			4,
+		},
+	}
+
+	for _, test := range tests {
+		score := test.candleMeta.Strength()
+		if score != test.score {
+			t.Errorf("%s: expected %v, got %v", test.name, test.score, score)
+		}
+	}
+}
+
+func TestFetchSignalCandle(t *testing.T) {
+	bullishCandleMeta := []*CandleMetadata{
+		{
+			Kind:      Marubozu,
+			Sentiment: Bearish,
+			Momentum:  Medium,
+			Volume:    float64(3),
+			Engulfing: false,
+			High:      7,
+			Low:       3,
+			Date:      time.Time{},
+		},
+		{
+			Kind:      Marubozu,
+			Sentiment: Bullish,
+			Momentum:  High,
+			Volume:    float64(6),
+			Engulfing: true,
+			High:      9,
+			Low:       2,
+			Date:      time.Time{},
+		},
+		{
+			Kind:      Pinbar,
+			Sentiment: Bullish,
+			Momentum:  Medium,
+			Volume:    float64(4),
+			Engulfing: false,
+			High:      12,
+			Low:       5,
+			Date:      time.Time{},
+		},
+		{
+			Kind:      Pinbar,
+			Sentiment: Bullish,
+			Momentum:  Medium,
+			Volume:    float64(4),
+			Engulfing: false,
+			High:      16,
+			Low:       8,
+			Date:      time.Time{},
+		},
+	}
+
+	bearishCandleMeta := []*CandleMetadata{
+		{
+			Kind:      Marubozu,
+			Sentiment: Bullish,
+			Momentum:  Medium,
+			Volume:    float64(3),
+			Engulfing: false,
+			High:      9,
+			Low:       7,
+			Date:      time.Time{},
+		},
+		{
+			Kind:      Marubozu,
+			Sentiment: Bearish,
+			Momentum:  High,
+			Volume:    float64(6),
+			Engulfing: true,
+			High:      10,
+			Low:       6,
+			Date:      time.Time{},
+		},
+		{
+			Kind:      Pinbar,
+			Sentiment: Bearish,
+			Momentum:  Medium,
+			Volume:    float64(4),
+			Engulfing: false,
+			High:      9,
+			Low:       5,
+			Date:      time.Time{},
+		},
+		{
+			Kind:      Pinbar,
+			Sentiment: Bearish,
+			Momentum:  Medium,
+			Volume:    float64(4),
+			Engulfing: false,
+			High:      7,
+			Low:       4,
+			Date:      time.Time{},
+		},
+	}
+
+	// Ensure the signal candle can be fetched from a candle metadata slice.
+	meta := FetchSignalCandle(bullishCandleMeta, Bullish)
+	assert.Equal(t, meta, bullishCandleMeta[1])
+
+	meta = FetchSignalCandle(bearishCandleMeta, Bearish)
+	assert.Equal(t, meta, bearishCandleMeta[1])
+}
+
+func TestCandleMetaRangeHighAndLow(t *testing.T) {
+	bullishCandleMeta := []*CandleMetadata{
+		{
+			Kind:      Marubozu,
+			Sentiment: Bearish,
+			Momentum:  Medium,
+			Volume:    float64(3),
+			Engulfing: false,
+			High:      7,
+			Low:       3,
+			Date:      time.Time{},
+		},
+		{
+			Kind:      Marubozu,
+			Sentiment: Bullish,
+			Momentum:  High,
+			Volume:    float64(6),
+			Engulfing: true,
+			High:      9,
+			Low:       2,
+			Date:      time.Time{},
+		},
+		{
+			Kind:      Pinbar,
+			Sentiment: Bullish,
+			Momentum:  Medium,
+			Volume:    float64(4),
+			Engulfing: false,
+			High:      12,
+			Low:       5,
+			Date:      time.Time{},
+		},
+		{
+			Kind:      Pinbar,
+			Sentiment: Bullish,
+			Momentum:  Medium,
+			Volume:    float64(4),
+			Engulfing: false,
+			High:      16,
+			Low:       8,
+			Date:      time.Time{},
+		},
+	}
+
+	// Ensure the candle metadata range high and low can be fetched.
+	high, low := CandleMetaRangeHighAndLow(bullishCandleMeta)
+	assert.Equal(t, high, float64(16))
+	assert.Equal(t, low, float64(2))
+}
+
 func TestParseCandlesticks(t *testing.T) {
 	market := "^GSPC"
 	timeframe := FiveMinute

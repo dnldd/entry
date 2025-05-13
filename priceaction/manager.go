@@ -197,6 +197,8 @@ func (m *Manager) evaluateReactionAtVWAPSignal(mkt *Market) error {
 		return fmt.Errorf("timed out waiting for reaction at vwap status")
 	}
 
+	mkt.ResetVWAPDataState()
+
 	return nil
 }
 

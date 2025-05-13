@@ -72,16 +72,20 @@ func setupManager(t *testing.T, market string) *Manager {
 			Date:  now,
 		}
 	}
+	vwapReactionSignals := make(chan shared.ReactionAtVWAP, 5)
+	signalReactionAtVWAP := func(reaction shared.ReactionAtVWAP) {
+		vwapReactionSignals <- reaction
+		reaction.Status <- shared.Processed
+	}
+
 	cfg := &ManagerConfig{
 		Markets:               []string{market},
 		Subscribe:             subscribe,
 		RequestPriceData:      requestPriceData,
 		SignalReactionAtLevel: signalLevelReaction,
-		SignalReactionAtVWAP: func(signal shared.ReactionAtVWAP) {
-			// TODO.
-		},
-		RequestVWAPData: requestVWAPData,
-		RequestVWAP:     requestVWAP,
+		SignalReactionAtVWAP:  signalReactionAtVWAP,
+		RequestVWAPData:       requestVWAPData,
+		RequestVWAP:           requestVWAP,
 		FetchCaughtUpState: func(market string) (bool, error) {
 			return true, nil
 		},
@@ -215,6 +219,16 @@ func TestManagerHandleUpdateSignal(t *testing.T) {
 
 	// Ensure price request flag is reset after the request is processed.
 	assert.False(t, mgr.markets[market].requestingPriceData.Load())
+
+	// Trigger a vwap request for the market.
+	mgr.markets[market].requestingVWAPData.Store(true)
+
+	secondCandle.Status = make(chan shared.StatusCode, 1)
+	err = mgr.handleUpdateSignal(&secondCandle)
+	assert.NoError(t, err)
+
+	// Ensure vwap request flag is reset after the request is processed.
+	assert.False(t, mgr.markets[market].requestingVWAPData.Load())
 }
 
 func TestFillManagerChannels(t *testing.T) {
@@ -328,7 +342,7 @@ func TestManagerHandleCandleMetadataSignal(t *testing.T) {
 
 	}
 
-	// Ensure requesting candle metadate for a valid market succeeds.
+	// Ensure requesting candle metadata for a valid market succeeds.
 	req = shared.CandleMetadataRequest{
 		Market:   market,
 		Response: make(chan []*shared.CandleMetadata),
