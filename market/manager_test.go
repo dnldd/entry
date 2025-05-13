@@ -151,18 +151,33 @@ func TestFillManagerChannels(t *testing.T) {
 		Response: make(chan float64, 5),
 	}
 
+	vwapDataReq := shared.VWAPDataRequest{
+		Market:   market,
+		Response: make(chan []*shared.VWAP, 5),
+	}
+
+	vwapReq := shared.VWAPRequest{
+		Market:   market,
+		At:       time.Time{},
+		Response: make(chan *shared.VWAP, 1),
+	}
+
 	// Fill all the channels used by the manager.
 	for range bufferSize + 1 {
 		mgr.SendAverageVolumeRequest(avgVolumeReq)
 		mgr.SendCaughtUpSignal(caughtUpSignal)
 		mgr.SendMarketUpdate(candle)
 		mgr.SendPriceDataRequest(priceDataReq)
+		mgr.SendVWAPDataRequest(vwapDataReq)
+		mgr.SendVWAPRequest(vwapReq)
 	}
 
 	assert.Equal(t, len(mgr.averageVolumeRequests), bufferSize)
 	assert.Equal(t, len(mgr.caughtUpSignals), bufferSize)
 	assert.Equal(t, len(mgr.updateSignals), bufferSize)
 	assert.Equal(t, len(mgr.priceDataRequests), bufferSize)
+	assert.Equal(t, len(mgr.vwapDataRequests), bufferSize)
+	assert.Equal(t, len(mgr.vwapRequests), bufferSize)
 }
 
 func TestHandleUpdateCandle(t *testing.T) {
@@ -233,6 +248,11 @@ func TestHandleCaughtUpSignal(t *testing.T) {
 
 	err = mgr.handleCaughtUpSignal(&caughtUpSignal)
 	assert.NoError(t, err)
+
+	// Ensure a market's caught up state can be fetched.
+	caughtUp, err := mgr.FetchCaughtUpState(market)
+	assert.NoError(t, err)
+	assert.True(t, caughtUp)
 }
 
 func TestHandleAverageVolumeSignal(t *testing.T) {
@@ -343,6 +363,118 @@ func TestHandlePriceDataRequest(t *testing.T) {
 	assert.GreaterThan(t, len(req), 0)
 }
 
+func TestHandleVWAPDataRequest(t *testing.T) {
+	market := "^GSPC"
+
+	now, _, err := shared.NewYorkTime()
+	assert.NoError(t, err)
+
+	mgr, _, _ := setupManager(t, market, now, false)
+
+	// Update the market with candle data.
+	for idx := range 6 {
+		candle := shared.Candlestick{
+			Open:   float64(idx),
+			Close:  float64(idx),
+			High:   float64(idx),
+			Low:    float64(idx),
+			Volume: float64(idx),
+			Date:   now,
+
+			Market:    market,
+			Timeframe: shared.FiveMinute,
+			Status:    make(chan shared.StatusCode, 1),
+		}
+
+		err = mgr.handleUpdateCandle(&candle)
+		assert.NoError(t, err)
+	}
+
+	mgr.marketsMtx.RLock()
+	mkt := mgr.markets[market]
+	mgr.marketsMtx.RUnlock()
+
+	// Mark the market as caught up.
+	mkt.caughtUp.Store(true)
+
+	// Ensure a vwap data request for an unknown market errors.
+	unknownVWAPDataReq := shared.VWAPDataRequest{
+		Market:   "^AAPL",
+		Response: make(chan []*shared.VWAP, 5),
+	}
+
+	err = mgr.handleVWAPDataRequest(&unknownVWAPDataReq)
+	assert.Error(t, err)
+
+	// Ensure a valid vwap data request succeeds.
+	vwapDataReq := shared.VWAPDataRequest{
+		Market:   market,
+		Response: make(chan []*shared.VWAP, 5),
+	}
+
+	err = mgr.handleVWAPDataRequest(&vwapDataReq)
+	assert.NoError(t, err)
+	req := <-vwapDataReq.Response
+	assert.GreaterThan(t, len(req), 0)
+}
+
+func TestHandleVWAPRequest(t *testing.T) {
+	market := "^GSPC"
+
+	now, _, err := shared.NewYorkTime()
+	assert.NoError(t, err)
+
+	mgr, _, _ := setupManager(t, market, now, false)
+
+	// Update the market with candle data.
+	for idx := range 6 {
+		candle := shared.Candlestick{
+			Open:   float64(idx),
+			Close:  float64(idx),
+			High:   float64(idx),
+			Low:    float64(idx),
+			Volume: float64(idx),
+			Date:   now,
+
+			Market:    market,
+			Timeframe: shared.FiveMinute,
+			Status:    make(chan shared.StatusCode, 1),
+		}
+
+		err = mgr.handleUpdateCandle(&candle)
+		assert.NoError(t, err)
+	}
+
+	mgr.marketsMtx.RLock()
+	mkt := mgr.markets[market]
+	mgr.marketsMtx.RUnlock()
+
+	// Mark the market as caught up.
+	mkt.caughtUp.Store(true)
+
+	// Ensure a vwap request for an unknown market errors.
+	unknownVWAPReq := shared.VWAPRequest{
+		Market:   "^AAPL",
+		At:       now,
+		Response: make(chan *shared.VWAP, 1),
+	}
+
+	err = mgr.handleVWAPRequest(&unknownVWAPReq)
+	assert.Error(t, err)
+
+	// Ensure a valid vwap request succeeds.
+	vwapReq := shared.VWAPRequest{
+		Market:   market,
+		At:       now,
+		Response: make(chan *shared.VWAP, 1),
+	}
+
+	err = mgr.handleVWAPRequest(&vwapReq)
+	assert.NoError(t, err)
+	vwap := <-vwapReq.Response
+	assert.Equal(t, vwap.Value, float64(3.6666666666666665))
+}
+
 func TestBacktestLevelGeneration(t *testing.T) {
 	market := "^GSPC"
 	backtest := true
@@ -375,10 +507,12 @@ func TestBacktestLevelGeneration(t *testing.T) {
 	defer cancel()
 
 	expectedLevelPrices := []float64{36, 18}
+	runDone := make(chan struct{}, 1)
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
+				close(runDone)
 				return
 			case sig := <-levelSignals:
 				// Ensure the historical data source triggers level signals as expected.
@@ -390,15 +524,16 @@ func TestBacktestLevelGeneration(t *testing.T) {
 	historicData, err := shared.NewHistoricData(hCfg)
 	assert.NoError(t, err)
 
-	done := make(chan struct{})
+	mgrDone := make(chan struct{})
 	go func() {
 		mgr.Run(ctx)
-		close(done)
+		close(mgrDone)
 	}()
 
 	err = historicData.ProcessHistoricalData()
 	assert.NoError(t, err)
 
 	cancel()
-	<-done
+	<-runDone
+	<-mgrDone
 }

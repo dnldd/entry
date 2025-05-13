@@ -123,9 +123,8 @@ func TestMarket(t *testing.T) {
 
 	// Ensure the market can persist its positions to file.
 	filename, err := mkt.PersistPositionsCSV()
-	assert.NoError(t, err)
-
 	defer os.Remove(filename)
+	assert.NoError(t, err)
 
 	// Ensure an exit signal for an unknown market returns an error.
 	wrongMarketExitSignal := &shared.ExitSignal{

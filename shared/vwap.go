@@ -41,10 +41,6 @@ func NewReactionAtVWAP(market string, vwapData []*VWAP, priceData []*Candlestick
 			len(priceData), PriceDataPayloadSize)
 	}
 
-	if len(vwapData) != len(priceData) {
-		return nil, fmt.Errorf("data length mismatch, %d != %d", len(vwapData), len(priceData))
-	}
-
 	levelKind := fetchVWAPLevelKind(vwapData[0], priceData[0])
 	vr := &ReactionAtVWAP{
 		ReactionAtFocus: ReactionAtFocus{
@@ -97,9 +93,6 @@ func NewReactionAtVWAP(market string, vwapData []*VWAP, priceData []*Candlestick
 	switch levelKind {
 	case Support:
 		switch {
-		case above == 0 && below == 0:
-			// If price is not closing above or below the vwap it is chopping.
-			vr.Reaction = Chop
 		case below == 0:
 			// If price consistently stayed below a support vwap it tagged then it
 			// it is likely reversing at the vwap.
@@ -124,9 +117,6 @@ func NewReactionAtVWAP(market string, vwapData []*VWAP, priceData []*Candlestick
 		}
 	case Resistance:
 		switch {
-		case above == 0 && below == 0:
-			// If price is not closing above or below the vwap it is chopping.
-			vr.Reaction = Chop
 		case above == 0:
 			// If price consistently stayed below a vwap acting as resistance it tagged then
 			// it is likely reversing at the vwap.
