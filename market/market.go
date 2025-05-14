@@ -94,10 +94,8 @@ func (m *Market) CaughtUp() bool {
 // Update processes incoming market data for the provided market.
 func (m *Market) Update(candle *shared.Candlestick) error {
 	if candle.Timeframe != shared.FiveMinute {
-		// do nothing.
-		m.cfg.Logger.Info().Msgf("encountered %s candle for updates instead of the expected "+
+		return fmt.Errorf("encountered %s candle for updates instead of the expected "+
 			"%s timeframe, skipping", candle.Timeframe.String(), updateTimeframe.String())
-		return nil
 	}
 
 	m.candleSnapshot.Update(candle)

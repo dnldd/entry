@@ -32,22 +32,20 @@ func TestMarket(t *testing.T) {
 		Logger:       &log.Logger,
 	}
 
-	mkt, err := NewMarket(cfg, now)
+	asiaSessionCloseStr := "03:00"
+	ts, err := time.Parse(shared.SessionTimeLayout, asiaSessionCloseStr)
+	assert.NoError(t, err)
+	asiaSessionCloseTime := time.Date(now.Year(), now.Month(), now.Day(), ts.Hour(), ts.Minute(), 0, 0, loc)
+
+	mkt, err := NewMarket(cfg, asiaSessionCloseTime)
 	assert.NoError(t, err)
 
-	tomorrow := now.AddDate(0, 0, 1)
-	mkt.sessionSnapshot.GenerateNewSessions(tomorrow)
+	mkt.sessionSnapshot.GenerateNewSessions(asiaSessionCloseTime)
 
 	// Ensure a market's caught up status can be set and fetched.
 	mkt.SetCaughtUpStatus(true)
 	status := mkt.CaughtUp()
 	assert.Equal(t, status, true)
-
-	currentSession := mkt.sessionSnapshot.FetchCurrentSession()
-
-	// Set the update candle's time to a time in the next session
-	// to trigger level signals.
-	nextSessionTime := currentSession.Close.Add(time.Hour * 2)
 
 	// Ensure a market ignores candle updates that are not of the expected update timeframe (five minute timeframe).
 	ignoredCandle := &shared.Candlestick{
@@ -56,7 +54,7 @@ func TestMarket(t *testing.T) {
 		High:   float64(9),
 		Low:    float64(3),
 		Volume: float64(2),
-		Date:   now,
+		Date:   asiaSessionCloseTime,
 
 		Market:    market,
 		Timeframe: shared.OneHour,
@@ -64,7 +62,7 @@ func TestMarket(t *testing.T) {
 	}
 
 	err = mkt.Update(ignoredCandle)
-	assert.NoError(t, err)
+	assert.Error(t, err)
 
 	// Ensure a market can be updated.
 	firstCandle := &shared.Candlestick{
@@ -73,7 +71,7 @@ func TestMarket(t *testing.T) {
 		High:   float64(9),
 		Low:    float64(3),
 		Volume: float64(2),
-		Date:   now,
+		Date:   asiaSessionCloseTime,
 
 		Market:    market,
 		Timeframe: shared.FiveMinute,
@@ -84,13 +82,14 @@ func TestMarket(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Ensure a market can trigger session high/low signals.
+	earlyNewYorkSessionTime := asiaSessionCloseTime.Add(time.Minute * 5)
 	secondCandle := &shared.Candlestick{
 		Open:   float64(9),
 		Close:  float64(12),
 		High:   float64(15),
 		Low:    float64(8),
 		Volume: float64(3),
-		Date:   nextSessionTime,
+		Date:   earlyNewYorkSessionTime,
 
 		Market:    market,
 		Timeframe: shared.FiveMinute,
