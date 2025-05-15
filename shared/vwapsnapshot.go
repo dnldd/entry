@@ -90,12 +90,12 @@ func (s *VWAPSnapshot) At(t time.Time) *VWAP {
 
 // LastN fetches the last n number of elements from the snapshot.
 func (s *VWAPSnapshot) LastN(n int32) []*VWAP {
-	s.dataMtx.RLock()
-	defer s.dataMtx.RUnlock()
-
 	if n <= 0 {
 		return nil
 	}
+
+	s.dataMtx.RLock()
+	defer s.dataMtx.RUnlock()
 
 	start := s.start.Load()
 	count := s.count.Load()
@@ -115,4 +115,67 @@ func (s *VWAPSnapshot) LastN(n int32) []*VWAP {
 	}
 
 	return set
+}
+
+// TrendScore determines the strength of the market trend from the vwap snapshot generated from it.
+//
+// It uses linear regression slope and qualifies it with r squared to generate the trend score.
+func (s *VWAPSnapshot) TrendScore(n int32) (float64, Trend) {
+	if n <= 0 {
+		return 0, ChoppyTrend
+	}
+
+	values := s.LastN(n)
+	currentVwap := values[len(values)-1].Value
+	nf := float64(n)
+
+	// Calculate the linear regression slope of the vwap which is the strength of the trend.
+	// The slope can either be positive or negative. A high slope value regardless of sign
+	// indicates a strong trend while being closest to zero indicate chop.
+	var sumX, sumY, sumXY, sumXX float64
+	for idx, y := range values {
+		x := float64(idx)
+		sumX += x
+		sumY += y.Value
+		sumXY += x * y.Value
+		sumXX += x * x
+	}
+
+	numerator := (nf * sumXY) - (sumX * sumY)
+	denominator := (nf * sumXX) - (sumX * sumX)
+	if denominator == 0 {
+		return 0, ChoppyTrend
+	}
+
+	slope := numerator / denominator
+	meanY := sumY / float64(n)
+
+	// Calculate total sum of squares and residual sum of squares.
+	var totalSum, residualSum float64
+	intercept := meanY - slope*(sumX/nf)
+	for idx, v := range values {
+		x := float64(idx)
+		y := v.Value
+		yPred := slope*x + intercept
+		totalSum += (y - meanY) * (y - meanY)
+		residualSum += (y - yPred) * (y - yPred)
+	}
+
+	if totalSum == 0 {
+		return 0, ChoppyTrend
+	}
+
+	// Calculate r2 (r squared) which is the confidence metric of the linear regression slope.
+	r2 := 1 - (residualSum / totalSum)
+
+	// Normalize the slope with the vwap value.
+	normalizedSlope := slope / currentVwap
+
+	// The trend score becomes a combination of strength and confidence.
+	trendScore := normalizedSlope * r2
+
+	// Categorize the trend.
+	trendCategory := CategorizeTrendScore(trendScore)
+
+	return trendScore, trendCategory
 }
