@@ -164,7 +164,7 @@ func (s *CandlestickSnapshot) DetectImbalance() (*Imbalance, bool) {
 		low := thirdCandle.Low
 		midpoint := (high + low) / 2
 
-		imbalance := NewImbalance(firstCandle.Market, high, midpoint, low, sentiment, gapRatio)
+		imbalance := NewImbalance(firstCandle.Market, high, midpoint, low, sentiment, gapRatio, thirdCandle.Date)
 
 		return imbalance, true
 
@@ -186,7 +186,7 @@ func (s *CandlestickSnapshot) DetectImbalance() (*Imbalance, bool) {
 		low := thirdCandle.High
 		midpoint := (high + low) / 2
 
-		imbalance := NewImbalance(firstCandle.Market, high, midpoint, low, sentiment, gapRatio)
+		imbalance := NewImbalance(firstCandle.Market, high, midpoint, low, sentiment, gapRatio, thirdCandle.Date)
 
 		return imbalance, true
 	}

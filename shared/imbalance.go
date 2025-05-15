@@ -1,6 +1,8 @@
 package shared
 
 import (
+	"time"
+
 	"go.uber.org/atomic"
 )
 
@@ -17,10 +19,11 @@ type Imbalance struct {
 	Touches     atomic.Uint32
 	Touching    atomic.Bool
 	Invalidated atomic.Bool
+	Date        time.Time
 }
 
 // NewImbalance initializes a new imbalance.
-func NewImbalance(market string, high float64, midpoint float64, low float64, sentiment Sentiment, gapRatio float64) *Imbalance {
+func NewImbalance(market string, high float64, midpoint float64, low float64, sentiment Sentiment, gapRatio float64, date time.Time) *Imbalance {
 	return &Imbalance{
 		Market:    market,
 		High:      high,
@@ -28,6 +31,7 @@ func NewImbalance(market string, high float64, midpoint float64, low float64, se
 		Low:       low,
 		Sentiment: sentiment,
 		GapRatio:  gapRatio,
+		Date:      date,
 	}
 }
 
