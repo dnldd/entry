@@ -10,6 +10,8 @@ import (
 const (
 	// SnapshotSize is the maximum number of entries for a candlestick snapshot.
 	SnapshotSize = 36
+	// minImbalanceRatioThreshold is the minimum imbalance ratio to be considered substantive
+	minImbalanceRatioThreshold = 0.24
 )
 
 // CandlestickSnapshot represents a snapshot of candlestick data.
@@ -119,4 +121,75 @@ func (s *CandlestickSnapshot) AverageVolumeN(n int32) float64 {
 
 	average := volumeSum / float64(n)
 	return average
+}
+
+// DetectImbalance detects an imbalance through from the provided snapshot.
+func (s *CandlestickSnapshot) DetectImbalance() (*Imbalance, bool) {
+	// Three candles are needed to detect an imbalance.
+	candles := s.LastN(3)
+	if len(candles) < 3 {
+		return nil, false
+	}
+
+	avgVolume := s.AverageVolumeN(10)
+
+	firstCandle := candles[0]
+	secondCandle := candles[1]
+	thirdCandle := candles[2]
+
+	// An imbalance requires a displacement candle with above-average volume,
+	// and the candle must be either a marubozu or a pinbar.
+	if (secondCandle.FetchKind() != Marubozu && secondCandle.FetchKind() != Pinbar) || secondCandle.Volume < avgVolume {
+		return nil, false
+	}
+
+	// An imbalance must have an inefficiency - a gap.
+	sentiment := secondCandle.FetchSentiment()
+	switch sentiment {
+	case Bullish:
+		displacementSize := secondCandle.Close - secondCandle.Open
+		if displacementSize <= 0 {
+			return nil, false
+		}
+
+		gap := thirdCandle.Low - firstCandle.High
+
+		// A prominent imbalance should be at least 24% of the displacement candle.
+		gapRatio := gap / displacementSize
+		if gapRatio < minImbalanceRatioThreshold {
+			return nil, false
+		}
+
+		high := firstCandle.High
+		low := thirdCandle.Low
+		midpoint := (high + low) / 2
+
+		imbalance := NewImbalance(firstCandle.Market, high, midpoint, low, sentiment, gapRatio)
+
+		return imbalance, true
+
+	case Bearish:
+		displacementSize := secondCandle.Open - secondCandle.Close
+		if displacementSize <= 0 {
+			return nil, false
+		}
+
+		gap := firstCandle.Low - thirdCandle.High
+
+		// A prominent imbalance should be at least 24% of the displacement candle.
+		gapRatio := gap / displacementSize
+		if gapRatio < minImbalanceRatioThreshold {
+			return nil, false
+		}
+
+		high := firstCandle.Low
+		low := thirdCandle.High
+		midpoint := (high + low) / 2
+
+		imbalance := NewImbalance(firstCandle.Market, high, midpoint, low, sentiment, gapRatio)
+
+		return imbalance, true
+	}
+
+	return nil, false
 }
