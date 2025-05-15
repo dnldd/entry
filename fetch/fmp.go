@@ -59,8 +59,9 @@ func (c *FMPClient) formURL(path string, params string) string {
 
 // FetchIndexIntradayHistorical fetches intraday historical market data.
 func (c *FMPClient) FetchIndexIntradayHistorical(ctx context.Context, market string, timeframe shared.Timeframe, start time.Time, end time.Time) ([]gjson.Result, error) {
-	const fiveMinuteHistoricalPath = "/historical-chart/5min"
 	const oneHourHistoricalPath = "/historical-chart/1hour"
+	const fiveMinuteHistoricalPath = "/historical-chart/5min"
+	const oneMinuteHistoricalPath = "/historical-chart/1min"
 
 	params := url.Values{}
 	params.Add("symbol", market)
@@ -73,6 +74,8 @@ func (c *FMPClient) FetchIndexIntradayHistorical(ctx context.Context, market str
 	var formedURL string
 
 	switch timeframe {
+	case shared.OneMinute:
+		formedURL = c.formURL(oneMinuteHistoricalPath, params.Encode())
 	case shared.FiveMinute:
 		formedURL = c.formURL(fiveMinuteHistoricalPath, params.Encode())
 	case shared.OneHour:

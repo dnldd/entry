@@ -30,6 +30,11 @@ func TestTimeframeString(t *testing.T) {
 			FiveMinute,
 			"5m",
 		},
+		{
+			"One Minute",
+			OneMinute,
+			"1m",
+		},
 	}
 
 	for _, test := range tests {

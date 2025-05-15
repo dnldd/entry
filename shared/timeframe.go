@@ -20,6 +20,7 @@ type Timeframe int
 const (
 	OneHour Timeframe = iota
 	FiveMinute
+	OneMinute
 )
 
 // String stringifies the provided timeframe.
@@ -29,6 +30,8 @@ func (t Timeframe) String() string {
 		return "1H"
 	case FiveMinute:
 		return "5m"
+	case OneMinute:
+		return "1m"
 	default:
 		return "unknown"
 	}
