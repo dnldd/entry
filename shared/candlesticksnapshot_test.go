@@ -8,15 +8,16 @@ import (
 
 func TestCandlestickSnapshot(t *testing.T) {
 	// Ensure candle snapshot size cannot be negaitve or zero.
-	candleSnapshot, err := NewCandlestickSnapshot(-1)
+	timeframe := FiveMinute
+	candleSnapshot, err := NewCandlestickSnapshot(-1, timeframe)
 	assert.Error(t, err)
 
-	candleSnapshot, err = NewCandlestickSnapshot(0)
+	candleSnapshot, err = NewCandlestickSnapshot(0, timeframe)
 	assert.Error(t, err)
 
 	// Ensure a candlestick snapshot can be created.
 	size := int32(4)
-	candleSnapshot, err = NewCandlestickSnapshot(size)
+	candleSnapshot, err = NewCandlestickSnapshot(size, timeframe)
 	assert.NoError(t, err)
 
 	// Ensure calling last on an empty snapshot returns nothing.
@@ -34,14 +35,16 @@ func TestCandlestickSnapshot(t *testing.T) {
 	// Ensure the snapshot can be updated with candles.
 	for idx := range size {
 		candle := &Candlestick{
-			Open:   float64(idx + 1),
-			Close:  float64(idx + 2),
-			High:   float64(idx + 3),
-			Low:    float64(idx),
-			Volume: float64(idx),
-			Status: make(chan StatusCode, 1),
+			Open:      float64(idx + 1),
+			Close:     float64(idx + 2),
+			High:      float64(idx + 3),
+			Low:       float64(idx),
+			Volume:    float64(idx),
+			Status:    make(chan StatusCode, 1),
+			Timeframe: timeframe,
 		}
-		candleSnapshot.Update(candle)
+		err = candleSnapshot.Update(candle)
+		assert.NoError(t, err)
 	}
 
 	assert.Equal(t, candleSnapshot.count.Load(), size)
@@ -59,15 +62,17 @@ func TestCandlestickSnapshot(t *testing.T) {
 
 	// Ensure candle updates at capacity overwrite existing slots.
 	candle := &Candlestick{
-		Open:   float64(5),
-		Close:  float64(8),
-		High:   float64(9),
-		Low:    float64(3),
-		Volume: float64(2),
-		Status: make(chan StatusCode, 1),
+		Open:      float64(5),
+		Close:     float64(8),
+		High:      float64(9),
+		Low:       float64(3),
+		Volume:    float64(2),
+		Status:    make(chan StatusCode, 1),
+		Timeframe: timeframe,
 	}
 
-	candleSnapshot.Update(candle)
+	err = candleSnapshot.Update(candle)
+	assert.NoError(t, err)
 	assert.Equal(t, candleSnapshot.count.Load(), size)
 	assert.Equal(t, candleSnapshot.size.Load(), size)
 	assert.Equal(t, candleSnapshot.start.Load(), 1)
@@ -103,17 +108,33 @@ func TestCandlestickSnapshot(t *testing.T) {
 
 	// Ensure candle updates after capacity advances the start index for the next addition.
 	next := &Candlestick{
-		Open:   float64(6),
-		Close:  float64(9),
-		High:   float64(10),
-		Low:    float64(4),
-		Volume: float64(3),
-		Status: make(chan StatusCode, 1),
+		Open:      float64(6),
+		Close:     float64(9),
+		High:      float64(10),
+		Low:       float64(4),
+		Volume:    float64(3),
+		Status:    make(chan StatusCode, 1),
+		Timeframe: timeframe,
 	}
 
-	candleSnapshot.Update(next)
+	err = candleSnapshot.Update(next)
+	assert.NoError(t, err)
 	assert.Equal(t, candleSnapshot.count.Load(), size)
 	assert.Equal(t, candleSnapshot.size.Load(), size)
 	assert.Equal(t, candleSnapshot.start.Load(), 2)
 	assert.Equal(t, len(candleSnapshot.data), int(size))
+
+	// Ensure updating the snapshot with a candle of a different timeframe errors.
+	wrongTimeframeCandle := &Candlestick{
+		Open:      float64(6),
+		Close:     float64(9),
+		High:      float64(10),
+		Low:       float64(4),
+		Volume:    float64(3),
+		Status:    make(chan StatusCode, 1),
+		Timeframe: OneHour,
+	}
+
+	err = candleSnapshot.Update(wrongTimeframeCandle)
+	assert.Error(t, err)
 }

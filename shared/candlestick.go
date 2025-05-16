@@ -197,6 +197,11 @@ func IsVolumeSpike(current *Candlestick, prev *Candlestick) bool {
 	return diff > 0 && diff/prev.Volume >= MinimumVolumeSpikePercent
 }
 
+// MarketDataKey creates a market data key from the provided market name and timeframe.
+func MarketDataKey(market string, timeframe string) string {
+	return fmt.Sprintf("%s-%s", market, timeframe)
+}
+
 // GenerateMomentum returns the current candles momentum.
 func GenerateMomentum(current *Candlestick, prev *Candlestick) Momentum {
 	if current.Volume < 0 || prev.Volume < 0 || prev.Volume == 0 || current.Volume == 0 {

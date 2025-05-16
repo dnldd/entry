@@ -124,11 +124,6 @@ func (m *Manager) SendCatchUpSignal(catchUp shared.CatchUpSignal) {
 	}
 }
 
-// MarketDataKey creates a market data key from the provided market name and timeframe.
-func MarketDataKey(market string, timeframe string) string {
-	return fmt.Sprintf("%s-%s", market, timeframe)
-}
-
 // fetchMarketData fetches market data using the provided parameters.
 func (m *Manager) fetchMarketData(market string, timeframe shared.Timeframe, start time.Time) error {
 	data, err := m.cfg.ExchangeClient.FetchIndexIntradayHistorical(context.Background(), market,
@@ -146,7 +141,7 @@ func (m *Manager) fetchMarketData(market string, timeframe shared.Timeframe, sta
 		m.NotifySubscribers(candles[idx])
 	}
 
-	key := MarketDataKey(market, timeframe.String())
+	key := shared.MarketDataKey(market, timeframe.String())
 	m.lastUpdatedTimesMtx.Lock()
 	m.lastUpdatedTimes[key] = candles[len(candles)-1].Date
 	m.lastUpdatedTimesMtx.Unlock()
@@ -158,7 +153,7 @@ func (m *Manager) fetchMarketData(market string, timeframe shared.Timeframe, sta
 //
 // This job should be scheduled for periodic execution.
 func (m *Manager) fetchMarketDataJob(marketName string, timeframe shared.Timeframe) error {
-	key := MarketDataKey(marketName, timeframe.String())
+	key := shared.MarketDataKey(marketName, timeframe.String())
 
 	m.lastUpdatedTimesMtx.Lock()
 	lastUpdatedTime, ok := m.lastUpdatedTimes[key]
@@ -198,7 +193,7 @@ func (m *Manager) handleCatchUpSignal(signal shared.CatchUpSignal) error {
 		signal.Status <- shared.Processed
 	}()
 
-	key := MarketDataKey(signal.Market, signal.Timeframe.String())
+	key := shared.MarketDataKey(signal.Market, signal.Timeframe.String())
 	m.lastUpdatedTimesMtx.RLock()
 	_, ok := m.lastUpdatedTimes[key]
 	m.lastUpdatedTimesMtx.RUnlock()

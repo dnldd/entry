@@ -2,6 +2,7 @@ package shared
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"go.uber.org/atomic"
@@ -16,15 +17,16 @@ const (
 
 // CandlestickSnapshot represents a snapshot of candlestick data.
 type CandlestickSnapshot struct {
-	data    []*Candlestick
-	dataMtx sync.RWMutex
-	start   atomic.Int32
-	count   atomic.Int32
-	size    atomic.Int32
+	data      []*Candlestick
+	dataMtx   sync.RWMutex
+	timeframe Timeframe
+	start     atomic.Int32
+	count     atomic.Int32
+	size      atomic.Int32
 }
 
 // NewCandlestickSnapshot initializes a new candlestick snapshot.
-func NewCandlestickSnapshot(size int32) (*CandlestickSnapshot, error) {
+func NewCandlestickSnapshot(size int32, timeframe Timeframe) (*CandlestickSnapshot, error) {
 	if size < 0 {
 		return nil, errors.New("snapshot size cannot be negative")
 	}
@@ -33,7 +35,8 @@ func NewCandlestickSnapshot(size int32) (*CandlestickSnapshot, error) {
 	}
 
 	snapshot := &CandlestickSnapshot{
-		data: make([]*Candlestick, size),
+		timeframe: timeframe,
+		data:      make([]*Candlestick, size),
 	}
 
 	snapshot.size.Store(int32(size))
@@ -41,7 +44,12 @@ func NewCandlestickSnapshot(size int32) (*CandlestickSnapshot, error) {
 }
 
 // Update adds the provided candlestick to the snapshot.
-func (s *CandlestickSnapshot) Update(candle *Candlestick) {
+func (s *CandlestickSnapshot) Update(candle *Candlestick) error {
+	if candle.Timeframe != s.timeframe {
+		return fmt.Errorf("cannot update candlestick snapshot of timeframe %s "+
+			"with candle of timeframe %s", s.timeframe, candle.Timeframe)
+	}
+
 	s.dataMtx.Lock()
 	defer s.dataMtx.Unlock()
 
@@ -57,6 +65,8 @@ func (s *CandlestickSnapshot) Update(candle *Candlestick) {
 	} else {
 		s.count.Add(1)
 	}
+
+	return nil
 }
 
 // Last returns the last added entry for the snapshot.
