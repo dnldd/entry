@@ -1,11 +1,10 @@
-package market
+package shared
 
 import (
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/dnldd/entry/shared"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 )
@@ -13,11 +12,13 @@ import (
 const (
 	// SessionGenerationTime is the time new sessions are generated to cover the day.
 	SessionGenerationTime = "00:01"
+	// SessionSnapshotSize is the maximum number of entries for a session snapshot.
+	SessionSnapshotSize = 28
 )
 
 // CandlestickSnapshot represents a snapshot of session data.
 type SessionSnapshot struct {
-	data    []*shared.Session
+	data    []*Session
 	start   atomic.Int32
 	current atomic.Int32
 	count   atomic.Int32
@@ -34,7 +35,7 @@ func NewSessionSnapshot(size int32, now time.Time) (*SessionSnapshot, error) {
 	}
 
 	snapshot := &SessionSnapshot{
-		data: make([]*shared.Session, size),
+		data: make([]*Session, size),
 	}
 
 	snapshot.size.Store(size)
@@ -53,7 +54,7 @@ func NewSessionSnapshot(size int32, now time.Time) (*SessionSnapshot, error) {
 }
 
 // Adds adds the provided session to the snapshot.
-func (s *SessionSnapshot) Add(session *shared.Session) {
+func (s *SessionSnapshot) Add(session *Session) {
 	start := s.start.Load()
 	count := s.count.Load()
 	size := s.size.Load()
@@ -95,14 +96,14 @@ func (s *SessionSnapshot) GenerateNewSessions(now time.Time) error {
 		close string
 		time  time.Time
 	}{
-		{shared.Asia, shared.AsiaOpen, shared.AsiaClose, yesterday},
-		{shared.London, shared.LondonOpen, shared.LondonClose, now},
-		{shared.NewYork, shared.NewYorkOpen, shared.NewYorkClose, now},
-		{shared.Asia, shared.AsiaOpen, shared.AsiaClose, now},
+		{Asia, AsiaOpen, AsiaClose, yesterday},
+		{London, LondonOpen, LondonClose, now},
+		{NewYork, NewYorkOpen, NewYorkClose, now},
+		{Asia, AsiaOpen, AsiaClose, now},
 	}
 
 	for _, sess := range sessions {
-		session, err := shared.NewSession(sess.name, sess.open, sess.close, sess.time)
+		session, err := NewSession(sess.name, sess.open, sess.close, sess.time)
 		if err != nil {
 			return fmt.Errorf("creating %s session: %w", sess.name, err)
 		}
@@ -119,7 +120,7 @@ func (s *SessionSnapshot) GenerateNewSessions(now time.Time) error {
 //
 // This job should be scheduled for periodic execution.
 func (s *SessionSnapshot) GenerateNewSessionsJob(logger *zerolog.Logger) {
-	now, _, err := shared.NewYorkTime()
+	now, _, err := NewYorkTime()
 	if err != nil {
 		logger.Error().Msgf("fetching new york time: %v", err)
 		return
@@ -164,7 +165,7 @@ func (s *SessionSnapshot) SetCurrentSession(now time.Time) (bool, error) {
 		for i := range count {
 			idx := (start + count - 1 - i + size) % size
 			session := s.data[idx]
-			if session.Name == shared.Asia && now.Before(session.Open) {
+			if session.Name == Asia && now.Before(session.Open) {
 				if prev != idx {
 					// The changed flag indicates there has been a session change.
 					changed = true
@@ -179,7 +180,7 @@ func (s *SessionSnapshot) SetCurrentSession(now time.Time) (bool, error) {
 }
 
 // FetchCurrentSession returns the current market session.
-func (s *SessionSnapshot) FetchCurrentSession() *shared.Session {
+func (s *SessionSnapshot) FetchCurrentSession() *Session {
 	return s.data[s.current.Load()]
 }
 

@@ -1,16 +1,15 @@
-package market
+package shared
 
 import (
 	"testing"
 	"time"
 
-	"github.com/dnldd/entry/shared"
 	"github.com/peterldowns/testy/assert"
 	"github.com/rs/zerolog"
 )
 
 func TestSessionSnapshot(t *testing.T) {
-	now, loc, err := shared.NewYorkTime()
+	now, loc, err := NewYorkTime()
 	assert.NoError(t, err)
 
 	// Ensure session snapshot size cannot be negaitve or zero.
@@ -48,7 +47,7 @@ func TestSessionSnapshot(t *testing.T) {
 	tomorrow := now.AddDate(0, 0, 1)
 
 	// Ensure adding a session at capacity advances the start index for the next addition.
-	londonSession, err := shared.NewSession(shared.London, shared.LondonOpen, shared.LondonClose, tomorrow)
+	londonSession, err := NewSession(London, LondonOpen, LondonClose, tomorrow)
 	assert.NoError(t, err)
 
 	sessionSnapshot.Add(londonSession)
@@ -61,14 +60,14 @@ func TestSessionSnapshot(t *testing.T) {
 	// no session time range which is the hour between new york close and asia open.
 	noSessionStr := "17:30"
 
-	noSession, err := time.Parse(shared.SessionTimeLayout, noSessionStr)
+	noSession, err := time.Parse(SessionTimeLayout, noSessionStr)
 	assert.NoError(t, err)
 
 	noSessionTime := time.Date(now.Year(), now.Month(), now.Day(), noSession.Hour(), noSession.Minute(), 0, 0, loc)
 
 	_, err = sessionSnapshot.SetCurrentSession(noSessionTime)
 	assert.NoError(t, err)
-	assert.Equal(t, sessionSnapshot.FetchCurrentSession().Name, shared.Asia)
+	assert.Equal(t, sessionSnapshot.FetchCurrentSession().Name, Asia)
 
 	// Ensure sessions jobs can be executed.
 	sessionSnapshot.GenerateNewSessionsJob(&zerolog.Logger{})
@@ -88,14 +87,14 @@ func TestSessionSnapshot(t *testing.T) {
 }
 
 func TestGenerateNewSessions(t *testing.T) {
-	now, _, err := shared.NewYorkTime()
+	now, _, err := NewYorkTime()
 	assert.NoError(t, err)
 
 	yesterday := now.AddDate(0, 0, -1)
 	tomorrow := now.AddDate(0, 0, 1)
 	tomorrowNext := tomorrow.AddDate(0, 0, 1)
 
-	sessionSnapshot, err := NewSessionSnapshot(shared.SnapshotSize, now)
+	sessionSnapshot, err := NewSessionSnapshot(SessionSnapshotSize, now)
 	assert.NoError(t, err)
 
 	// Asia -> London -> New York -> Asia (today-tomorrow)
