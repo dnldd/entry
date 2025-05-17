@@ -28,50 +28,127 @@ type MarketConfig struct {
 }
 
 // Market tracks the metadata of a market.
+//
+// The market tracks candlestick data spanning multiple timeframes – 1m, 5m & 1H,
+// as well as their corresponding vwap indicators and vwap snapshots.
 type Market struct {
 	cfg             *MarketConfig
-	candleSnapshot  *shared.CandlestickSnapshot
-	sessionSnapshot *SessionSnapshot
-	vwapSnapshot    *shared.VWAPSnapshot
-	vwapIndicator   *indicator.VWAP
+	sessionSnapshot *shared.SessionSnapshot
+	candleSnapshots map[shared.Timeframe]*shared.CandlestickSnapshot
+	vwapSnapshots   map[shared.Timeframe]*shared.VWAPSnapshot
+	vwapIndicators  map[shared.Timeframe]*indicator.VWAP
 	caughtUp        atomic.Bool
 }
 
 // NewMarket initializes a new market.
 func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
-	sessionsSnapshot, err := NewSessionSnapshot(shared.SnapshotSize, now)
+	sessionsSnapshot, err := shared.NewSessionSnapshot(shared.SessionSnapshotSize, now)
 	if err != nil {
 		return nil, err
 	}
 
-	candleSnapshot, err := shared.NewCandlestickSnapshot(shared.SnapshotSize)
-	if err != nil {
-		return nil, err
+	timeframes := []shared.Timeframe{shared.OneMinute, shared.FiveMinute, shared.OneHour}
+
+	// Create candlestick snapshots for all tracked timeframes.
+	candleSnapshots := make(map[shared.Timeframe]*shared.CandlestickSnapshot)
+	for idx := range timeframes {
+		timeframe := timeframes[idx]
+
+		switch timeframe {
+		case shared.OneMinute:
+			snapshot, err := shared.NewCandlestickSnapshot(shared.OneMinuteSnapshotSize, timeframe)
+			if err != nil {
+				return nil, err
+			}
+
+			candleSnapshots[timeframe] = snapshot
+		case shared.FiveMinute:
+			snapshot, err := shared.NewCandlestickSnapshot(shared.FiveMinuteSnapshotSize, timeframe)
+			if err != nil {
+				return nil, err
+			}
+
+			candleSnapshots[timeframe] = snapshot
+		case shared.OneHour:
+			snapshot, err := shared.NewCandlestickSnapshot(shared.FiveMinuteSnapshotSize, timeframe)
+			if err != nil {
+				return nil, err
+			}
+
+			candleSnapshots[timeframe] = snapshot
+		}
 	}
 
-	vwapSnapshot, err := shared.NewVWAPSnapshot(shared.SnapshotSize)
-	if err != nil {
-		return nil, err
+	// Create vwap snapshots for all tracked timeframes.
+	vwapSnapshots := make(map[shared.Timeframe]*shared.VWAPSnapshot)
+	for idx := range timeframes {
+		timeframe := timeframes[idx]
+
+		switch timeframe {
+		case shared.OneMinute:
+			snapshot, err := shared.NewVWAPSnapshot(shared.OneMinuteSnapshotSize, timeframe)
+			if err != nil {
+				return nil, err
+			}
+
+			vwapSnapshots[timeframe] = snapshot
+		case shared.FiveMinute:
+			snapshot, err := shared.NewVWAPSnapshot(shared.FiveMinuteSnapshotSize, timeframe)
+			if err != nil {
+				return nil, err
+			}
+
+			vwapSnapshots[timeframe] = snapshot
+		case shared.OneHour:
+			snapshot, err := shared.NewVWAPSnapshot(shared.OneHourSnapshotSize, timeframe)
+			if err != nil {
+				return nil, err
+			}
+
+			vwapSnapshots[timeframe] = snapshot
+		}
+	}
+
+	vwapIndicators := make(map[shared.Timeframe]*indicator.VWAP)
+	for idx := range timeframes {
+		timeframe := timeframes[idx]
+
+		switch timeframe {
+		case shared.OneMinute:
+			indicator := indicator.NewVWAP(cfg.Market, timeframe)
+			vwapIndicators[timeframe] = indicator
+		case shared.FiveMinute:
+			indicator := indicator.NewVWAP(cfg.Market, timeframe)
+			vwapIndicators[timeframe] = indicator
+		case shared.OneHour:
+			indicator := indicator.NewVWAP(cfg.Market, timeframe)
+			vwapIndicators[timeframe] = indicator
+		}
 	}
 
 	mkt := &Market{
 		cfg:             cfg,
-		candleSnapshot:  candleSnapshot,
 		sessionSnapshot: sessionsSnapshot,
-		vwapSnapshot:    vwapSnapshot,
-		vwapIndicator:   indicator.NewVWAP(cfg.Market, shared.FiveMinute),
+		candleSnapshots: candleSnapshots,
+		vwapSnapshots:   vwapSnapshots,
+		vwapIndicators:  vwapIndicators,
 	}
 
-	// Periodically reset the market vwap when the new york session closes.
-	_, err = mkt.cfg.JobScheduler.Every(1).Day().At(indicator.VwapResetTime).WaitForSchedule().
-		Do(mkt.vwapIndicator.Reset)
-	if err != nil {
-		return nil, fmt.Errorf("scheduling %s market vwap reset job for %s: %w", mkt.cfg.Market,
-			shared.FiveMinute, err)
+	// Periodically reset the market vwaps on all timeframes when the new york session closes.
+	for idx := range timeframes {
+		timeframe := timeframes[idx]
+
+		vwap := mkt.vwapIndicators[timeframe]
+		_, err = mkt.cfg.JobScheduler.Every(1).Day().At(indicator.VwapResetTime).WaitForSchedule().
+			Do(vwap.Reset)
+		if err != nil {
+			return nil, fmt.Errorf("scheduling %s market vwap reset job for timefram %s: %w",
+				vwap.Market, vwap.Timeframe, err)
+		}
 	}
 
 	// Periodically add sessions covering the day to the snapshot.
-	_, err = mkt.cfg.JobScheduler.Every(1).Day().At(SessionGenerationTime).WaitForSchedule().
+	_, err = mkt.cfg.JobScheduler.Every(1).Day().At(shared.SessionGenerationTime).WaitForSchedule().
 		Do(mkt.sessionSnapshot.GenerateNewSessionsJob, cfg.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("scheduling %s market vwap reset job for %s: %w", mkt.cfg.Market,
@@ -93,26 +170,42 @@ func (m *Market) CaughtUp() bool {
 
 // Update processes incoming market data for the provided market.
 func (m *Market) Update(candle *shared.Candlestick) error {
-	if candle.Timeframe != shared.FiveMinute {
-		return fmt.Errorf("encountered %s candle for updates instead of the expected "+
-			"%s timeframe, skipping", candle.Timeframe.String(), updateTimeframe.String())
+	// Update the candle snapshot for the provided timeframe.
+	candleSnapshot, ok := m.candleSnapshots[candle.Timeframe]
+	if !ok {
+		return fmt.Errorf("no candle snapshot found for timeframe %s", candle.Timeframe.String())
 	}
 
-	m.candleSnapshot.Update(candle)
+	candleSnapshot.Update(candle)
 	changed, err := m.sessionSnapshot.SetCurrentSession(candle.Date)
 	if err != nil {
 		return fmt.Errorf("setting current session: %w", err)
 	}
 
 	m.sessionSnapshot.FetchCurrentSession().Update(candle)
-	vwap, err := m.vwapIndicator.Update(candle)
-	if err != nil {
-		return err
+
+	// Generate the vwap for the provided timeframe.
+	indicator, ok := m.vwapIndicators[candle.Timeframe]
+	if !ok {
+		return fmt.Errorf("no vwap indicator found for timeframe %s", candle.Timeframe.String())
 	}
 
-	m.vwapSnapshot.Update(vwap)
+	vwap, err := indicator.Update(candle)
+	if err != nil {
+		return fmt.Errorf("updating vwap indicator for market %s at timeframe %s",
+			indicator.Market, indicator.Timeframe)
+	}
 
-	if changed {
+	// Update the vwap snapshot for the provided timeframe.
+	vwapSnapshot, ok := m.vwapSnapshots[candle.Timeframe]
+	if !ok {
+		return fmt.Errorf("no vwap snapshot found for timeframe %s", candle.Timeframe.String())
+	}
+
+	vwapSnapshot.Update(vwap)
+
+	// Only generate level signals on the 5m timeframe.
+	if changed && candle.Timeframe == shared.FiveMinute {
 		// Fetch and send new high and low from completed sessions.
 		high, low, err := m.sessionSnapshot.FetchLastSessionHighLow()
 		if err != nil {
