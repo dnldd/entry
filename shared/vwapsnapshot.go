@@ -10,15 +10,16 @@ import (
 
 // VWAPSnapshot represents a snapshot of vwap data.
 type VWAPSnapshot struct {
-	data    []*VWAP
-	dataMtx sync.RWMutex
-	start   atomic.Int32
-	count   atomic.Int32
-	size    atomic.Int32
+	data      []*VWAP
+	dataMtx   sync.RWMutex
+	timeframe Timeframe
+	start     atomic.Int32
+	count     atomic.Int32
+	size      atomic.Int32
 }
 
 // NewVWAPSnapshot initializes a new vwap snapshot.
-func NewVWAPSnapshot(size int32) (*VWAPSnapshot, error) {
+func NewVWAPSnapshot(size int32, timeframe Timeframe) (*VWAPSnapshot, error) {
 	if size < 0 {
 		return nil, errors.New("snapshot size cannot be negative")
 	}
@@ -27,7 +28,8 @@ func NewVWAPSnapshot(size int32) (*VWAPSnapshot, error) {
 	}
 
 	snapshot := &VWAPSnapshot{
-		data: make([]*VWAP, size),
+		timeframe: timeframe,
+		data:      make([]*VWAP, size),
 	}
 	snapshot.size.Store(int32(size))
 

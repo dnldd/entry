@@ -8,15 +8,16 @@ import (
 
 func TestVWAPSnapshot(t *testing.T) {
 	// Ensure vwap snapshot size cannot be negaitve or zero.
-	vwapSnapshot, err := NewVWAPSnapshot(-1)
+	timeframe := FiveMinute
+	vwapSnapshot, err := NewVWAPSnapshot(-1, timeframe)
 	assert.Error(t, err)
 
-	vwapSnapshot, err = NewVWAPSnapshot(0)
+	vwapSnapshot, err = NewVWAPSnapshot(0, timeframe)
 	assert.Error(t, err)
 
 	// Ensure a vwap snapshot can be created.
 	size := int32(4)
-	vwapSnapshot, err = NewVWAPSnapshot(size)
+	vwapSnapshot, err = NewVWAPSnapshot(size, timeframe)
 	assert.NoError(t, err)
 
 	// Ensure calling last on an empty snapshot returns nothing.
