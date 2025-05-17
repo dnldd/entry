@@ -93,8 +93,9 @@ func TestManager(t *testing.T) {
 
 	// Ensure the manager can process a price data request.
 	priceDataReq := shared.PriceDataRequest{
-		Market:   market,
-		Response: make(chan []*shared.Candlestick, 5),
+		Market:    market,
+		Timeframe: candle.Timeframe,
+		Response:  make(chan []*shared.Candlestick, 5),
 	}
 
 	mgr.SendPriceDataRequest(priceDataReq)
@@ -102,8 +103,9 @@ func TestManager(t *testing.T) {
 
 	// Ensure the manager can process an average volume request.
 	avgVolumeReq := shared.AverageVolumeRequest{
-		Market:   market,
-		Response: make(chan float64, 5),
+		Market:    market,
+		Timeframe: candle.Timeframe,
+		Response:  make(chan float64, 5),
 	}
 
 	mgr.SendAverageVolumeRequest(avgVolumeReq)
@@ -142,24 +144,28 @@ func TestFillManagerChannels(t *testing.T) {
 	}
 
 	priceDataReq := shared.PriceDataRequest{
-		Market:   market,
-		Response: make(chan []*shared.Candlestick, 5),
+		Market:    market,
+		Timeframe: candle.Timeframe,
+		Response:  make(chan []*shared.Candlestick, 5),
 	}
 
 	avgVolumeReq := shared.AverageVolumeRequest{
-		Market:   market,
-		Response: make(chan float64, 5),
+		Market:    market,
+		Timeframe: candle.Timeframe,
+		Response:  make(chan float64, 5),
 	}
 
 	vwapDataReq := shared.VWAPDataRequest{
-		Market:   market,
-		Response: make(chan []*shared.VWAP, 5),
+		Market:    market,
+		Timeframe: candle.Timeframe,
+		Response:  make(chan []*shared.VWAP, 5),
 	}
 
 	vwapReq := shared.VWAPRequest{
-		Market:   market,
-		At:       time.Time{},
-		Response: make(chan *shared.VWAP, 1),
+		Market:    market,
+		Timeframe: candle.Timeframe,
+		At:        time.Time{},
+		Response:  make(chan *shared.VWAP, 1),
 	}
 
 	// Fill all the channels used by the manager.
@@ -282,8 +288,9 @@ func TestHandleAverageVolumeSignal(t *testing.T) {
 
 	// Ensure requesting an average volume for an unknown market errors.
 	unknownMarketAvgVolumeReq := shared.AverageVolumeRequest{
-		Market:   "^AAPL",
-		Response: make(chan float64, 5),
+		Market:    "^AAPL",
+		Timeframe: candle.Timeframe,
+		Response:  make(chan float64, 5),
 	}
 
 	err = mgr.handleAverageVolumeRequest(&unknownMarketAvgVolumeReq)
@@ -291,8 +298,9 @@ func TestHandleAverageVolumeSignal(t *testing.T) {
 
 	// Ensure requesting a valid market average volume succeeds.
 	avgVolumeReq := shared.AverageVolumeRequest{
-		Market:   market,
-		Response: make(chan float64, 5),
+		Market:    market,
+		Timeframe: candle.Timeframe,
+		Response:  make(chan float64, 5),
 	}
 
 	err = mgr.handleAverageVolumeRequest(&avgVolumeReq)
@@ -315,8 +323,8 @@ func TestHandlePriceDataRequest(t *testing.T) {
 
 	mgr, _, _ := setupManager(t, market, now, false)
 
+	timeframe := shared.FiveMinute
 	// Update the market with candle data.
-
 	for idx := range 6 {
 		candle := shared.Candlestick{
 			Open:   float64(idx),
@@ -327,7 +335,7 @@ func TestHandlePriceDataRequest(t *testing.T) {
 			Date:   now,
 
 			Market:    market,
-			Timeframe: shared.FiveMinute,
+			Timeframe: timeframe,
 			Status:    make(chan shared.StatusCode, 1),
 		}
 
@@ -344,8 +352,9 @@ func TestHandlePriceDataRequest(t *testing.T) {
 
 	// Ensure a price data request for an unknown market errors.
 	unknownPriceDataReq := shared.PriceDataRequest{
-		Market:   "^AAPL",
-		Response: make(chan []*shared.Candlestick, 5),
+		Market:    "^AAPL",
+		Timeframe: timeframe,
+		Response:  make(chan []*shared.Candlestick, 5),
 	}
 
 	err = mgr.handlePriceDataRequest(&unknownPriceDataReq)
@@ -353,8 +362,9 @@ func TestHandlePriceDataRequest(t *testing.T) {
 
 	// Ensure a valid price data request succeeds.
 	priceDataReq := shared.PriceDataRequest{
-		Market:   market,
-		Response: make(chan []*shared.Candlestick, 5),
+		Market:    market,
+		Timeframe: timeframe,
+		Response:  make(chan []*shared.Candlestick, 5),
 	}
 
 	err = mgr.handlePriceDataRequest(&priceDataReq)
@@ -372,6 +382,7 @@ func TestHandleVWAPDataRequest(t *testing.T) {
 	mgr, _, _ := setupManager(t, market, now, false)
 
 	// Update the market with candle data.
+	timeframe := shared.FiveMinute
 	for idx := range 6 {
 		candle := shared.Candlestick{
 			Open:   float64(idx),
@@ -382,7 +393,7 @@ func TestHandleVWAPDataRequest(t *testing.T) {
 			Date:   now,
 
 			Market:    market,
-			Timeframe: shared.FiveMinute,
+			Timeframe: timeframe,
 			Status:    make(chan shared.StatusCode, 1),
 		}
 
@@ -399,8 +410,9 @@ func TestHandleVWAPDataRequest(t *testing.T) {
 
 	// Ensure a vwap data request for an unknown market errors.
 	unknownVWAPDataReq := shared.VWAPDataRequest{
-		Market:   "^AAPL",
-		Response: make(chan []*shared.VWAP, 5),
+		Market:    "^AAPL",
+		Timeframe: timeframe,
+		Response:  make(chan []*shared.VWAP, 5),
 	}
 
 	err = mgr.handleVWAPDataRequest(&unknownVWAPDataReq)
@@ -408,8 +420,9 @@ func TestHandleVWAPDataRequest(t *testing.T) {
 
 	// Ensure a valid vwap data request succeeds.
 	vwapDataReq := shared.VWAPDataRequest{
-		Market:   market,
-		Response: make(chan []*shared.VWAP, 5),
+		Market:    market,
+		Timeframe: timeframe,
+		Response:  make(chan []*shared.VWAP, 5),
 	}
 
 	err = mgr.handleVWAPDataRequest(&vwapDataReq)
@@ -427,6 +440,7 @@ func TestHandleVWAPRequest(t *testing.T) {
 	mgr, _, _ := setupManager(t, market, now, false)
 
 	// Update the market with candle data.
+	timeframe := shared.FiveMinute
 	for idx := range 6 {
 		candle := shared.Candlestick{
 			Open:   float64(idx),
@@ -437,7 +451,7 @@ func TestHandleVWAPRequest(t *testing.T) {
 			Date:   now,
 
 			Market:    market,
-			Timeframe: shared.FiveMinute,
+			Timeframe: timeframe,
 			Status:    make(chan shared.StatusCode, 1),
 		}
 
@@ -454,9 +468,10 @@ func TestHandleVWAPRequest(t *testing.T) {
 
 	// Ensure a vwap request for an unknown market errors.
 	unknownVWAPReq := shared.VWAPRequest{
-		Market:   "^AAPL",
-		At:       now,
-		Response: make(chan *shared.VWAP, 1),
+		Market:    "^AAPL",
+		Timeframe: timeframe,
+		At:        now,
+		Response:  make(chan *shared.VWAP, 1),
 	}
 
 	err = mgr.handleVWAPRequest(&unknownVWAPReq)
@@ -464,9 +479,10 @@ func TestHandleVWAPRequest(t *testing.T) {
 
 	// Ensure a valid vwap request succeeds.
 	vwapReq := shared.VWAPRequest{
-		Market:   market,
-		At:       now,
-		Response: make(chan *shared.VWAP, 1),
+		Market:    market,
+		Timeframe: timeframe,
+		At:        now,
+		Response:  make(chan *shared.VWAP, 1),
 	}
 
 	err = mgr.handleVWAPRequest(&vwapReq)

@@ -49,8 +49,6 @@ type Manager struct {
 	cfg                   *ManagerConfig
 	markets               map[string]*Market
 	marketsMtx            sync.RWMutex
-	averageVolume         map[string]shared.AverageVolumeEntry
-	averageVolumeMtx      sync.RWMutex
 	updateSignals         chan shared.Candlestick
 	caughtUpSignals       chan shared.CaughtUpSignal
 	priceDataRequests     chan shared.PriceDataRequest
@@ -91,7 +89,6 @@ func NewManager(cfg *ManagerConfig, now time.Time) (*Manager, error) {
 		caughtUpSignals:       make(chan shared.CaughtUpSignal, bufferSize),
 		vwapDataRequests:      make(chan shared.VWAPDataRequest, bufferSize),
 		vwapRequests:          make(chan shared.VWAPRequest, bufferSize),
-		averageVolume:         make(map[string]shared.AverageVolumeEntry),
 		workers:               workers,
 		requestWorkers:        make(chan struct{}, maxWorkers),
 	}, nil
@@ -219,44 +216,21 @@ func (m *Manager) handleCaughtUpSignal(signal *shared.CaughtUpSignal) error {
 
 // handleAverageVolumeRequest processes the provided average volume request.
 func (m *Manager) handleAverageVolumeRequest(req *shared.AverageVolumeRequest) error {
-	m.averageVolumeMtx.RLock()
-	avgVolume, ok := m.averageVolume[req.Market]
-	m.averageVolumeMtx.RUnlock()
+	m.marketsMtx.RLock()
+	mkt, ok := m.markets[req.Market]
+	m.marketsMtx.RUnlock()
 
-	now, _, err := shared.NewYorkTime()
-	if err != nil {
-		return fmt.Errorf("fetching new york time: %v", err)
+	if !ok {
+		return fmt.Errorf("no market found with name %s", req.Market)
 	}
 
-	if ok && now.Unix()-avgVolume.CreatedAt < fiveMinutesInSeconds {
-		req.Response <- avgVolume.Average
-
-		return nil
+	candleSnapshot, ok := mkt.candleSnapshots[req.Timeframe]
+	if !ok {
+		return fmt.Errorf("no candle snapshot found for market %s with timeframe %s", req.Market, req.Timeframe)
 	}
 
-	if now.Unix()-avgVolume.CreatedAt > fiveMinutesInSeconds {
-		// Generate a new average volume entry for the market if it is older than five minutes.
-		m.marketsMtx.RLock()
-		mkt, ok := m.markets[req.Market]
-		m.marketsMtx.RUnlock()
-
-		if !ok {
-			return fmt.Errorf("no market found with name %s", req.Market)
-		}
-
-		avg := mkt.candleSnapshot.AverageVolumeN(averageVolumeRange)
-
-		avgVolume = shared.AverageVolumeEntry{
-			Average:   avg,
-			CreatedAt: now.Unix(),
-		}
-
-		m.averageVolumeMtx.Lock()
-		m.averageVolume[req.Market] = avgVolume
-		m.averageVolumeMtx.Unlock()
-	}
-
-	req.Response <- avgVolume.Average
+	avgVolume := candleSnapshot.AverageVolumeN(averageVolumeRange)
+	req.Response <- avgVolume
 
 	return nil
 }
@@ -275,8 +249,13 @@ func (m *Manager) handlePriceDataRequest(req *shared.PriceDataRequest) error {
 		return fmt.Errorf("%s is not caught up to current market data", req.Market)
 	}
 
-	data := mkt.candleSnapshot.LastN(shared.PriceDataPayloadSize)
+	candleSnapshot, ok := mkt.candleSnapshots[req.Timeframe]
+	if !ok {
+		return fmt.Errorf("no candle snapshot for market %s found for timeframe %s",
+			req.Market, req.Timeframe)
+	}
 
+	data := candleSnapshot.LastN(shared.PriceDataPayloadSize)
 	req.Response <- data
 
 	return nil
@@ -296,8 +275,13 @@ func (m *Manager) handleVWAPDataRequest(req *shared.VWAPDataRequest) error {
 		return fmt.Errorf("%s is not caught up to current market data", req.Market)
 	}
 
-	data := mkt.vwapSnapshot.LastN(shared.VWAPDataPayloadSize)
+	vwapSnapshot, ok := mkt.vwapSnapshots[req.Timeframe]
+	if !ok {
+		return fmt.Errorf("no vwap snapshot for market %s found for timeframe %s",
+			req.Market, req.Timeframe)
+	}
 
+	data := vwapSnapshot.LastN(shared.VWAPDataPayloadSize)
 	req.Response <- data
 
 	return nil
@@ -321,7 +305,13 @@ func (m *Manager) handleVWAPRequest(req *shared.VWAPRequest) error {
 	count := uint32(0)
 	var vwap *shared.VWAP
 	for !match {
-		vwap = mkt.vwapSnapshot.At(req.At)
+		vwapSnapshot, ok := mkt.vwapSnapshots[req.Timeframe]
+		if !ok {
+			return fmt.Errorf("no vwap snapshot for market %s found for timeframe %s",
+				req.Market, req.Timeframe)
+		}
+
+		vwap = vwapSnapshot.At(req.At)
 		if vwap == nil {
 			time.Sleep(time.Millisecond * 200)
 			count++
