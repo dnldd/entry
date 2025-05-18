@@ -177,12 +177,6 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 	}
 
 	candleSnapshot.Update(candle)
-	changed, err := m.sessionSnapshot.SetCurrentSession(candle.Date)
-	if err != nil {
-		return fmt.Errorf("setting current session: %w", err)
-	}
-
-	m.sessionSnapshot.FetchCurrentSession().Update(candle)
 
 	// Generate the vwap for the provided timeframe.
 	indicator, ok := m.vwapIndicators[candle.Timeframe]
@@ -205,33 +199,42 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 	vwapSnapshot.Update(vwap)
 
 	// Only generate level signals on the 5m timeframe.
-	if changed && candle.Timeframe == shared.FiveMinute {
-		// Fetch and send new high and low from completed sessions.
-		high, low, err := m.sessionSnapshot.FetchLastSessionHighLow()
+	if candle.Timeframe == shared.FiveMinute {
+		changed, err := m.sessionSnapshot.SetCurrentSession(candle.Date)
 		if err != nil {
-			return fmt.Errorf("fetching new levels: %w", err)
+			return fmt.Errorf("setting current session: %w", err)
 		}
 
-		// Skip new level signals if either high or low from the last session is zero.
-		if high == 0 || low == 0 {
-			m.cfg.Logger.Info().Msgf("high and low cannot be zero, skipping new level signal")
-			return nil
-		}
+		m.sessionSnapshot.FetchCurrentSession().Update(candle)
 
-		sessionHigh := shared.NewLevelSignal(candle.Market, high)
-		m.cfg.SignalLevel(sessionHigh)
-		select {
-		case <-sessionHigh.Status:
-		case <-time.After(shared.TimeoutDuration):
-			return fmt.Errorf("timed out while waiting for level signal status")
-		}
+		if changed {
+			// Fetch and send new high and low from completed sessions.
+			high, low, err := m.sessionSnapshot.FetchLastSessionHighLow()
+			if err != nil {
+				return fmt.Errorf("fetching new levels: %w", err)
+			}
 
-		sessionLow := shared.NewLevelSignal(candle.Market, low)
-		m.cfg.SignalLevel(sessionLow)
-		select {
-		case <-sessionLow.Status:
-		case <-time.After(shared.TimeoutDuration):
-			return fmt.Errorf("timed out while waiting for level signal status")
+			// Skip new level signals if either high or low from the last session is zero.
+			if high == 0 || low == 0 {
+				m.cfg.Logger.Info().Msgf("high and low cannot be zero, skipping new level signal")
+				return nil
+			}
+
+			sessionHigh := shared.NewLevelSignal(candle.Market, high)
+			m.cfg.SignalLevel(sessionHigh)
+			select {
+			case <-sessionHigh.Status:
+			case <-time.After(shared.TimeoutDuration):
+				return fmt.Errorf("timed out while waiting for level signal status")
+			}
+
+			sessionLow := shared.NewLevelSignal(candle.Market, low)
+			m.cfg.SignalLevel(sessionLow)
+			select {
+			case <-sessionLow.Status:
+			case <-time.After(shared.TimeoutDuration):
+				return fmt.Errorf("timed out while waiting for level signal status")
+			}
 		}
 	}
 
