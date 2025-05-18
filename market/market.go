@@ -205,7 +205,7 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 	updateCandle := *candle
 	updateCandle.Status = make(chan shared.StatusCode, 1)
 
-	m.cfg.RelayMarketUpdate(*candle)
+	m.cfg.RelayMarketUpdate(updateCandle)
 	select {
 	case <-updateCandle.Status:
 	case <-time.After(shared.TimeoutDuration):

@@ -72,17 +72,15 @@ func NewAverageVolumeRequest(market string, timeframe Timeframe) *AverageVolumeR
 // MarketSkewRequest represents a market skew request to fetch the market
 // skew for a market.
 type MarketSkewRequest struct {
-	Market    string
-	Timeframe Timeframe
-	Response  chan MarketSkew
+	Market   string
+	Response chan MarketSkew
 }
 
 // NewMarketSkewRequest initializes a new market skew request.
-func NewMarketSkewRequest(market string, timeframe Timeframe) *MarketSkewRequest {
+func NewMarketSkewRequest(market string) *MarketSkewRequest {
 	return &MarketSkewRequest{
-		Market:    market,
-		Timeframe: timeframe,
-		Response:  make(chan MarketSkew, 1),
+		Market:   market,
+		Response: make(chan MarketSkew, 1),
 	}
 }
 

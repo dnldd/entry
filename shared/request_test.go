@@ -29,7 +29,7 @@ func TestRequestResponse(t *testing.T) {
 	avgVolumeResp := <-avgVolumeReq.Response
 	assert.Equal(t, avgVolumeResp, float64(1))
 
-	marketSkewReq := NewMarketSkewRequest(market, timeframe)
+	marketSkewReq := NewMarketSkewRequest(market)
 	assert.NotNil(t, marketSkewReq)
 	go func() { marketSkewReq.Response <- LongSkewed }()
 	marketSkewResp := <-marketSkewReq.Response

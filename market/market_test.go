@@ -21,15 +21,22 @@ func TestMarket(t *testing.T) {
 		signal.Status <- shared.Processed
 	}
 
+	relayMarketUpdateSignals := make(chan shared.Candlestick, 2)
+	relayMarketUpdate := func(candle shared.Candlestick) {
+		candle.Status <- shared.Processed
+		relayMarketUpdateSignals <- candle
+	}
+
 	market := "^GSPC"
 	loc, err := time.LoadLocation(shared.NewYorkLocation)
 	assert.NoError(t, err)
 
 	cfg := &MarketConfig{
-		Market:       market,
-		SignalLevel:  signalLevel,
-		JobScheduler: gocron.NewScheduler(loc),
-		Logger:       &log.Logger,
+		Market:            market,
+		SignalLevel:       signalLevel,
+		RelayMarketUpdate: relayMarketUpdate,
+		JobScheduler:      gocron.NewScheduler(loc),
+		Logger:            &log.Logger,
 	}
 
 	asiaSessionCloseStr := "03:00"
@@ -46,23 +53,6 @@ func TestMarket(t *testing.T) {
 	mkt.SetCaughtUpStatus(true)
 	status := mkt.CaughtUp()
 	assert.Equal(t, status, true)
-
-	// Ensure a market ignores candle updates that are not of the expected update timeframe (five minute timeframe).
-	ignoredCandle := &shared.Candlestick{
-		Open:   float64(5),
-		Close:  float64(8),
-		High:   float64(9),
-		Low:    float64(3),
-		Volume: float64(2),
-		Date:   asiaSessionCloseTime,
-
-		Market:    market,
-		Timeframe: shared.OneHour,
-		Status:    make(chan shared.StatusCode, 1),
-	}
-
-	err = mkt.Update(ignoredCandle)
-	assert.Error(t, err)
 
 	// Ensure a market can be updated.
 	firstCandle := &shared.Candlestick{

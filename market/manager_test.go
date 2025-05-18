@@ -30,17 +30,24 @@ func setupManager(t *testing.T, market string, now time.Time, backtest bool) (*M
 		signalLevelSignals <- signal
 	}
 
+	relayMarketUpdateSignals := make(chan shared.Candlestick, bufferSize)
+	relayMarketUpdate := func(candle shared.Candlestick) {
+		candle.Status <- shared.Processed
+		relayMarketUpdateSignals <- candle
+	}
+
 	loc, err := time.LoadLocation(shared.NewYorkLocation)
 	assert.NoError(t, err)
 
 	cfg := &ManagerConfig{
-		Markets:      []string{market},
-		Subscribe:    subscribe,
-		CatchUp:      catchUp,
-		SignalLevel:  signalLevel,
-		Backtest:     backtest,
-		JobScheduler: gocron.NewScheduler(loc),
-		Logger:       &log.Logger,
+		Markets:           []string{market},
+		Subscribe:         subscribe,
+		CatchUp:           catchUp,
+		SignalLevel:       signalLevel,
+		RelayMarketUpdate: relayMarketUpdate,
+		Backtest:          backtest,
+		JobScheduler:      gocron.NewScheduler(loc),
+		Logger:            &log.Logger,
 	}
 
 	mgr, err := NewManager(cfg, now)
@@ -95,6 +102,7 @@ func TestManager(t *testing.T) {
 	priceDataReq := shared.PriceDataRequest{
 		Market:    market,
 		Timeframe: candle.Timeframe,
+		N:         1,
 		Response:  make(chan []*shared.Candlestick, 5),
 	}
 
@@ -364,6 +372,7 @@ func TestHandlePriceDataRequest(t *testing.T) {
 	priceDataReq := shared.PriceDataRequest{
 		Market:    market,
 		Timeframe: timeframe,
+		N:         6,
 		Response:  make(chan []*shared.Candlestick, 5),
 	}
 
