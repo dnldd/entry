@@ -220,7 +220,7 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 				return nil
 			}
 
-			sessionHigh := shared.NewLevelSignal(candle.Market, high)
+			sessionHigh := shared.NewLevelSignal(candle.Market, high, candle.Close)
 			m.cfg.SignalLevel(sessionHigh)
 			select {
 			case <-sessionHigh.Status:
@@ -228,7 +228,7 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 				return fmt.Errorf("timed out while waiting for level signal status")
 			}
 
-			sessionLow := shared.NewLevelSignal(candle.Market, low)
+			sessionLow := shared.NewLevelSignal(candle.Market, low, candle.Close)
 			m.cfg.SignalLevel(sessionLow)
 			select {
 			case <-sessionLow.Status:

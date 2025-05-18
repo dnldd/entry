@@ -25,7 +25,7 @@ func TestSignalStatus(t *testing.T) {
 	status = <-exitSignal.Status
 	assert.Equal(t, status, Processed)
 
-	levelSignal := NewLevelSignal(market, float64(14))
+	levelSignal := NewLevelSignal(market, float64(14), float64(16))
 	assert.NotNil(t, levelSignal)
 	go func() { levelSignal.Status <- Processed }()
 	status = <-levelSignal.Status

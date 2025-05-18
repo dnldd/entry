@@ -43,16 +43,16 @@ type Level struct {
 }
 
 // NewLevel initializes a new level.
-func NewLevel(market string, price float64, candle *Candlestick) *Level {
+func NewLevel(market string, price float64, close float64) *Level {
 	lvl := &Level{
 		Market: market,
 		Price:  price,
 	}
 
 	switch {
-	case candle.Close < price:
+	case close < price:
 		lvl.Kind = Resistance
-	case candle.Close >= price:
+	case close >= price:
 		lvl.Kind = Support
 	}
 

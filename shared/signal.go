@@ -74,14 +74,16 @@ func NewExitSignal(market string, timeframe Timeframe, direction Direction, pric
 type LevelSignal struct {
 	Market string
 	Price  float64
+	Close  float64
 	Status chan StatusCode
 }
 
 // NewLevelSignal initializes a new level signal.
-func NewLevelSignal(market string, price float64) LevelSignal {
+func NewLevelSignal(market string, price float64, close float64) LevelSignal {
 	return LevelSignal{
 		Market: market,
 		Price:  price,
+		Close:  close,
 		Status: make(chan StatusCode, 1),
 	}
 }

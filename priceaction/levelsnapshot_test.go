@@ -30,19 +30,15 @@ func TestLevelSnapshot(t *testing.T) {
 		Close:  5,
 		Status: make(chan shared.StatusCode, 1),
 	}
-	supportCandle := &shared.Candlestick{
-		Open:   13,
-		High:   18,
-		Low:    12,
-		Close:  17,
-		Status: make(chan shared.StatusCode, 1),
-	}
+
+	supportClose := float64(17)
+
 	for idx := range size {
 		var level *shared.Level
 		if idx%2 == 0 {
-			level = shared.NewLevel(market, price, resistanceCandle)
+			level = shared.NewLevel(market, price, resistanceCandle.Close)
 		} else {
-			level = shared.NewLevel(market, price, supportCandle)
+			level = shared.NewLevel(market, price, supportClose)
 		}
 
 		levelSnapshot.Add(level)
@@ -54,7 +50,7 @@ func TestLevelSnapshot(t *testing.T) {
 	assert.Equal(t, len(levelSnapshot.data), int(size))
 
 	// Ensure level updates at capacity overwrite existing slots.
-	level := shared.NewLevel(market, price, resistanceCandle)
+	level := shared.NewLevel(market, price, resistanceCandle.Close)
 	levelSnapshot.Add(level)
 
 	assert.Equal(t, levelSnapshot.count.Load(), size)

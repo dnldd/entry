@@ -255,7 +255,7 @@ func (m *Manager) handlePriceDataRequest(req *shared.PriceDataRequest) error {
 			req.Market, req.Timeframe)
 	}
 
-	data := candleSnapshot.LastN(shared.PriceDataPayloadSize)
+	data := candleSnapshot.LastN(int32(req.N))
 	req.Response <- data
 
 	return nil

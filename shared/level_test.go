@@ -49,7 +49,7 @@ func TestLevel(t *testing.T) {
 	}
 
 	// Ensure a level can be initialized.
-	lvl := NewLevel(market, price, firstCandle)
+	lvl := NewLevel(market, price, firstCandle.Close)
 	assert.Equal(t, lvl.Kind, Resistance)
 
 	// Ensure a level can be updated.
@@ -92,19 +92,8 @@ func TestLevel(t *testing.T) {
 func TestNewReactionAtLevel(t *testing.T) {
 	price := float64(12)
 	market := "^GSPC"
-	resistanceCandle := &Candlestick{
-		Open:  10,
-		High:  15,
-		Low:   9,
-		Close: 5,
-	}
-
-	supportCandle := &Candlestick{
-		Open:  13,
-		High:  18,
-		Low:   12,
-		Close: 17,
-	}
+	resistanceClose := float64(5)
+	supportClose := float64(17)
 
 	tests := []struct {
 		name              string
@@ -116,7 +105,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 	}{
 		{
 			name:  "insufficient data",
-			level: NewLevel(market, price, resistanceCandle),
+			level: NewLevel(market, price, resistanceClose),
 			data: []*Candlestick{
 				{
 					Open:   10,
@@ -139,7 +128,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:  "reversal at resistance",
-			level: NewLevel(market, price, resistanceCandle),
+			level: NewLevel(market, price, resistanceClose),
 			data: []*Candlestick{
 				{
 					Open:   10,
@@ -176,7 +165,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:  "reversal at support",
-			level: NewLevel(market, price, supportCandle),
+			level: NewLevel(market, price, supportClose),
 			data: []*Candlestick{
 				{
 					Open:   15,
@@ -213,7 +202,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:  "break at resistance",
-			level: NewLevel(market, price, resistanceCandle),
+			level: NewLevel(market, price, resistanceClose),
 			data: []*Candlestick{
 				{
 					Open:   10,
@@ -250,7 +239,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:  "break at support",
-			level: NewLevel(market, price, supportCandle),
+			level: NewLevel(market, price, supportClose),
 			data: []*Candlestick{
 				{
 					Open:   15,
@@ -287,7 +276,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:  "chop reaction at support",
-			level: NewLevel(market, price, supportCandle),
+			level: NewLevel(market, price, supportClose),
 			data: []*Candlestick{
 				{
 					Open:   11,
@@ -324,7 +313,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:  "reversal at support - price consistently above level",
-			level: NewLevel(market, price, supportCandle),
+			level: NewLevel(market, price, supportClose),
 			data: []*Candlestick{
 				{
 					Open:   20,
@@ -361,7 +350,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:  "break at support - sharp price reversal to break support",
-			level: NewLevel(market, price, supportCandle),
+			level: NewLevel(market, price, supportClose),
 			data: []*Candlestick{
 				{
 					Open:   20,
@@ -398,7 +387,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:  "reversal at support - level rejection",
-			level: NewLevel(market, price, supportCandle),
+			level: NewLevel(market, price, supportClose),
 			data: []*Candlestick{
 				{
 					Open:   15,
@@ -435,7 +424,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:  "chop reaction at support - stagnant price",
-			level: NewLevel(market, price, supportCandle),
+			level: NewLevel(market, price, supportClose),
 			data: []*Candlestick{
 				{
 					Open:   12,
@@ -472,7 +461,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:  "chop reaction at resistance - stagnant price",
-			level: NewLevel(market, price, resistanceCandle),
+			level: NewLevel(market, price, resistanceClose),
 			data: []*Candlestick{
 				{
 					Open:   12,
@@ -509,7 +498,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:  "break at resistance - sharp price reversal to break support",
-			level: NewLevel(market, price, resistanceCandle),
+			level: NewLevel(market, price, resistanceClose),
 			data: []*Candlestick{
 				{
 					Open:   12,
@@ -546,7 +535,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:  "reversal at resistance - level rejection",
-			level: NewLevel(market, price, resistanceCandle),
+			level: NewLevel(market, price, resistanceClose),
 			data: []*Candlestick{
 				{
 					Open:   15,
@@ -583,7 +572,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:  "chop reaction at resistance",
-			level: NewLevel(market, price, resistanceCandle),
+			level: NewLevel(market, price, resistanceClose),
 			data: []*Candlestick{
 				{
 					Open:   10,
@@ -620,7 +609,7 @@ func TestNewReactionAtLevel(t *testing.T) {
 		},
 		{
 			name:    "not enough data",
-			level:   NewLevel(market, price, supportCandle),
+			level:   NewLevel(market, price, supportClose),
 			data:    []*Candlestick{},
 			wantErr: true,
 		},
