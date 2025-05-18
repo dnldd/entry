@@ -34,6 +34,9 @@ type ManagerConfig struct {
 	Backtest bool
 	// Subscribe registers the provided subscriber for market updates.
 	Subscribe func(name string, sub chan shared.Candlestick)
+	// RelayMarketUpdate relays the provided market update to the price action
+	// manager for processing.
+	RelayMarketUpdate func(candle shared.Candlestick)
 	// CatchUp signals a catchup process for a market.
 	CatchUp func(signal shared.CatchUpSignal)
 	// SignalLevel relays the provided  level signal for  processing.
@@ -68,9 +71,10 @@ func NewManager(cfg *ManagerConfig, now time.Time) (*Manager, error) {
 		workers[cfg.Markets[idx]] = make(chan struct{}, workerBufferSize)
 
 		mCfg := &MarketConfig{
-			Market:       cfg.Markets[idx],
-			SignalLevel:  cfg.SignalLevel,
-			JobScheduler: cfg.JobScheduler,
+			Market:            cfg.Markets[idx],
+			SignalLevel:       cfg.SignalLevel,
+			RelayMarketUpdate: cfg.RelayMarketUpdate,
+			JobScheduler:      cfg.JobScheduler,
 		}
 		market, err := NewMarket(mCfg, now)
 		if err != nil {
@@ -301,32 +305,13 @@ func (m *Manager) handleVWAPRequest(req *shared.VWAPRequest) error {
 		return fmt.Errorf("%s is not caught up to current market data", req.Market)
 	}
 
-	match := false
-	count := uint32(0)
-	var vwap *shared.VWAP
-	for !match {
-		vwapSnapshot, ok := mkt.vwapSnapshots[req.Timeframe]
-		if !ok {
-			return fmt.Errorf("no vwap snapshot for market %s found for timeframe %s",
-				req.Market, req.Timeframe)
-		}
-
-		vwap = vwapSnapshot.At(req.At)
-		if vwap == nil {
-			time.Sleep(time.Millisecond * 200)
-			count++
-
-			if count >= maxRetries {
-				// Send a nil response when max retries are exhausted.
-				req.Response <- nil
-				return fmt.Errorf("no vwap found for time %s", req.At)
-			}
-			continue
-		}
-
-		match = true
+	vwapSnapshot, ok := mkt.vwapSnapshots[req.Timeframe]
+	if !ok {
+		return fmt.Errorf("no vwap snapshot for market %s found for timeframe %s",
+			req.Market, req.Timeframe)
 	}
 
+	vwap := vwapSnapshot.At(req.At)
 	req.Response <- vwap
 
 	return nil

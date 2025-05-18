@@ -21,6 +21,9 @@ type MarketConfig struct {
 	Market string
 	// SignalLevel relays the provided level signal for processing.
 	SignalLevel func(signal shared.LevelSignal)
+	// RelayMarketUpdate relays the provided market update to the price action
+	// manager for processing.
+	RelayMarketUpdate func(candle shared.Candlestick)
 	// JobScheduler represents the job scheduler.
 	JobScheduler *gocron.Scheduler
 	// Logger represents the application logger.
@@ -197,6 +200,17 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 	}
 
 	vwapSnapshot.Update(vwap)
+
+	// Notify the price action manager of the received market update.
+	updateCandle := *candle
+	updateCandle.Status = make(chan shared.StatusCode, 1)
+
+	m.cfg.RelayMarketUpdate(*candle)
+	select {
+	case <-updateCandle.Status:
+	case <-time.After(shared.TimeoutDuration):
+		return fmt.Errorf("timed out while waiting for market update status")
+	}
 
 	// Only generate level signals on the 5m timeframe.
 	if candle.Timeframe == shared.FiveMinute {

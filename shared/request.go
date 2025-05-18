@@ -1,6 +1,8 @@
 package shared
 
-import "time"
+import (
+	"time"
+)
 
 const (
 	// PriceDataPayloadSize is the number of candles expected as payload for a price data range request.
@@ -19,41 +21,48 @@ const (
 
 // CandleMetadataRequest represents a request to fetch the current candle's metadata.
 type CandleMetadataRequest struct {
-	Market   string
-	Response chan []*CandleMetadata
+	Market    string
+	Timeframe Timeframe
+	Response  chan []*CandleMetadata
 }
 
 // NewCandleMetadataRequest initializes a new candle metadata request.
-func NewCandleMetadataRequest(market string) *CandleMetadataRequest {
+func NewCandleMetadataRequest(market string, timeframe Timeframe) *CandleMetadataRequest {
 	return &CandleMetadataRequest{
-		Market:   market,
-		Response: make(chan []*CandleMetadata, 1),
+		Market:    market,
+		Timeframe: timeframe,
+		Response:  make(chan []*CandleMetadata, 1),
 	}
 }
 
 // PriceDataRequest represents a price data request to fetch price data for a time range.
 type PriceDataRequest struct {
-	Market   string
-	Response chan []*Candlestick
+	Market    string
+	Timeframe Timeframe
+	N         uint32
+	Response  chan []*Candlestick
 }
 
 // NewPriceDataRequest initializes a new price data request.
-func NewPriceDataRequest(market string) *PriceDataRequest {
+func NewPriceDataRequest(market string, timeframe Timeframe, n uint32) *PriceDataRequest {
 	return &PriceDataRequest{
-		Market:   market,
-		Response: make(chan []*Candlestick, 1),
+		Market:    market,
+		N:         n,
+		Response:  make(chan []*Candlestick, 1),
+		Timeframe: timeframe,
 	}
 }
 
 // AverageVolumeRequest represents an average volume request to fetch the average
 // volume for a market.
 type AverageVolumeRequest struct {
-	Market   string
-	Response chan float64
+	Market    string
+	Timeframe Timeframe
+	Response  chan float64
 }
 
 // NewAverageVolumeRequest initializes a new average volume request.
-func NewAverageVolumeRequest(market string) *AverageVolumeRequest {
+func NewAverageVolumeRequest(market string, timeframe Timeframe) *AverageVolumeRequest {
 	return &AverageVolumeRequest{
 		Market:   market,
 		Response: make(chan float64, 1),
@@ -63,44 +72,50 @@ func NewAverageVolumeRequest(market string) *AverageVolumeRequest {
 // MarketSkewRequest represents a market skew request to fetch the market
 // skew for a market.
 type MarketSkewRequest struct {
-	Market   string
-	Response chan MarketSkew
+	Market    string
+	Timeframe Timeframe
+	Response  chan MarketSkew
 }
 
 // NewMarketSkewRequest initializes a new market skew request.
-func NewMarketSkewRequest(market string) *MarketSkewRequest {
+func NewMarketSkewRequest(market string, timeframe Timeframe) *MarketSkewRequest {
 	return &MarketSkewRequest{
-		Market:   market,
-		Response: make(chan MarketSkew, 1),
+		Market:    market,
+		Timeframe: timeframe,
+		Response:  make(chan MarketSkew, 1),
 	}
 }
 
 // VWAPRequest represents a VWAP request for a market.
 type VWAPRequest struct {
-	Market   string
-	At       time.Time
-	Response chan *VWAP
+	Market    string
+	Timeframe Timeframe
+	At        time.Time
+	Response  chan *VWAP
 }
 
 // NewVWAPRequest initializes a new VWAP request.
-func NewVWAPRequest(market string, time time.Time) *VWAPRequest {
+func NewVWAPRequest(market string, time time.Time, timeframe Timeframe) *VWAPRequest {
 	return &VWAPRequest{
-		Market:   market,
-		At:       time,
-		Response: make(chan *VWAP, 1),
+		Market:    market,
+		Timeframe: timeframe,
+		At:        time,
+		Response:  make(chan *VWAP, 1),
 	}
 }
 
 // VWAPDataRequest represents a VWAP data request for a market.
 type VWAPDataRequest struct {
-	Market   string
-	Response chan []*VWAP
+	Market    string
+	Timeframe Timeframe
+	Response  chan []*VWAP
 }
 
 // NewVWAPDataRequest initializes a new VWAP data request.
-func NewVWAPDataRequest(market string) *VWAPDataRequest {
+func NewVWAPDataRequest(market string, timeframe Timeframe) *VWAPDataRequest {
 	return &VWAPDataRequest{
-		Market:   market,
-		Response: make(chan []*VWAP, 1),
+		Market:    market,
+		Timeframe: timeframe,
+		Response:  make(chan []*VWAP, 1),
 	}
 }

@@ -21,7 +21,7 @@ type MarketConfig struct {
 	RequestVWAPData func(request shared.VWAPDataRequest)
 	// RequestVWAP relays the provided vwap request for processing.
 	RequestVWAP func(request shared.VWAPRequest)
-	// FetchCaughtUpState returns the caught up statis of the provided market.
+	// FetchCaughtUpState returns the caught up status of the provided market.
 	FetchCaughtUpState func(market string) (bool, error)
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
@@ -31,7 +31,6 @@ type MarketConfig struct {
 type Market struct {
 	cfg                 *MarketConfig
 	levelSnapshot       *LevelSnapshot
-	candleSnapshot      *shared.CandlestickSnapshot
 	taggedLevels        atomic.Bool
 	taggedVWAP          atomic.Bool
 	levelUpdateCounter  atomic.Uint32
@@ -47,23 +46,12 @@ func NewMarket(cfg *MarketConfig) (*Market, error) {
 		return nil, fmt.Errorf("creating level snapshot: %v", err)
 	}
 
-	candleSnapshot, err := shared.NewCandlestickSnapshot(smallSnapshotSize)
-	if err != nil {
-		return nil, fmt.Errorf("creating candle snapshot: %v", err)
-	}
-
 	mgr := &Market{
-		cfg:            cfg,
-		levelSnapshot:  levelSnapshot,
-		candleSnapshot: candleSnapshot,
+		cfg:           cfg,
+		levelSnapshot: levelSnapshot,
 	}
 
 	return mgr, nil
-}
-
-// FetchCurrentCandle fetches the current market candlestick.
-func (m *Market) FetchCurrentCandle() *shared.Candlestick {
-	return m.candleSnapshot.Last()
 }
 
 // evaluateTaggedLevels checks whether levels have been tagged by current price action. If confirmed
@@ -113,7 +101,6 @@ func (m *Market) evaluateTaggedVWAP(candle *shared.Candlestick, vwap *shared.VWA
 // Update processes the provided market candlestick data.
 func (m *Market) Update(candle *shared.Candlestick) {
 	m.levelSnapshot.Update(candle)
-	m.candleSnapshot.Update(candle)
 
 	caughtUp, err := m.cfg.FetchCaughtUpState(m.cfg.Market)
 	if err != nil {
@@ -126,7 +113,7 @@ func (m *Market) Update(candle *shared.Candlestick) {
 
 		// Fetch the vwap corresponding to the update candle.
 		var vwap *shared.VWAP
-		req := shared.NewVWAPRequest(m.cfg.Market, candle.Date)
+		req := shared.NewVWAPRequest(m.cfg.Market, candle.Date, candle.Timeframe)
 		m.cfg.RequestVWAP(*req)
 		select {
 		case vwap = <-req.Response:
@@ -204,9 +191,7 @@ func (m *Market) FilterTaggedLevels(candle *shared.Candlestick) []*shared.Level 
 	return taggedLevels
 }
 
-//	GenerateReactionsAtTaggedLevels generates reactions for all levels tagged by the first of the
-//
-// provided market candlestick data.
+// GenerateReactionsAtTaggedLevels generates reactions for all levels tagged by the first of the provided market candlestick data.
 func (m *Market) GenerateReactionsAtTaggedLevels(data []*shared.Candlestick) ([]*shared.ReactionAtLevel, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("data cannot be an empty slice")

@@ -187,7 +187,6 @@ func TestManagerHandleUpdateSignal(t *testing.T) {
 
 	err = mgr.handleUpdateSignal(&firstCandle)
 	assert.NoError(t, err)
-	assert.NotNil(t, mgr.markets[market].FetchCurrentCandle())
 
 	// Add a level for reaction tests.
 	levelSignal := shared.LevelSignal{

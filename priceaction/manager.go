@@ -122,14 +122,14 @@ func (m *Manager) SendCandleMetadataRequest(req shared.CandleMetadataRequest) {
 
 // evaluateReactionAtLevelSignal determines whether a reaction at level signal should be generated for
 // the provided market.
-func (m *Manager) evaluateReactionAtLevelSignal(mkt *Market) error {
+func (m *Manager) evaluateReactionAtLevelSignal(mkt *Market, timeframe shared.Timeframe) error {
 	if !mkt.RequestingPriceData() {
 		// Do nothing.
 		return nil
 	}
 
 	// Request price data and generate price reactions from them.
-	req := shared.NewPriceDataRequest(mkt.cfg.Market)
+	req := shared.NewPriceDataRequest(mkt.cfg.Market, timeframe, shared.PriceDataPayloadSize)
 	m.cfg.RequestPriceData(*req)
 	var data []*shared.Candlestick
 	select {
@@ -160,14 +160,14 @@ func (m *Manager) evaluateReactionAtLevelSignal(mkt *Market) error {
 
 // evaluateReactionAtVWAPSignal determines whether a reaction at vwap signal should be generated for
 // the provided market.
-func (m *Manager) evaluateReactionAtVWAPSignal(mkt *Market) error {
+func (m *Manager) evaluateReactionAtVWAPSignal(mkt *Market, timeframe shared.Timeframe) error {
 	if !mkt.RequestingVWAPData() {
 		// Do nothing.
 		return nil
 	}
 
 	// Request price data and vwap data and generate price reactions from them.
-	priceReq := shared.NewPriceDataRequest(mkt.cfg.Market)
+	priceReq := shared.NewPriceDataRequest(mkt.cfg.Market, timeframe, shared.PriceDataPayloadSize)
 	m.cfg.RequestPriceData(*priceReq)
 	var priceData []*shared.Candlestick
 	select {
@@ -176,7 +176,7 @@ func (m *Manager) evaluateReactionAtVWAPSignal(mkt *Market) error {
 		return fmt.Errorf("timed out waiting for price data response")
 	}
 
-	vwapReq := shared.NewVWAPDataRequest(mkt.cfg.Market)
+	vwapReq := shared.NewVWAPDataRequest(mkt.cfg.Market, timeframe)
 	m.cfg.RequestVWAPData(*vwapReq)
 	var vwapData []*shared.VWAP
 	select {
@@ -216,12 +216,12 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) error {
 	// Update price action concepts related to the market.
 	mkt.Update(candle)
 
-	err := m.evaluateReactionAtLevelSignal(mkt)
+	err := m.evaluateReactionAtLevelSignal(mkt, candle.Timeframe)
 	if err != nil {
 		return fmt.Errorf("evaluating reaction at level signal: %v", err)
 	}
 
-	err = m.evaluateReactionAtVWAPSignal(mkt)
+	err = m.evaluateReactionAtVWAPSignal(mkt, candle.Timeframe)
 	if err != nil {
 		return fmt.Errorf("evaluatiing reaction at vwap signal: %v", err)
 	}
@@ -240,12 +240,7 @@ func (m *Manager) handleLevelSignal(signal shared.LevelSignal) error {
 		return fmt.Errorf("no market found with name %s", signal.Market)
 	}
 
-	currentCandle := mkt.FetchCurrentCandle()
-	if currentCandle == nil {
-		return fmt.Errorf("no current candle available for market: %s", mkt.cfg.Market)
-	}
-
-	level := shared.NewLevel(signal.Market, signal.Price, currentCandle)
+	level := shared.NewLevel(signal.Market, signal.Price, signal.Close)
 	mkt.levelSnapshot.Add(level)
 	m.cfg.Logger.Info().Msgf("added new %s level @ %.2f for %s", level.Kind.String(), level.Price, level.Market)
 
@@ -259,13 +254,21 @@ func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest)
 		return fmt.Errorf("no market found with name: %s", req.Market)
 	}
 
-	// Generate metadata for all candles in the range being evaluated.
-	candles := mkt.candleSnapshot.LastN(candleMetadataSize + 1)
-	metadataSet := make([]*shared.CandleMetadata, 0, candleMetadataSize)
+	// Request price data and generate price reactions from them.
+	priceDataReq := shared.NewPriceDataRequest(mkt.cfg.Market, req.Timeframe, shared.PriceDataPayloadSize+1)
+	m.cfg.RequestPriceData(*priceDataReq)
+	var data []*shared.Candlestick
+	select {
+	case data = <-priceDataReq.Response:
+	case <-time.After(shared.TimeoutDuration):
+		return fmt.Errorf("timed out waiting for price data response")
+	}
 
-	for idx := 1; idx < len(candles)-1; idx++ {
-		currentCandle := candles[idx]
-		previousCandle := candles[idx-1]
+	// Generate metadata for all candles in the range being evaluated.
+	metadataSet := make([]*shared.CandleMetadata, 0, shared.PriceDataPayloadSize)
+	for idx := 1; idx < len(data)-1; idx++ {
+		currentCandle := data[idx]
+		previousCandle := data[idx-1]
 
 		kind := currentCandle.FetchKind()
 		sentiment := currentCandle.FetchSentiment()
@@ -297,9 +300,6 @@ func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest)
 
 // Run manages the lifecycle processes of the price action manager.
 func (m *Manager) Run(ctx context.Context) {
-	const priceActionManager = "priceactionmanager"
-	m.cfg.Subscribe(priceActionManager, m.updateSignals)
-
 	for {
 		select {
 		case <-ctx.Done():

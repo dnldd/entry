@@ -31,6 +31,7 @@ func TestMarket(t *testing.T) {
 	assert.Equal(t, mkt.levelUpdateCounter.Load(), uint32(0))
 	assert.Equal(t, mkt.requestingPriceData.Load(), false)
 	// Ensure a market can be updated with price data.
+	supportClose := float64(8)
 	supportCandle := &shared.Candlestick{
 		Open:   float64(5),
 		Close:  float64(8),
@@ -40,14 +41,7 @@ func TestMarket(t *testing.T) {
 		Status: make(chan shared.StatusCode, 1),
 	}
 
-	resistanceCandle := &shared.Candlestick{
-		Open:   float64(8),
-		Close:  float64(9),
-		High:   float64(10),
-		Low:    float64(5),
-		Volume: float64(2),
-		Status: make(chan shared.StatusCode, 1),
-	}
+	resistanceClose := float64(9)
 
 	mkt.Update(supportCandle)
 	assert.Equal(t, mkt.taggedLevels.Load(), false)
@@ -56,15 +50,15 @@ func TestMarket(t *testing.T) {
 
 	// Ensure levels can be added to the market.
 	supportPrice := float64(2)
-	level := shared.NewLevel(market, supportPrice, supportCandle)
+	level := shared.NewLevel(market, supportPrice, supportClose)
 	mkt.AddLevel(level)
 
-	invalidLevel := shared.NewLevel(market, supportPrice, supportCandle)
+	invalidLevel := shared.NewLevel(market, supportPrice, supportClose)
 	invalidLevel.Invalidated.Store(true)
 	mkt.AddLevel(invalidLevel)
 
 	resistancePrice := float64(10)
-	secondLevel := shared.NewLevel(market, resistancePrice, resistanceCandle)
+	secondLevel := shared.NewLevel(market, resistancePrice, resistanceClose)
 	mkt.AddLevel(secondLevel)
 
 	tagCandle := &shared.Candlestick{
@@ -87,9 +81,6 @@ func TestMarket(t *testing.T) {
 	// Ensure a tagged tracked level starts the price data request process.
 	mkt.Update(tagCandle)
 	assert.Equal(t, mkt.taggedLevels.Load(), true)
-
-	// Ensure the market tracks previous and current candle used in updating it.
-	assert.Equal(t, mkt.candleSnapshot.Last(), tagCandle)
 
 	// Ensure tagged levels can be filtered from a market.
 	taggedLevels := mkt.FilterTaggedLevels(tagCandle)
