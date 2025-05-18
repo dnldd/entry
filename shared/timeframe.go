@@ -18,16 +18,13 @@ const (
 type Timeframe int
 
 const (
-	OneHour Timeframe = iota
-	FiveMinute
+	FiveMinute Timeframe = iota
 	OneMinute
 )
 
 // String stringifies the provided timeframe.
 func (t Timeframe) String() string {
 	switch t {
-	case OneHour:
-		return "1H"
 	case FiveMinute:
 		return "5m"
 	case OneMinute:
@@ -51,10 +48,10 @@ func NewYorkTime() (time.Time, *time.Location, error) {
 // NextInterval calculates the next expected time for the provided timeframe.
 func NextInterval(timeframe Timeframe, currentTime time.Time) (time.Time, error) {
 	switch timeframe {
+	case OneMinute:
+		return currentTime.Truncate(time.Minute).Add(time.Minute), nil
 	case FiveMinute:
 		return currentTime.Truncate(time.Minute * 5).Add(time.Minute * 5), nil
-	case OneHour:
-		return currentTime.Truncate(time.Hour).Add(time.Hour), nil
 	default:
 		return time.Time{}, fmt.Errorf("unknown timeframe provided for interval: %s", timeframe.String())
 	}

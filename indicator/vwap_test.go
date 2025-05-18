@@ -22,7 +22,7 @@ func TestVWAPGenerator(t *testing.T) {
 		Volume: float64(2),
 
 		Market:    market,
-		Timeframe: shared.OneHour,
+		Timeframe: shared.Timeframe(999),
 	}
 
 	_, err := vwap.Update(ignoredCandle)

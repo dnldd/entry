@@ -132,7 +132,7 @@ func TestCandlestickSnapshot(t *testing.T) {
 		Low:       float64(4),
 		Volume:    float64(3),
 		Status:    make(chan StatusCode, 1),
-		Timeframe: OneHour,
+		Timeframe: Timeframe(999),
 	}
 
 	err = candleSnapshot.Update(wrongTimeframeCandle)
