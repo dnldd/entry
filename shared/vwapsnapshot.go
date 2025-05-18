@@ -8,6 +8,13 @@ import (
 	"go.uber.org/atomic"
 )
 
+const (
+	// MacroTrend is the total number of 5-minute candles used to create a high timeframe trend perpective.
+	MacroTrend = 60
+	// LocalTrend is the total number of 5-minute candles used to create a low timeframe trend perspective.
+	LocalTrend = 20
+)
+
 // VWAPSnapshot represents a snapshot of vwap data.
 type VWAPSnapshot struct {
 	data      []*VWAP

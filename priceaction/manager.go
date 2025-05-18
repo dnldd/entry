@@ -249,13 +249,13 @@ func (m *Manager) handleLevelSignal(signal shared.LevelSignal) error {
 
 // handleCandleMetadataRequest processes the provided candle metadata request.
 func (m *Manager) handleCandleMetadataRequest(req *shared.CandleMetadataRequest) error {
-	mkt, ok := m.markets[req.Market]
+	_, ok := m.markets[req.Market]
 	if !ok {
 		return fmt.Errorf("no market found with name: %s", req.Market)
 	}
 
 	// Request price data and generate price reactions from them.
-	priceDataReq := shared.NewPriceDataRequest(mkt.cfg.Market, req.Timeframe, shared.PriceDataPayloadSize+1)
+	priceDataReq := shared.NewPriceDataRequest(req.Market, req.Timeframe, shared.PriceDataPayloadSize+1)
 	m.cfg.RequestPriceData(*priceDataReq)
 	var data []*shared.Candlestick
 	select {

@@ -51,12 +51,6 @@ type Manager struct {
 
 // NewManager initializes the fetch manager.
 func NewManager(cfg *ManagerConfig) (*Manager, error) {
-	// Track the last updated times for all expected markets.
-	lastUpdatedTimes := make(map[string]time.Time)
-	for idx := range cfg.Markets {
-		lastUpdatedTimes[cfg.Markets[idx]] = time.Time{}
-	}
-
 	loc, err := time.LoadLocation(shared.NewYorkLocation)
 	if err != nil {
 		return nil, fmt.Errorf("loading new york location: %v", err)
@@ -67,7 +61,7 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 
 	mgr := &Manager{
 		cfg:              cfg,
-		lastUpdatedTimes: lastUpdatedTimes,
+		lastUpdatedTimes: make(map[string]time.Time),
 		catchUpSignals:   make(chan shared.CatchUpSignal, bufferSize),
 		subscribers:      make(map[string]chan shared.Candlestick),
 		workers:          make(chan struct{}, maxWorkers),
@@ -162,7 +156,7 @@ func (m *Manager) fetchMarketDataJob(marketName string, timeframe shared.Timefra
 	// A market is required to be caught up and have a last updated time in order to receive
 	// periodic market updates.
 	if !ok {
-		return fmt.Errorf("no last updated time found for %s, skipping market %s update",
+		return fmt.Errorf("no last updated time found for %s with timeframe %s, skipping update",
 			marketName, timeframe.String())
 	}
 
@@ -193,18 +187,31 @@ func (m *Manager) handleCatchUpSignal(signal shared.CatchUpSignal) error {
 		signal.Status <- shared.Processed
 	}()
 
-	key := shared.MarketDataKey(signal.Market, signal.Timeframe.String())
-	m.lastUpdatedTimesMtx.RLock()
-	_, ok := m.lastUpdatedTimes[key]
-	m.lastUpdatedTimesMtx.RUnlock()
-
-	if !ok {
-		return fmt.Errorf("unexpected catch up signal for market %s with timeframe %s",
-			signal.Market, signal.Timeframe.String())
+	match := false
+	for idx := range m.cfg.Markets {
+		market := m.cfg.Markets[idx]
+		if market == signal.Market {
+			match = true
+			break
+		}
 	}
 
-	m.fetchMarketData(signal.Market, signal.Timeframe, signal.Start)
+	if !match {
+		return fmt.Errorf("unexpected market %s provided for catch up signal", signal.Market)
+	}
 
+	var wg sync.WaitGroup
+	wg.Add(len(signal.Timeframe))
+	for idx := range signal.Timeframe {
+		timeframe := signal.Timeframe[idx]
+		// Process fetched market data concurrently for different timeframes.
+		go func() {
+			m.fetchMarketData(signal.Market, timeframe, signal.Start)
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
 	sig := shared.NewCaughtUpSignal(signal.Market)
 	m.cfg.SignalCaughtUp(sig)
 
@@ -214,31 +221,34 @@ func (m *Manager) handleCatchUpSignal(signal shared.CatchUpSignal) error {
 		return fmt.Errorf("fetching new york time: %v", err)
 	}
 
-	startTime, err := shared.NextInterval(signal.Timeframe, now)
-	if err != nil {
-		return fmt.Errorf("fetching next %s interval time: %v", signal.Timeframe.String(), err)
-	}
+	for idx := range signal.Timeframe {
+		timeframe := signal.Timeframe[idx]
+		startTime, err := shared.NextInterval(timeframe, now)
+		if err != nil {
+			return fmt.Errorf("fetching next %s interval time: %v", timeframe.String(), err)
+		}
 
-	// Add a few seconds to ensure a market update occurs before the job runs.
-	startTime = startTime.Add(time.Second * 5)
-	var jobIntervalSeconds uint32
-	switch signal.Timeframe {
-	case shared.OneMinute:
-		jobIntervalSeconds = 65
-	case shared.FiveMinute:
-		jobIntervalSeconds = 305
-	}
+		// Add a few seconds to ensure a market update occurs before the job runs.
+		startTime = startTime.Add(time.Second * 5)
+		var jobIntervalSeconds int
+		switch timeframe {
+		case shared.OneMinute:
+			jobIntervalSeconds = 65
+		case shared.FiveMinute:
+			jobIntervalSeconds = 305
+		}
 
-	_, err = m.cfg.JobScheduler.Every(jobIntervalSeconds).Seconds().StartAt(startTime).
-		Do(func() {
-			err := m.fetchMarketDataJob(signal.Market, signal.Timeframe)
-			if err != nil {
-				m.cfg.Logger.Error().Err(err).Send()
-			}
-		})
-	if err != nil {
-		return fmt.Errorf("scheduling %s market update job for %s: %v", signal.Market,
-			signal.Timeframe.String(), err)
+		_, err = m.cfg.JobScheduler.Every(jobIntervalSeconds).Seconds().StartAt(startTime).
+			Do(func() {
+				err := m.fetchMarketDataJob(signal.Market, timeframe)
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+				}
+			})
+		if err != nil {
+			return fmt.Errorf("scheduling %s market update job for %s: %v", signal.Market,
+				timeframe.String(), err)
+		}
 	}
 
 	return nil

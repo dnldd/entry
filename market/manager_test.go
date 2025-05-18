@@ -12,7 +12,7 @@ import (
 )
 
 func setupManager(t *testing.T, market string, now time.Time, backtest bool) (*Manager, chan shared.CatchUpSignal, chan shared.LevelSignal) {
-	bufferSize := 10
+	bufferSize := 200
 	subscriptions := make([]chan shared.Candlestick, 0, bufferSize)
 	subscribe := func(name string, sub chan shared.Candlestick) {
 		subscriptions = append(subscriptions, sub)

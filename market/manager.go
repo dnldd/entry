@@ -330,7 +330,7 @@ func (m *Manager) catchUp() error {
 			return fmt.Errorf("fetching last session open: %v", err)
 		}
 
-		signal := shared.NewCatchUpSignal(market.cfg.Market, shared.FiveMinute, start)
+		signal := shared.NewCatchUpSignal(market.cfg.Market, []shared.Timeframe{shared.OneMinute, shared.FiveMinute}, start)
 		m.cfg.CatchUp(signal)
 	}
 

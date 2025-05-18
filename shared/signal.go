@@ -91,13 +91,13 @@ func NewLevelSignal(market string, price float64, close float64) LevelSignal {
 // CatchUpSignal represents a signal to catchup on market data.
 type CatchUpSignal struct {
 	Market    string
-	Timeframe Timeframe
+	Timeframe []Timeframe
 	Start     time.Time
 	Status    chan StatusCode
 }
 
 // NewCatchUpSignal initializes a new catch up signal.
-func NewCatchUpSignal(market string, timeframe Timeframe, start time.Time) CatchUpSignal {
+func NewCatchUpSignal(market string, timeframe []Timeframe, start time.Time) CatchUpSignal {
 	return CatchUpSignal{
 		Market:    market,
 		Timeframe: timeframe,

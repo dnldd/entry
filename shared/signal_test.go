@@ -31,7 +31,7 @@ func TestSignalStatus(t *testing.T) {
 	status = <-levelSignal.Status
 	assert.Equal(t, status, Processed)
 
-	catchUpSignal := NewCatchUpSignal(market, timeframe, now)
+	catchUpSignal := NewCatchUpSignal(market, []Timeframe{timeframe}, now)
 	assert.NotNil(t, catchUpSignal)
 	go func() { catchUpSignal.Status <- Processed }()
 	status = <-catchUpSignal.Status

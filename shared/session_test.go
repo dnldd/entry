@@ -54,7 +54,7 @@ func TestSession(t *testing.T) {
 	assert.NotNil(t, current)
 
 	// Ensure it can be checked if the market is open.
-	open, _, err := IsMarketOpen(now)
+	open, _, err := IsMarketOpen(newYork.Open)
 	assert.NoError(t, err)
 	assert.True(t, open)
 

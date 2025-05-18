@@ -88,7 +88,7 @@ func TestManager(t *testing.T) {
 	market := "^GSPC"
 	catchUp := shared.CatchUpSignal{
 		Market:    market,
-		Timeframe: shared.FiveMinute,
+		Timeframe: []shared.Timeframe{shared.FiveMinute},
 		Start:     time.Time{},
 		Status:    make(chan shared.StatusCode, 1),
 	}
@@ -115,7 +115,7 @@ func TestFillManagerChannels(t *testing.T) {
 	market := "^GSPC"
 	catchUp := shared.CatchUpSignal{
 		Market:    market,
-		Timeframe: shared.FiveMinute,
+		Timeframe: []shared.Timeframe{shared.FiveMinute},
 		Start:     time.Time{},
 		Status:    make(chan shared.StatusCode),
 	}
@@ -134,7 +134,7 @@ func TestHandleCatchUpSignal(t *testing.T) {
 	// Ensure handling a catch up signal for an unknown market errors.
 	unknownMarketCatchUp := shared.CatchUpSignal{
 		Market:    "^AAPL",
-		Timeframe: shared.FiveMinute,
+		Timeframe: []shared.Timeframe{shared.FiveMinute},
 		Start:     time.Time{},
 		Status:    make(chan shared.StatusCode, 1),
 	}
@@ -146,7 +146,7 @@ func TestHandleCatchUpSignal(t *testing.T) {
 	market := "^GSPC"
 	catchUp := shared.CatchUpSignal{
 		Market:    market,
-		Timeframe: shared.FiveMinute,
+		Timeframe: []shared.Timeframe{shared.FiveMinute},
 		Start:     time.Time{},
 		Status:    make(chan shared.StatusCode, 1),
 	}
