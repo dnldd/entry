@@ -2,6 +2,7 @@ package shared
 
 import (
 	"errors"
+	"math"
 	"sync"
 	"time"
 
@@ -13,6 +14,10 @@ const (
 	MacroTrend = 60
 	// LocalTrend is the total number of 5-minute candles used to create a low timeframe trend perspective.
 	LocalTrend = 20
+	// minStrongR2 is the mimimum r2 value considered a strong fit.
+	minStrongR2 = 0.80
+	// minStrongSlope is the mimimum score a score needs to be considered strong.
+	minStrongSlope = 0.5
 )
 
 // VWAPSnapshot represents a snapshot of vwap data.
@@ -126,16 +131,55 @@ func (s *VWAPSnapshot) LastN(n int32) []*VWAP {
 	return set
 }
 
+// categorizeTrend classifies the trend based on the slope fit.
+func categorizeTrend(slope float64, r2 float64) Trend {
+	var trend Trend
+	absSlope := math.Abs(slope)
+
+	// If the slope is twice as weak as the minimum to be considered strong then the trend is choppy.
+	if absSlope < minStrongSlope/2 {
+		trend = ChoppyTrend
+	}
+
+	switch {
+	// If r2 and the slope are both below the minimum to be considered strong then the trend is mild one.
+	case r2 < minStrongR2 && absSlope < minStrongSlope:
+		switch {
+		case slope > 0:
+			trend = MildBullishTrend
+		case slope < 0:
+			trend = MildBearishTrend
+		default:
+			trend = ChoppyTrend
+		}
+
+	// If r2 and the slope are above the minimum to be considered strong then for a linear
+	// progressing scenario it is a strong trend. For a parabolic scenario r2 expectedly
+	// will be low but the slope will be magnitudes higher for a strong trend.
+	case (r2 > minStrongR2 && absSlope > minStrongSlope) || (r2 < minStrongR2 && r2 > minStrongR2/2 && absSlope > minStrongSlope*2):
+		switch {
+		case slope > 0:
+			trend = StrongBullishTrend
+
+		case slope < 0:
+			trend = StrongBearishTrend
+		default:
+			trend = ChoppyTrend
+		}
+	}
+
+	return trend
+}
+
 // TrendScore determines the strength of the market trend from the vwap snapshot generated from it.
 //
-// It uses linear regression slope and qualifies it with r squared to generate the trend score.
-func (s *VWAPSnapshot) TrendScore(n int32) (float64, Trend) {
+// This uses linear regression slope and qualifies it with r squared to generate the trend.
+func (s *VWAPSnapshot) Trend(n int32) (Trend, float64, float64) {
 	if n <= 0 {
-		return 0, ChoppyTrend
+		return ChoppyTrend, 0, 0
 	}
 
 	values := s.LastN(n)
-	currentVwap := values[len(values)-1].Value
 	nf := float64(n)
 
 	// Calculate the linear regression slope of the vwap which is the strength of the trend.
@@ -153,7 +197,7 @@ func (s *VWAPSnapshot) TrendScore(n int32) (float64, Trend) {
 	numerator := (nf * sumXY) - (sumX * sumY)
 	denominator := (nf * sumXX) - (sumX * sumX)
 	if denominator == 0 {
-		return 0, ChoppyTrend
+		return ChoppyTrend, 0, 0
 	}
 
 	slope := numerator / denominator
@@ -171,20 +215,11 @@ func (s *VWAPSnapshot) TrendScore(n int32) (float64, Trend) {
 	}
 
 	if totalSum == 0 {
-		return 0, ChoppyTrend
+		return ChoppyTrend, 0, 0
 	}
 
 	// Calculate r2 (r squared) which is the confidence metric of the linear regression slope.
-	r2 := 1 - (residualSum / totalSum)
+	r2 := min(max(1-(residualSum/totalSum), 0), 1)
 
-	// Normalize the slope with the vwap value.
-	normalizedSlope := slope / currentVwap
-
-	// The trend score becomes a combination of strength and confidence.
-	trendScore := normalizedSlope * r2
-
-	// Categorize the trend.
-	trendCategory := CategorizeTrendScore(trendScore)
-
-	return trendScore, trendCategory
+	return categorizeTrend(slope, r2), slope, r2
 }

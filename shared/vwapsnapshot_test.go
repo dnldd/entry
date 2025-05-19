@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"math"
 	"testing"
 
 	"github.com/peterldowns/testy/assert"
@@ -93,4 +94,91 @@ func TestVWAPSnapshot(t *testing.T) {
 	// Ensure vwap entries can be fetched by their associated timestamps.
 	vwapAtTime := vwapSnapshot.At(now)
 	assert.NotNil(t, vwapAtTime)
+}
+
+func TestVWAPTrend(t *testing.T) {
+	tests := []struct {
+		name  string
+		data  []*VWAP
+		trend Trend
+		slope float64
+		r2    float64
+	}{
+		{
+			"no trend (chop)",
+			[]*VWAP{
+				{Value: 2}, {Value: 2}, {Value: 2}, {Value: 2}, {Value: 2},
+				{Value: 2}, {Value: 2}, {Value: 2}, {Value: 2}, {Value: 2},
+				{Value: 2}, {Value: 2}, {Value: 2}, {Value: 2}, {Value: 2},
+				{Value: 2}, {Value: 2}, {Value: 2}, {Value: 2}, {Value: 2},
+			},
+			ChoppyTrend,
+			0.0,
+			0.0,
+		},
+		{
+			"mild bullish trend",
+			[]*VWAP{
+				{Value: 2.00}, {Value: 2.04}, {Value: 1.98}, {Value: 2.06}, {Value: 2.00},
+				{Value: 2.05}, {Value: 2.01}, {Value: 2.08}, {Value: 2.03}, {Value: 2.12},
+				{Value: 2.05}, {Value: 2.10}, {Value: 2.07}, {Value: 2.12}, {Value: 2.08},
+				{Value: 2.15}, {Value: 2.12}, {Value: 2.16}, {Value: 2.14}, {Value: 2.18},
+			},
+			MildBullishTrend,
+			0.008556,
+			0.760479,
+		},
+		{
+			"strong linear bullish trend",
+			[]*VWAP{
+				{Value: 2}, {Value: 4}, {Value: 6}, {Value: 8}, {Value: 10},
+				{Value: 12}, {Value: 14}, {Value: 16}, {Value: 18}, {Value: 20},
+				{Value: 22}, {Value: 24}, {Value: 26}, {Value: 28}, {Value: 30},
+				{Value: 32}, {Value: 34}, {Value: 36}, {Value: 38}, {Value: 40},
+			},
+			StrongBullishTrend,
+			2.0,
+			1.0,
+		},
+		{
+			"strong parabolic bullish trend",
+			[]*VWAP{
+				{Value: 2}, {Value: 4}, {Value: 7}, {Value: 14}, {Value: 24},
+				{Value: 36}, {Value: 54}, {Value: 67}, {Value: 84}, {Value: 102},
+				{Value: 140}, {Value: 200}, {Value: 280}, {Value: 350}, {Value: 500},
+				{Value: 700}, {Value: 1000}, {Value: 1500}, {Value: 2500}, {Value: 4000},
+			},
+			StrongBullishTrend,
+			126.873684,
+			0.539507,
+		},
+	}
+
+	for _, test := range tests {
+		size := int32(30)
+		timeframe := FiveMinute
+		snapshot, err := NewVWAPSnapshot(size, timeframe)
+		if err != nil {
+			t.Errorf("%s: unexpected error %v", test.name, err)
+		}
+
+		for idx := range test.data {
+			vwap := test.data[idx]
+			snapshot.Update(vwap)
+		}
+
+		trend, slope, r2 := snapshot.Trend(20)
+
+		if math.Abs(slope-test.slope) > 0.0001 {
+			t.Errorf("%s: mismatched slope, got %f, expected %f", test.name, slope, test.slope)
+		}
+
+		if math.Abs(r2-test.r2) > 0.0001 {
+			t.Errorf("%s: mismatched r2, got %f, expected %f", test.name, r2, test.r2)
+		}
+
+		if trend != test.trend {
+			t.Errorf("%s: mismatched trend , got %s, expected %s", test.name, trend.String(), test.trend.String())
+		}
+	}
 }
