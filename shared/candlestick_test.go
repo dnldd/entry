@@ -200,7 +200,7 @@ func TestIsVolumeSpike(t *testing.T) {
 	}
 }
 
-func TestGenerateMomemtum(t *testing.T) {
+func TestGenerateMomentum(t *testing.T) {
 	tests := []struct {
 		name    string
 		current *Candlestick

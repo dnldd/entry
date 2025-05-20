@@ -138,3 +138,158 @@ func TestCandlestickSnapshot(t *testing.T) {
 	err = candleSnapshot.Update(wrongTimeframeCandle)
 	assert.Error(t, err)
 }
+
+func TestDetectImbalance(t *testing.T) {
+	size := int32(8)
+	timeframe := FiveMinute
+	market := "^GSPC"
+
+	tests := []struct {
+		name          string
+		candles       []Candlestick
+		wantImbalance bool
+		sentiment     Sentiment
+		gapRatio      float64
+	}{
+		{
+			"no imbalance - no candle gaps",
+			[]Candlestick{
+				{
+					Market:    market,
+					Open:      float64(5),
+					Close:     float64(10),
+					High:      float64(12),
+					Low:       float64(4),
+					Volume:    float64(3),
+					Status:    make(chan StatusCode, 1),
+					Timeframe: timeframe,
+				},
+				{
+					Market:    market,
+					Open:      float64(10),
+					Close:     float64(15),
+					High:      float64(16),
+					Low:       float64(5),
+					Volume:    float64(2),
+					Status:    make(chan StatusCode, 1),
+					Timeframe: timeframe,
+				},
+				{
+					Market:    market,
+					Open:      float64(15),
+					Close:     float64(17),
+					High:      float64(18),
+					Low:       float64(10),
+					Volume:    float64(2),
+					Status:    make(chan StatusCode, 1),
+					Timeframe: timeframe,
+				},
+			},
+			false,
+			Sentiment(999),
+			0.0,
+		},
+		{
+			"no imbalance - low volume",
+			[]Candlestick{
+				{
+					Market:    market,
+					Open:      float64(15),
+					Close:     float64(17),
+					High:      float64(18),
+					Low:       float64(10),
+					Volume:    float64(2),
+					Status:    make(chan StatusCode, 1),
+					Timeframe: timeframe,
+				},
+				{
+					Market:    market,
+					Open:      float64(17),
+					Close:     float64(24),
+					High:      float64(25),
+					Low:       float64(16),
+					Volume:    float64(1),
+					Status:    make(chan StatusCode, 1),
+					Timeframe: timeframe,
+				},
+				{
+					Market:    market,
+					Open:      float64(24),
+					Close:     float64(27),
+					High:      float64(28),
+					Low:       float64(23),
+					Volume:    float64(2),
+					Status:    make(chan StatusCode, 1),
+					Timeframe: timeframe,
+				},
+			},
+			false,
+			Sentiment(999),
+			0.0,
+		},
+		{
+			"valid imbalance",
+			[]Candlestick{
+				{
+					Market:    market,
+					Open:      float64(15),
+					Close:     float64(17),
+					High:      float64(18),
+					Low:       float64(10),
+					Volume:    float64(2),
+					Status:    make(chan StatusCode, 1),
+					Timeframe: timeframe,
+				},
+				{
+					Market:    market,
+					Open:      float64(17),
+					Close:     float64(24),
+					High:      float64(25),
+					Low:       float64(16),
+					Volume:    float64(7),
+					Status:    make(chan StatusCode, 1),
+					Timeframe: timeframe,
+				},
+				{
+					Market:    market,
+					Open:      float64(24),
+					Close:     float64(27),
+					High:      float64(28),
+					Low:       float64(23),
+					Volume:    float64(2),
+					Status:    make(chan StatusCode, 1),
+					Timeframe: timeframe,
+				},
+			},
+			true,
+			Bullish,
+			0.7142857142857143,
+		},
+	}
+
+	for _, test := range tests {
+		snapshot, err := NewCandlestickSnapshot(size, timeframe)
+		assert.NoError(t, err)
+
+		for idx := range test.candles {
+			candle := test.candles[idx]
+			snapshot.Update(&candle)
+		}
+
+		imbalance, ok := snapshot.DetectImbalance()
+
+		if (!test.wantImbalance && ok) || (test.wantImbalance && !ok) {
+			t.Errorf("%s: expected %v, got %v", test.name, test.wantImbalance, ok)
+		}
+
+		if test.wantImbalance && ok {
+			if test.gapRatio != imbalance.GapRatio {
+				t.Errorf("%s: expected imbalance gap ratio %.2f, got %.2f", test.name, imbalance.GapRatio, test.gapRatio)
+			}
+
+			if test.sentiment != imbalance.Sentiment {
+				t.Errorf("%s: expected imbalance sentiment %s, got %s", test.name, imbalance.Sentiment, test.sentiment)
+			}
+		}
+	}
+}
