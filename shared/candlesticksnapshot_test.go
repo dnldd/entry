@@ -150,6 +150,8 @@ func TestDetectImbalance(t *testing.T) {
 		wantImbalance bool
 		sentiment     Sentiment
 		gapRatio      float64
+		high          float64
+		low           float64
 	}{
 		{
 			"no imbalance - no candle gaps",
@@ -187,6 +189,8 @@ func TestDetectImbalance(t *testing.T) {
 			},
 			false,
 			Sentiment(999),
+			0.0,
+			0.0,
 			0.0,
 		},
 		{
@@ -226,6 +230,8 @@ func TestDetectImbalance(t *testing.T) {
 			false,
 			Sentiment(999),
 			0.0,
+			0.0,
+			0.0,
 		},
 		{
 			"valid imbalance",
@@ -264,6 +270,8 @@ func TestDetectImbalance(t *testing.T) {
 			true,
 			Bullish,
 			0.7142857142857143,
+			23.0,
+			18.0,
 		},
 	}
 
@@ -289,6 +297,14 @@ func TestDetectImbalance(t *testing.T) {
 
 			if test.sentiment != imbalance.Sentiment {
 				t.Errorf("%s: expected imbalance sentiment %s, got %s", test.name, imbalance.Sentiment, test.sentiment)
+			}
+
+			if test.high != imbalance.High {
+				t.Errorf("%s: expected imbalance high %.2f, got %.2f", test.name, imbalance.High, test.high)
+			}
+
+			if test.low != imbalance.Low {
+				t.Errorf("%s: expected imbalance low %.2f, got %.2f", test.name, imbalance.Low, test.low)
 			}
 		}
 	}

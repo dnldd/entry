@@ -174,8 +174,8 @@ func (s *CandlestickSnapshot) DetectImbalance() (*Imbalance, bool) {
 			return nil, false
 		}
 
-		high := firstCandle.High
-		low := thirdCandle.Low
+		high := thirdCandle.Low
+		low := firstCandle.High
 		midpoint := (high + low) / 2
 
 		imbalance := NewImbalance(firstCandle.Market, firstCandle.Timeframe, high, midpoint, low,
