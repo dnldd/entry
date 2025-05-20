@@ -55,7 +55,7 @@ func NewReactionAtVWAP(market string, vwapData []*VWAP, priceData []*Candlestick
 		VWAPData: vwapData,
 	}
 
-	// Generate price movement data from the level and provided price data.
+	// Generate price movement data from the vwap and provided price data.
 	for idx := range priceData {
 		candle := priceData[idx]
 		vwap := vwapData[idx]
@@ -106,8 +106,8 @@ func NewReactionAtVWAP(market string, vwapData []*VWAP, priceData []*Candlestick
 			// it is likely breaking the vwap.
 			vr.Reaction = Break
 		case first == Above && below > 0 && fourth == Above:
-			// If price was above a vwap acting as support level but closed below it briefly and
-			// pushed back above it then it is likely reversing at the level.
+			// If price was above a vwap acting as support but closed below it briefly and
+			// pushed back above it then it is likely reversing at the vwap.
 			vr.Reaction = Reversal
 		case first == Above && second == Below && third == Above && fourth == Below:
 			// If price is consistently closing aimlessly above and below a vwap it is chopping.
@@ -134,7 +134,7 @@ func NewReactionAtVWAP(market string, vwapData []*VWAP, priceData []*Candlestick
 			// back below it then it is likely breaking the vwap.
 			vr.Reaction = Reversal
 		case first == Below && second == Above && third == Below && fourth == Above:
-			// If price is consistently closing aimlessly above and below a level it is chopping.
+			// If price is consistently closing aimlessly above and below a vwap it is chopping.
 			vr.Reaction = Chop
 		default:
 			vr.Reaction = Chop

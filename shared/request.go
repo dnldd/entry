@@ -9,12 +9,17 @@ const (
 	PriceDataPayloadSize = 4
 	// VWAPDataPayloadSize is the number of vwap data expected as payload for a vwap data request.
 	VWAPDataPayloadSize = 4
+	// ImbalanceDataPayloadSize is the number of imbalance data expected as payload for a imbalance data request.
+	ImbalanceDataPayloadSize = 4
 	// MaxPriceDataRequestInterval is the maximum update intervals to wait before triggering a
 	// price data request.
 	MaxPriceDataRequestInterval = 3
 	// MaxVWAPDataRequestInterval is the maximum update intervals to wait before triggering a
 	// vwap data request.
 	MaxVWAPDataRequestInterval = 3
+	// MaxImbalanceDataRequestInterval is the maximum update intervals to wait before triggering a
+	// imbalance data request.
+	MaxImbalanceDataRequestInterval = 3
 	// TimeoutDuration is the maximum time to wait before timing out.
 	TimeoutDuration = time.Second * 4
 )

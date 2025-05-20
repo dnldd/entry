@@ -152,7 +152,8 @@ func (s *CandlestickSnapshot) DetectImbalance() (*Imbalance, bool) {
 
 	// An imbalance requires a displacement candle with above-average volume,
 	// and the candle must be either a marubozu or a pinbar.
-	if (secondCandle.FetchKind() != Marubozu && secondCandle.FetchKind() != Pinbar) || secondCandle.Volume < avgVolume {
+	if (secondCandle.FetchKind() != Marubozu && secondCandle.FetchKind() != Pinbar) ||
+		secondCandle.Volume < avgVolume {
 		return nil, false
 	}
 
@@ -177,7 +178,8 @@ func (s *CandlestickSnapshot) DetectImbalance() (*Imbalance, bool) {
 		low := thirdCandle.Low
 		midpoint := (high + low) / 2
 
-		imbalance := NewImbalance(firstCandle.Market, high, midpoint, low, sentiment, gapRatio, thirdCandle.Date)
+		imbalance := NewImbalance(firstCandle.Market, firstCandle.Timeframe, high, midpoint, low,
+			sentiment, gapRatio, thirdCandle.Date)
 
 		return imbalance, true
 
@@ -199,7 +201,8 @@ func (s *CandlestickSnapshot) DetectImbalance() (*Imbalance, bool) {
 		low := thirdCandle.High
 		midpoint := (high + low) / 2
 
-		imbalance := NewImbalance(firstCandle.Market, high, midpoint, low, sentiment, gapRatio, thirdCandle.Date)
+		imbalance := NewImbalance(firstCandle.Market, firstCandle.Timeframe, high, midpoint,
+			low, sentiment, gapRatio, thirdCandle.Date)
 
 		return imbalance, true
 	}

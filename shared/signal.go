@@ -119,3 +119,19 @@ func NewCaughtUpSignal(market string) CaughtUpSignal {
 		Status: make(chan StatusCode, 1),
 	}
 }
+
+// ImbalanceSignal represents a imbalance signal to outline a price level.
+type ImbalanceSignal struct {
+	Market    string
+	Imbalance Imbalance
+	Status    chan StatusCode
+}
+
+// NewImbalanceSignal initializes a new imbalance signal.
+func NewImbalanceSignal(market string, imbalance Imbalance) ImbalanceSignal {
+	return ImbalanceSignal{
+		Market:    market,
+		Imbalance: imbalance,
+		Status:    make(chan StatusCode, 1),
+	}
+}
