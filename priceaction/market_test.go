@@ -71,11 +71,11 @@ func TestMarket(t *testing.T) {
 	}
 
 	// Ensure the market can check whether a candle tags a level.
-	isTagged := mkt.taggedLevel(level, tagCandle)
+	isTagged := mkt.levelTagged(level, tagCandle)
 	assert.True(t, isTagged)
 
 	// Ensure an invalidated level cannot be tagged.
-	invalidTag := mkt.taggedLevel(invalidLevel, tagCandle)
+	invalidTag := mkt.levelTagged(invalidLevel, tagCandle)
 	assert.False(t, invalidTag)
 
 	// Ensure a tagged tracked level starts the price data request process.
@@ -83,7 +83,7 @@ func TestMarket(t *testing.T) {
 	assert.Equal(t, mkt.taggedLevels.Load(), true)
 
 	// Ensure tagged levels can be filtered from a market.
-	taggedLevels := mkt.FilterTaggedLevels(tagCandle)
+	taggedLevels := mkt.filterTaggedLevels(tagCandle)
 	assert.Equal(t, len(taggedLevels), 2)
 
 	// Ensure 3 updates after a level is tagged the market signals a price data request.

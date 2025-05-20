@@ -36,6 +36,8 @@ type ManagerConfig struct {
 	SignalReactionAtLevel func(signal shared.ReactionAtLevel)
 	// SignalVWAPReaction relays a vwap reaction for processing.
 	SignalReactionAtVWAP func(signal shared.ReactionAtVWAP)
+	// SignalReactionAtImbalance relays an imbalance reaction for processing.
+	SignalReactionAtImbalance func(signal shared.ReactionAtImbalance)
 	// FetchCaughtUpState returns the caught up statis of the provided market.
 	FetchCaughtUpState func(market string) (bool, error)
 	// Logger represents the application logger.
@@ -44,13 +46,14 @@ type ManagerConfig struct {
 
 // Manager represents the price action manager.
 type Manager struct {
-	cfg            *ManagerConfig
-	markets        map[string]*Market
-	levelSignals   chan shared.LevelSignal
-	updateSignals  chan shared.Candlestick
-	metaSignals    chan shared.CandleMetadataRequest
-	workers        map[string]chan struct{}
-	requestWorkers chan struct{}
+	cfg              *ManagerConfig
+	markets          map[string]*Market
+	levelSignals     chan shared.LevelSignal
+	imbalanceSignals chan shared.ImbalanceSignal
+	updateSignals    chan shared.Candlestick
+	metaSignals      chan shared.CandleMetadataRequest
+	workers          map[string]chan struct{}
+	requestWorkers   chan struct{}
 }
 
 // NewManager initializes a new price action manager.
@@ -77,13 +80,14 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 		markets[market] = mkt
 	}
 	return &Manager{
-		cfg:            cfg,
-		markets:        markets,
-		levelSignals:   make(chan shared.LevelSignal, bufferSize),
-		updateSignals:  make(chan shared.Candlestick, bufferSize),
-		metaSignals:    make(chan shared.CandleMetadataRequest, bufferSize),
-		requestWorkers: make(chan struct{}, maxWorkers),
-		workers:        workers,
+		cfg:              cfg,
+		markets:          markets,
+		levelSignals:     make(chan shared.LevelSignal, bufferSize),
+		imbalanceSignals: make(chan shared.ImbalanceSignal, bufferSize),
+		updateSignals:    make(chan shared.Candlestick, bufferSize),
+		metaSignals:      make(chan shared.CandleMetadataRequest, bufferSize),
+		requestWorkers:   make(chan struct{}, maxWorkers),
+		workers:          workers,
 	}, nil
 }
 
@@ -95,6 +99,17 @@ func (m *Manager) SendLevelSignal(level shared.LevelSignal) {
 	default:
 		m.cfg.Logger.Error().Msgf("level channel at capacity: %d/%d",
 			len(m.levelSignals), bufferSize)
+	}
+}
+
+// SendImbalance relays the provided imbalance signal for processing.
+func (m *Manager) SendImbalanceSignal(imbalance shared.ImbalanceSignal) {
+	select {
+	case m.imbalanceSignals <- imbalance:
+		// do nothing.
+	default:
+		m.cfg.Logger.Error().Msgf("imbalance channel at capacity: %d/%d",
+			len(m.imbalanceSignals), bufferSize)
 	}
 }
 
@@ -154,6 +169,44 @@ func (m *Manager) evaluateReactionAtLevelSignal(mkt *Market, timeframe shared.Ti
 	}
 
 	mkt.ResetPriceDataState()
+
+	return nil
+}
+
+// evaluateReactionAtImbalanceSignal determines whether a reaction at imbalance signal should be
+// generated for the provided market.
+func (m *Manager) evaluateReactionAtImbalanceSignal(mkt *Market, timeframe shared.Timeframe) error {
+	if !mkt.RequestingImbalanceData() {
+		// Do nothing.
+		return nil
+	}
+
+	// Request price data and generate price reactions from them.
+	req := shared.NewPriceDataRequest(mkt.cfg.Market, timeframe, shared.PriceDataPayloadSize)
+	m.cfg.RequestPriceData(*req)
+	var data []*shared.Candlestick
+	select {
+	case data = <-req.Response:
+	case <-time.After(shared.TimeoutDuration):
+		return fmt.Errorf("timed out waiting for price data response")
+	}
+
+	reactions, err := mkt.GenerateReactionsAtTaggedImbalances(data)
+	if err != nil {
+		return fmt.Errorf("generating level reactions: %v", err)
+	}
+
+	for idx := range reactions {
+		reaction := reactions[idx]
+		m.cfg.SignalReactionAtImbalance(*reaction)
+		select {
+		case <-reaction.Status:
+		case <-time.After(shared.TimeoutDuration):
+			return fmt.Errorf("timed out waiting for reaction at imbalance status")
+		}
+	}
+
+	mkt.ResetImbalanceDataState()
 
 	return nil
 }
@@ -223,7 +276,12 @@ func (m *Manager) handleUpdateSignal(candle *shared.Candlestick) error {
 
 	err = m.evaluateReactionAtVWAPSignal(mkt, candle.Timeframe)
 	if err != nil {
-		return fmt.Errorf("evaluatiing reaction at vwap signal: %v", err)
+		return fmt.Errorf("evaluating reaction at vwap signal: %v", err)
+	}
+
+	err = m.evaluateReactionAtImbalanceSignal(mkt, candle.Timeframe)
+	if err != nil {
+		return fmt.Errorf("evaluating reaction at imbalance signal: %v", err)
 	}
 
 	return nil
@@ -243,6 +301,25 @@ func (m *Manager) handleLevelSignal(signal shared.LevelSignal) error {
 	level := shared.NewLevel(signal.Market, signal.Price, signal.Close)
 	mkt.levelSnapshot.Add(level)
 	m.cfg.Logger.Info().Msgf("added new %s level @ %.2f for %s", level.Kind.String(), level.Price, level.Market)
+
+	return nil
+}
+
+// handleImbalanceSignal processes the provided imbalance signal.
+func (m *Manager) handleImbalanceSignal(signal shared.ImbalanceSignal) error {
+	defer func() {
+		signal.Status <- shared.Processed
+	}()
+
+	mkt, ok := m.markets[signal.Market]
+	if !ok {
+		return fmt.Errorf("no market found with name %s", signal.Market)
+	}
+
+	imb := &signal.Imbalance
+	mkt.imbalanceSnapshot.Add(imb)
+	m.cfg.Logger.Info().Msgf("added new %s imbalance with gap ratio %.2f covering %.2f - %.2f for %s",
+		imb.Sentiment.String(), imb.GapRatio, imb.High, imb.Low, imb.Market)
 
 	return nil
 }
@@ -308,6 +385,15 @@ func (m *Manager) Run(ctx context.Context) {
 			m.workers[signal.Market] <- struct{}{}
 			go func(signal shared.LevelSignal) {
 				err := m.handleLevelSignal(signal)
+				if err != nil {
+					m.cfg.Logger.Error().Err(err).Send()
+				}
+				<-m.workers[signal.Market]
+			}(signal)
+		case signal := <-m.imbalanceSignals:
+			m.workers[signal.Market] <- struct{}{}
+			go func(signal shared.ImbalanceSignal) {
+				err := m.handleImbalanceSignal(signal)
 				if err != nil {
 					m.cfg.Logger.Error().Err(err).Send()
 				}
