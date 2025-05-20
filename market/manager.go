@@ -41,6 +41,8 @@ type ManagerConfig struct {
 	CatchUp func(signal shared.CatchUpSignal)
 	// SignalLevel relays the provided  level signal for  processing.
 	SignalLevel func(signal shared.LevelSignal)
+	// SignalImbalanace relays the provided imbalance signal for processing.
+	SignalImbalance func(signal shared.ImbalanceSignal)
 	// JobScheduler represents the job scheduler.
 	JobScheduler *gocron.Scheduler
 	// Logger represents the application logger.
@@ -73,6 +75,7 @@ func NewManager(cfg *ManagerConfig, now time.Time) (*Manager, error) {
 		mCfg := &MarketConfig{
 			Market:            cfg.Markets[idx],
 			SignalLevel:       cfg.SignalLevel,
+			SignalImbalance:   cfg.SignalImbalance,
 			RelayMarketUpdate: cfg.RelayMarketUpdate,
 			JobScheduler:      cfg.JobScheduler,
 		}

@@ -21,6 +21,8 @@ type MarketConfig struct {
 	Market string
 	// SignalLevel relays the provided level signal for processing.
 	SignalLevel func(signal shared.LevelSignal)
+	// SignalImbalanace relays the provided imbalance signal for processing.
+	SignalImbalance func(signal shared.ImbalanceSignal)
 	// RelayMarketUpdate relays the provided market update to the price action
 	// manager for processing.
 	RelayMarketUpdate func(candle shared.Candlestick)
@@ -205,6 +207,18 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 		m.sessionSnapshot.FetchCurrentSession().Update(candle)
 
 		if changed {
+			// Detect and send imbalances.
+			imbalance, ok := candleSnapshot.DetectImbalance()
+			if ok {
+				imbalanaceSignal := shared.NewImbalanceSignal(candle.Market, *imbalance)
+				m.cfg.SignalImbalance(imbalanaceSignal)
+				select {
+				case <-imbalanaceSignal.Status:
+				case <-time.After(shared.TimeoutDuration):
+					return fmt.Errorf("timed out while waiting for imbalance signal status")
+				}
+			}
+
 			// Fetch and send new high and low from completed sessions.
 			high, low, err := m.sessionSnapshot.FetchLastSessionHighLow()
 			if err != nil {
