@@ -626,6 +626,8 @@ func TestNewReactionAtLevel(t *testing.T) {
 		}
 
 		if err == nil {
+			reaction.ApplyPriceReaction()
+
 			if !cmp.Equal(test.wantPriceMovement, reaction.PriceMovement) {
 				t.Errorf("%s: expected movement %v, got %v", test.name, test.wantPriceMovement, reaction.PriceMovement)
 			}

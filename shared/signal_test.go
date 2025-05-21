@@ -42,4 +42,10 @@ func TestSignalStatus(t *testing.T) {
 	go func() { caughtUpSignal.Status <- Processed }()
 	status = <-caughtUpSignal.Status
 	assert.Equal(t, status, Processed)
+
+	imbalanceSignal := NewImbalanceSignal(market, Imbalance{})
+	assert.NotNil(t, imbalanceSignal)
+	go func() { imbalanceSignal.Status <- Processed }()
+	status = <-imbalanceSignal.Status
+	assert.Equal(t, status, Processed)
 }

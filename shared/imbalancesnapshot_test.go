@@ -39,6 +39,12 @@ func TestImbalanceSnapshot(t *testing.T) {
 	low := float64(18)
 	gapRatio := float64(0.7142857142857143)
 	imbalance := NewImbalance(market, timeframe, high, midpoint, low, Bullish, gapRatio, time.Time{})
+	wrongTimeframeImbalance := NewImbalance(market, OneHour, high, midpoint, low, Bullish, gapRatio, time.Time{})
+
+	// Ensure adding an imbalance of a different timeframe errors.
+	err = imbalanceSnapshot.Add(wrongTimeframeImbalance)
+	assert.Error(t, err)
+
 	// Ensure the snapshot can be updated with candles.
 	for range size {
 		err := imbalanceSnapshot.Add(imbalance)
@@ -50,6 +56,12 @@ func TestImbalanceSnapshot(t *testing.T) {
 	assert.Equal(t, imbalanceSnapshot.start.Load(), 0)
 	assert.Equal(t, len(imbalanceSnapshot.data), int(size))
 
+	// Ensure the snapshot overwrites its store at capacity.
+	err = imbalanceSnapshot.Add(imbalance)
+	assert.NoError(t, err)
+
+	assert.Equal(t, imbalanceSnapshot.start.Load(), 1)
+
 	// Ensure calling last on an valid snapshot returns the last added entry.
 	last = imbalanceSnapshot.Last()
 	assert.NotNil(t, last)
@@ -57,4 +69,31 @@ func TestImbalanceSnapshot(t *testing.T) {
 	// Ensure calling LastN with a larger size than the snapshot gets clamped to the snapshot's size.
 	lastN = imbalanceSnapshot.LastN(size + 1)
 	assert.Equal(t, len(lastN), int(size))
+
+	// Ensure the snapshot can  process market updates.
+	candle := &Candlestick{
+		Market:    market,
+		Open:      float64(25),
+		Close:     float64(16),
+		High:      float64(26),
+		Low:       float64(14),
+		Volume:    float64(2),
+		Status:    make(chan StatusCode, 1),
+		Timeframe: timeframe,
+	}
+
+	imbalanceSnapshot.Update(candle)
+	assert.True(t, imbalanceSnapshot.Last().Purged.Load())
+
+	// Ensure the snapshot can be filtered for qualifying imbalances.
+	filterFunc := func(*Imbalance, *Candlestick) bool {
+		if imbalance.Low > candle.Close {
+			return true
+		}
+
+		return false
+	}
+
+	imbalanceSet := imbalanceSnapshot.Filter(candle, filterFunc)
+	assert.GreaterThan(t, len(imbalanceSet), 0)
 }

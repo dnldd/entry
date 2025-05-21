@@ -223,10 +223,6 @@ func (s *SessionSnapshot) FetchLastSessionHighLow() (float64, float64, error) {
 		high = s.data[previous].High.Load()
 		low = s.data[previous].Low.Load()
 
-		if high == 29 {
-			fmt.Println("high is 29")
-		}
-
 		return high, low, nil
 	}
 
