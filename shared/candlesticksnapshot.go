@@ -9,11 +9,12 @@ import (
 )
 
 const (
-	// OneMinuteSnapshotSize is the maximum number of entries for a one minute timeframe candlestick snapshot.
+	// OneMinuteSnapshotSize is the maximum number of entries for a one minute timeframe snapshot.
 	OneMinuteSnapshotSize = 300
-	// FiveMinuteSnapshotSize is the maximum number of entries for a five minute timeframe candlestick snapshot.
+	// FiveMinuteSnapshotSize is the maximum number of entries for a five minute timeframe snapshot.
 	FiveMinuteSnapshotSize = 120
-
+	// OneHourSnapshotSize is the maximum number of entries for a one hour timeframe snapshot.
+	OneHourSnapshotSize = 72
 	// minImbalanceRatioThreshold is the minimum imbalance ratio to be considered substantive
 	minImbalanceRatioThreshold = 0.24
 )

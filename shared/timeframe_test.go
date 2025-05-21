@@ -21,6 +21,12 @@ func TestTimeframeString(t *testing.T) {
 		want      string
 	}{
 		{
+			"One Hour",
+			OneHour,
+			"1H",
+		},
+
+		{
 			"Five Minute",
 			FiveMinute,
 			"5m",
@@ -49,6 +55,11 @@ func TestNextInterval(t *testing.T) {
 	assert.NoError(t, err)
 	assert.GreaterThan(t, futureTimeOneMinuteInterval.Unix(), now.Unix())
 	assert.LessThanOrEqual(t, futureTimeOneMinuteInterval.Unix()-now.Unix(), 60)
+
+	futureTimeOneHourInterval, err := NextInterval(OneHour, now)
+	assert.NoError(t, err)
+	assert.GreaterThan(t, futureTimeOneHourInterval.Unix(), now.Unix())
+	assert.LessThanOrEqual(t, futureTimeOneHourInterval.Unix()-now.Unix(), 3600)
 
 	futureTimeFiveMinuteInterval, err := NextInterval(FiveMinute, now)
 	assert.NoError(t, err)

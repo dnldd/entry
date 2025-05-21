@@ -19,6 +19,7 @@ type Timeframe int
 
 const (
 	FiveMinute Timeframe = iota
+	OneHour
 	OneMinute
 )
 
@@ -29,6 +30,8 @@ func (t Timeframe) String() string {
 		return "5m"
 	case OneMinute:
 		return "1m"
+	case OneHour:
+		return "1H"
 	default:
 		return "unknown"
 	}
@@ -52,6 +55,8 @@ func NextInterval(timeframe Timeframe, currentTime time.Time) (time.Time, error)
 		return currentTime.Truncate(time.Minute).Add(time.Minute), nil
 	case FiveMinute:
 		return currentTime.Truncate(time.Minute * 5).Add(time.Minute * 5), nil
+	case OneHour:
+		return currentTime.Truncate(time.Hour).Add(time.Hour), nil
 	default:
 		return time.Time{}, fmt.Errorf("unknown timeframe provided for interval: %s", timeframe.String())
 	}

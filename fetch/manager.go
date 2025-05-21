@@ -236,6 +236,8 @@ func (m *Manager) handleCatchUpSignal(signal shared.CatchUpSignal) error {
 			jobIntervalSeconds = 65
 		case shared.FiveMinute:
 			jobIntervalSeconds = 305
+		case shared.OneHour:
+			jobIntervalSeconds = 3605
 		}
 
 		_, err = m.cfg.JobScheduler.Every(jobIntervalSeconds).Seconds().StartAt(startTime).

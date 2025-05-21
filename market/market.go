@@ -52,7 +52,7 @@ func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
 		return nil, err
 	}
 
-	timeframes := []shared.Timeframe{shared.OneMinute, shared.FiveMinute}
+	timeframes := []shared.Timeframe{shared.FiveMinute, shared.OneHour}
 
 	// Create candlestick snapshots for all tracked timeframes.
 	candleSnapshots := make(map[shared.Timeframe]*shared.CandlestickSnapshot)
@@ -69,6 +69,13 @@ func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
 			candleSnapshots[timeframe] = snapshot
 		case shared.FiveMinute:
 			snapshot, err := shared.NewCandlestickSnapshot(shared.FiveMinuteSnapshotSize, timeframe)
+			if err != nil {
+				return nil, err
+			}
+
+			candleSnapshots[timeframe] = snapshot
+		case shared.OneHour:
+			snapshot, err := shared.NewCandlestickSnapshot(shared.OneHourSnapshotSize, timeframe)
 			if err != nil {
 				return nil, err
 			}
@@ -97,6 +104,13 @@ func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
 			}
 
 			vwapSnapshots[timeframe] = snapshot
+		case shared.OneHour:
+			snapshot, err := shared.NewVWAPSnapshot(shared.OneHourSnapshotSize, timeframe)
+			if err != nil {
+				return nil, err
+			}
+
+			vwapSnapshots[timeframe] = snapshot
 		}
 	}
 
@@ -109,6 +123,9 @@ func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
 			indicator := indicator.NewVWAP(cfg.Market, timeframe)
 			vwapIndicators[timeframe] = indicator
 		case shared.FiveMinute:
+			indicator := indicator.NewVWAP(cfg.Market, timeframe)
+			vwapIndicators[timeframe] = indicator
+		case shared.OneHour:
 			indicator := indicator.NewVWAP(cfg.Market, timeframe)
 			vwapIndicators[timeframe] = indicator
 		}
