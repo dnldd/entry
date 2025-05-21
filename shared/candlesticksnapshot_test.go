@@ -28,7 +28,7 @@ func TestCandlestickSnapshot(t *testing.T) {
 	lastN := candleSnapshot.LastN(size)
 	assert.Equal(t, len(lastN), 0)
 
-	// Ensure calling LastN with zero or negagive size returns nil.
+	// Ensure calling LastN with zero or negative size returns nil.
 	lastN = candleSnapshot.LastN(-1)
 	assert.Nil(t, lastN)
 
@@ -291,6 +291,8 @@ func TestDetectImbalance(t *testing.T) {
 		}
 
 		if test.wantImbalance && ok {
+			// spew.Dump(imbalance)
+
 			if test.gapRatio != imbalance.GapRatio {
 				t.Errorf("%s: expected imbalance gap ratio %.2f, got %.2f", test.name, imbalance.GapRatio, test.gapRatio)
 			}
