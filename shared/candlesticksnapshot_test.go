@@ -234,7 +234,7 @@ func TestDetectImbalance(t *testing.T) {
 			0.0,
 		},
 		{
-			"valid imbalance",
+			"bullish imbalance",
 			[]Candlestick{
 				{
 					Market:    market,
@@ -273,6 +273,46 @@ func TestDetectImbalance(t *testing.T) {
 			23.0,
 			18.0,
 		},
+		{
+			"bearish imbalance",
+			[]Candlestick{
+				{
+					Market:    market,
+					Open:      float64(15),
+					Close:     float64(14),
+					High:      float64(16),
+					Low:       float64(13),
+					Volume:    float64(2),
+					Status:    make(chan StatusCode, 1),
+					Timeframe: timeframe,
+				},
+				{
+					Market:    market,
+					Open:      float64(14),
+					Close:     float64(8),
+					High:      float64(15),
+					Low:       float64(7),
+					Volume:    float64(7),
+					Status:    make(chan StatusCode, 1),
+					Timeframe: timeframe,
+				},
+				{
+					Market:    market,
+					Open:      float64(8),
+					Close:     float64(7),
+					High:      float64(9),
+					Low:       float64(6),
+					Volume:    float64(2),
+					Status:    make(chan StatusCode, 1),
+					Timeframe: timeframe,
+				},
+			},
+			true,
+			Bearish,
+			0.6666666666666666,
+			13.0,
+			9.0,
+		},
 	}
 
 	for _, test := range tests {
@@ -291,8 +331,6 @@ func TestDetectImbalance(t *testing.T) {
 		}
 
 		if test.wantImbalance && ok {
-			// spew.Dump(imbalance)
-
 			if test.gapRatio != imbalance.GapRatio {
 				t.Errorf("%s: expected imbalance gap ratio %.2f, got %.2f", test.name, imbalance.GapRatio, test.gapRatio)
 			}

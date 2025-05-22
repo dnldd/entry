@@ -19,6 +19,8 @@ const (
 type MarketConfig struct {
 	// Market is the name of the tracked market.
 	Market string
+	// Timeframes is the timeframes the market is expected to track.
+	Timeframes []shared.Timeframe
 	// SignalLevel relays the provided level signal for processing.
 	SignalLevel func(signal shared.LevelSignal)
 	// SignalImbalanace relays the provided imbalance signal for processing.
@@ -52,12 +54,10 @@ func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
 		return nil, err
 	}
 
-	timeframes := []shared.Timeframe{shared.FiveMinute, shared.OneHour}
-
 	// Create candlestick snapshots for all tracked timeframes.
 	candleSnapshots := make(map[shared.Timeframe]*shared.CandlestickSnapshot)
-	for idx := range timeframes {
-		timeframe := timeframes[idx]
+	for idx := range cfg.Timeframes {
+		timeframe := cfg.Timeframes[idx]
 
 		switch timeframe {
 		case shared.OneMinute:
@@ -86,8 +86,8 @@ func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
 
 	// Create vwap snapshots for all tracked timeframes.
 	vwapSnapshots := make(map[shared.Timeframe]*shared.VWAPSnapshot)
-	for idx := range timeframes {
-		timeframe := timeframes[idx]
+	for idx := range cfg.Timeframes {
+		timeframe := cfg.Timeframes[idx]
 
 		switch timeframe {
 		case shared.OneMinute:
@@ -115,8 +115,8 @@ func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
 	}
 
 	vwapIndicators := make(map[shared.Timeframe]*indicator.VWAP)
-	for idx := range timeframes {
-		timeframe := timeframes[idx]
+	for idx := range cfg.Timeframes {
+		timeframe := cfg.Timeframes[idx]
 
 		switch timeframe {
 		case shared.OneMinute:
@@ -140,8 +140,8 @@ func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
 	}
 
 	// Periodically reset the market vwaps on all timeframes when the new york session closes.
-	for idx := range timeframes {
-		timeframe := timeframes[idx]
+	for idx := range cfg.Timeframes {
+		timeframe := cfg.Timeframes[idx]
 
 		vwap := mkt.vwapIndicators[timeframe]
 		_, err = mkt.cfg.JobScheduler.Every(1).Day().At(indicator.VwapResetTime).WaitForSchedule().
@@ -214,8 +214,20 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 		return fmt.Errorf("timed out while waiting for market update status")
 	}
 
-	// Only generate level signals on the 5m timeframe.
+	// Only generate level and imbalance signals on the 5m timeframe.
 	if candle.Timeframe == shared.FiveMinute {
+		// Detect and send imbalances.
+		imbalance, ok := candleSnapshot.DetectImbalance()
+		if ok {
+			imbalanaceSignal := shared.NewImbalanceSignal(candle.Market, *imbalance)
+			m.cfg.SignalImbalance(imbalanaceSignal)
+			select {
+			case <-imbalanaceSignal.Status:
+			case <-time.After(shared.TimeoutDuration):
+				return fmt.Errorf("timed out while waiting for imbalance signal status")
+			}
+		}
+
 		changed, err := m.sessionSnapshot.SetCurrentSession(candle.Date)
 		if err != nil {
 			return fmt.Errorf("setting current session: %w", err)
@@ -224,18 +236,6 @@ func (m *Market) Update(candle *shared.Candlestick) error {
 		m.sessionSnapshot.FetchCurrentSession().Update(candle)
 
 		if changed {
-			// Detect and send imbalances.
-			imbalance, ok := candleSnapshot.DetectImbalance()
-			if ok {
-				imbalanaceSignal := shared.NewImbalanceSignal(candle.Market, *imbalance)
-				m.cfg.SignalImbalance(imbalanaceSignal)
-				select {
-				case <-imbalanaceSignal.Status:
-				case <-time.After(shared.TimeoutDuration):
-					return fmt.Errorf("timed out while waiting for imbalance signal status")
-				}
-			}
-
 			// Fetch and send new high and low from completed sessions.
 			high, low, err := m.sessionSnapshot.FetchLastSessionHighLow()
 			if err != nil {

@@ -21,7 +21,13 @@ func TestMarket(t *testing.T) {
 		signal.Status <- shared.Processed
 	}
 
-	relayMarketUpdateSignals := make(chan shared.Candlestick, 2)
+	imbalanceSignals := make(chan shared.ImbalanceSignal, 2)
+	signalImbalance := func(signal shared.ImbalanceSignal) {
+		imbalanceSignals <- signal
+		signal.Status <- shared.Processed
+	}
+
+	relayMarketUpdateSignals := make(chan shared.Candlestick, 20)
 	relayMarketUpdate := func(candle shared.Candlestick) {
 		candle.Status <- shared.Processed
 		relayMarketUpdateSignals <- candle
@@ -33,7 +39,9 @@ func TestMarket(t *testing.T) {
 
 	cfg := &MarketConfig{
 		Market:            market,
+		Timeframes:        []shared.Timeframe{shared.OneMinute, shared.FiveMinute, shared.OneHour},
 		SignalLevel:       signalLevel,
+		SignalImbalance:   signalImbalance,
 		RelayMarketUpdate: relayMarketUpdate,
 		JobScheduler:      gocron.NewScheduler(loc),
 		Logger:            &log.Logger,
@@ -56,10 +64,10 @@ func TestMarket(t *testing.T) {
 
 	// Ensure a market can be updated.
 	firstCandle := &shared.Candlestick{
-		Open:   float64(5),
-		Close:  float64(8),
-		High:   float64(9),
-		Low:    float64(3),
+		Open:   float64(10),
+		Close:  float64(9),
+		High:   float64(11),
+		Low:    float64(8),
 		Volume: float64(2),
 		Date:   asiaSessionCloseTime,
 
@@ -75,10 +83,10 @@ func TestMarket(t *testing.T) {
 	earlyNewYorkSessionTime := asiaSessionCloseTime.Add(time.Minute * 5)
 	secondCandle := &shared.Candlestick{
 		Open:   float64(9),
-		Close:  float64(12),
-		High:   float64(15),
-		Low:    float64(8),
-		Volume: float64(3),
+		Close:  float64(3),
+		High:   float64(10),
+		Low:    float64(2),
+		Volume: float64(50),
 		Date:   earlyNewYorkSessionTime,
 
 		Market:    market,
@@ -92,6 +100,28 @@ func TestMarket(t *testing.T) {
 	levelHigh := <-levelSignals
 	levelLow := <-levelSignals
 
-	assert.Equal(t, levelHigh.Price, float64(9))
-	assert.Equal(t, levelLow.Price, float64(3))
+	assert.Equal(t, levelHigh.Price, float64(11))
+	assert.Equal(t, levelLow.Price, float64(8))
+
+	// Ensure the market can generate imbalance signals.
+	nextSessionTime := earlyNewYorkSessionTime.Add(time.Minute * 5)
+	thirdCandle := &shared.Candlestick{
+		Open:   float64(3),
+		Close:  float64(2),
+		High:   float64(4),
+		Low:    float64(1),
+		Volume: float64(3),
+		Date:   nextSessionTime,
+
+		Market:    market,
+		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
+	}
+
+	err = mkt.Update(thirdCandle)
+	assert.NoError(t, err)
+
+	imb := <-imbalanceSignals
+
+	assert.Equal(t, imb.Imbalance.Sentiment, shared.Bearish)
 }
