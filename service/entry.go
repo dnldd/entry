@@ -83,7 +83,6 @@ func NewEntry(cfg *EntryConfig) (*Entry, error) {
 		historicDataLogger := logger.With().Str("component", "historicdata").Logger()
 		historicData, err = shared.NewHistoricData(&shared.HistoricDataConfig{
 			Market:            cfg.BacktestMarket,
-			Timeframe:         shared.FiveMinute,
 			FilePath:          cfg.BacktestDataFilepath,
 			SignalCaughtUp:    caughtUpFunc,
 			NotifySubscribers: notifySubcribersFunc,

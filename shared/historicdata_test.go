@@ -24,7 +24,6 @@ func TestHistoricalData(t *testing.T) {
 
 	cfg := &HistoricDataConfig{
 		Market:            market,
-		Timeframe:         FiveMinute,
 		FilePath:          "../testdata/historicdata.json",
 		SignalCaughtUp:    signalCaughtUp,
 		NotifySubscribers: notifySubscribers,
@@ -71,6 +70,6 @@ func TestHistoricalData(t *testing.T) {
 	assert.Equal(t, startTime, historicData.candles[0].Date)
 	endTime := historicData.FetchEndTime()
 	assert.Equal(t, endTime, historicData.candles[len(historicData.candles)-1].Date)
-	assert.Equal(t, candleCount.Load(), 10)
+	assert.Equal(t, candleCount.Load(), 11)
 	assert.Equal(t, caughUpCount.Load(), 1)
 }

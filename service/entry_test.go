@@ -65,7 +65,6 @@ func setupEntry() (*Entry, chan shared.LevelSignal, chan shared.ReactionAtLevel,
 		historicDataLogger := logger.With().Str("component", "historicdata").Logger()
 		historicData, err = shared.NewHistoricData(&shared.HistoricDataConfig{
 			Market:            cfg.BacktestMarket,
-			Timeframe:         shared.FiveMinute,
 			FilePath:          cfg.BacktestDataFilepath,
 			SignalCaughtUp:    caughtUpFunc,
 			NotifySubscribers: notifySubcribersFunc,
