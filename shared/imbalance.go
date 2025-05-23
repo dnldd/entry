@@ -159,6 +159,9 @@ func NewReactionAtImbalanace(market string, imbalance *Imbalance, priceData []*C
 	switch levelKind {
 	case Support:
 		switch {
+		case above == 0 && below == 0:
+			// If price is not closing above or below the imbalance it is chopping.
+			ir.Reaction = Chop
 		case below == 0:
 			// If price consistently stayed below a support imbalance it tagged then it
 			// it is likely reversing at the vwap.
@@ -183,6 +186,9 @@ func NewReactionAtImbalanace(market string, imbalance *Imbalance, priceData []*C
 		}
 	case Resistance:
 		switch {
+		case above == 0 && below == 0:
+			// If price is not closing above or below the imbalance it is chopping.
+			ir.Reaction = Chop
 		case above == 0:
 			// If price consistently stayed below an imabalance acting as resistance it tagged then
 			// it is likely reversing at the imbalance.

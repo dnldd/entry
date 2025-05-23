@@ -9,16 +9,15 @@ import (
 
 func TestImbalanceSnapshot(t *testing.T) {
 	// Ensure imbalance snapshot size cannot be negaitve or zero.
-	timeframe := FiveMinute
-	_, err := NewImbalanceSnapshot(-1, timeframe)
+	_, err := NewImbalanceSnapshot(-1)
 	assert.Error(t, err)
 
-	imbalanceSnapshot, err := NewImbalanceSnapshot(0, timeframe)
+	imbalanceSnapshot, err := NewImbalanceSnapshot(0)
 	assert.Error(t, err)
 
 	// Ensure an imbalance snapshot can be created.
 	size := int32(4)
-	imbalanceSnapshot, err = NewImbalanceSnapshot(size, timeframe)
+	imbalanceSnapshot, err = NewImbalanceSnapshot(size)
 	assert.NoError(t, err)
 
 	// Ensure calling last on an empty snapshot returns nothing.
@@ -36,14 +35,10 @@ func TestImbalanceSnapshot(t *testing.T) {
 	market := "^GSPC"
 	high := float64(23)
 	midpoint := float64(20.5)
+	timeframe := FiveMinute
 	low := float64(18)
 	gapRatio := float64(0.7142857142857143)
 	imbalance := NewImbalance(market, timeframe, high, midpoint, low, Bullish, gapRatio, time.Time{})
-	wrongTimeframeImbalance := NewImbalance(market, OneHour, high, midpoint, low, Bullish, gapRatio, time.Time{})
-
-	// Ensure adding an imbalance of a different timeframe errors.
-	err = imbalanceSnapshot.Add(wrongTimeframeImbalance)
-	assert.Error(t, err)
 
 	// Ensure the snapshot can be updated with candles.
 	for range size {

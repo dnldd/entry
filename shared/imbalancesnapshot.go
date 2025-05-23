@@ -2,24 +2,27 @@ package shared
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"go.uber.org/atomic"
 )
 
+const (
+	// ImbalanceSnapshotSize is the maximum number of elements for an imbalance snapshot.
+	ImbalanceSnapshotSize = 100
+)
+
 // ImbalanceSnapshot represents a snapshot of imbalances for a market.
 type ImbalanceSnapshot struct {
-	data      []*Imbalance
-	dataMtx   sync.RWMutex
-	timeframe Timeframe
-	start     atomic.Int32
-	count     atomic.Int32
-	size      atomic.Int32
+	data    []*Imbalance
+	dataMtx sync.RWMutex
+	start   atomic.Int32
+	count   atomic.Int32
+	size    atomic.Int32
 }
 
 // NewImbalanceSnapshot initializes a new imbalance snapshot.
-func NewImbalanceSnapshot(size int32, timeframe Timeframe) (*ImbalanceSnapshot, error) {
+func NewImbalanceSnapshot(size int32) (*ImbalanceSnapshot, error) {
 	if size < 0 {
 		return nil, errors.New("snapshot size cannot be negative")
 	}
@@ -28,8 +31,7 @@ func NewImbalanceSnapshot(size int32, timeframe Timeframe) (*ImbalanceSnapshot, 
 	}
 
 	snapshot := &ImbalanceSnapshot{
-		data:      make([]*Imbalance, size),
-		timeframe: timeframe,
+		data: make([]*Imbalance, size),
 	}
 
 	snapshot.size.Store(int32(size))
@@ -38,11 +40,6 @@ func NewImbalanceSnapshot(size int32, timeframe Timeframe) (*ImbalanceSnapshot, 
 
 // Add adds the provided imbalance to the snapshot.
 func (s *ImbalanceSnapshot) Add(imb *Imbalance) error {
-	if imb.Timeframe != s.timeframe {
-		return fmt.Errorf("cannot update imbalanace snapshot of timeframe %s "+
-			"with imbalance of timeframe %s", s.timeframe, imb.Timeframe)
-	}
-
 	s.dataMtx.Lock()
 	defer s.dataMtx.Unlock()
 
