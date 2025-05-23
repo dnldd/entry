@@ -50,9 +50,15 @@ func NewMarket(cfg *MarketConfig) (*Market, error) {
 		return nil, fmt.Errorf("creating level snapshot: %v", err)
 	}
 
+	imbalanceSnapshot, err := shared.NewImbalanceSnapshot(shared.ImbalanceSnapshotSize)
+	if err != nil {
+		return nil, fmt.Errorf("creating imbalance snapshot: %v", err)
+	}
+
 	mgr := &Market{
-		cfg:           cfg,
-		levelSnapshot: levelSnapshot,
+		cfg:               cfg,
+		levelSnapshot:     levelSnapshot,
+		imbalanceSnapshot: imbalanceSnapshot,
 	}
 
 	return mgr, nil

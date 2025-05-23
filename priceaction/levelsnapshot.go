@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	// snapshotSize is the maximum number of elements for a level snapshot.
+	// levelSnapshotSize is the maximum number of elements for a level snapshot.
 	levelSnapshotSize = 80
 )
 

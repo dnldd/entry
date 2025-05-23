@@ -70,6 +70,6 @@ func TestHistoricalData(t *testing.T) {
 	assert.Equal(t, startTime, historicData.candles[0].Date)
 	endTime := historicData.FetchEndTime()
 	assert.Equal(t, endTime, historicData.candles[len(historicData.candles)-1].Date)
-	assert.Equal(t, candleCount.Load(), 11)
+	assert.Equal(t, candleCount.Load(), 12)
 	assert.Equal(t, caughUpCount.Load(), 1)
 }

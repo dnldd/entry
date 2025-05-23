@@ -30,6 +30,8 @@ const (
 type ManagerConfig struct {
 	// Markets represents the collection of ids of the markets to manage.
 	Markets []string
+	// Timeframes is the timeframes the market is expected to track.
+	Timeframes []shared.Timeframe
 	// Backtest is the backtesting flag.
 	Backtest bool
 	// Subscribe registers the provided subscriber for market updates.
@@ -74,6 +76,7 @@ func NewManager(cfg *ManagerConfig, now time.Time) (*Manager, error) {
 
 		mCfg := &MarketConfig{
 			Market:            cfg.Markets[idx],
+			Timeframes:        cfg.Timeframes,
 			SignalLevel:       cfg.SignalLevel,
 			SignalImbalance:   cfg.SignalImbalance,
 			RelayMarketUpdate: cfg.RelayMarketUpdate,

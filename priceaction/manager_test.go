@@ -78,14 +78,21 @@ func setupManager(t *testing.T, market string) *Manager {
 		reaction.Status <- shared.Processed
 	}
 
+	imbalanceReactionSignals := make(chan shared.ReactionAtImbalance, 5)
+	signalReactionAtImbalance := func(reaction shared.ReactionAtImbalance) {
+		imbalanceReactionSignals <- reaction
+		reaction.Status <- shared.Processed
+	}
+
 	cfg := &ManagerConfig{
-		Markets:               []string{market},
-		Subscribe:             subscribe,
-		RequestPriceData:      requestPriceData,
-		SignalReactionAtLevel: signalLevelReaction,
-		SignalReactionAtVWAP:  signalReactionAtVWAP,
-		RequestVWAPData:       requestVWAPData,
-		RequestVWAP:           requestVWAP,
+		Markets:                   []string{market},
+		Subscribe:                 subscribe,
+		RequestPriceData:          requestPriceData,
+		SignalReactionAtLevel:     signalLevelReaction,
+		SignalReactionAtImbalance: signalReactionAtImbalance,
+		SignalReactionAtVWAP:      signalReactionAtVWAP,
+		RequestVWAPData:           requestVWAPData,
+		RequestVWAP:               requestVWAP,
 		FetchCaughtUpState: func(market string) (bool, error) {
 			return true, nil
 		},
