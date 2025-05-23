@@ -36,14 +36,22 @@ func setupManager(t *testing.T, market string, now time.Time, backtest bool) (*M
 		relayMarketUpdateSignals <- candle
 	}
 
+	imbalanceSignals := make(chan shared.ImbalanceSignal, 2)
+	signalImbalance := func(signal shared.ImbalanceSignal) {
+		imbalanceSignals <- signal
+		signal.Status <- shared.Processed
+	}
+
 	loc, err := time.LoadLocation(shared.NewYorkLocation)
 	assert.NoError(t, err)
 
 	cfg := &ManagerConfig{
 		Markets:           []string{market},
+		Timeframes:        []shared.Timeframe{shared.OneMinute, shared.FiveMinute, shared.OneHour},
 		Subscribe:         subscribe,
 		CatchUp:           catchUp,
 		SignalLevel:       signalLevel,
+		SignalImbalance:   signalImbalance,
 		RelayMarketUpdate: relayMarketUpdate,
 		Backtest:          backtest,
 		JobScheduler:      gocron.NewScheduler(loc),
@@ -521,7 +529,6 @@ func TestBacktestLevelGeneration(t *testing.T) {
 
 	hCfg := &shared.HistoricDataConfig{
 		Market:            market,
-		Timeframe:         shared.FiveMinute,
 		FilePath:          "../testdata/historicdata.json",
 		SignalCaughtUp:    mgr.SendCaughtUpSignal,
 		NotifySubscribers: notifySubscribersFunc,

@@ -77,8 +77,8 @@ type ReactionAtImbalance struct {
 	Imbalance *Imbalance
 }
 
-// NewReactionAtVWAP initializes a new reaction from the provided vwap and candlestick data.
-func NewReactionAtImbalanace(market string, imbalance *Imbalance, priceData []*Candlestick) (*ReactionAtImbalance, error) {
+// NewReactionAtImbalance initializes a new reaction from the provided imbalance and candlestick data.
+func NewReactionAtImbalance(market string, imbalance *Imbalance, priceData []*Candlestick) (*ReactionAtImbalance, error) {
 	if len(priceData) != PriceDataPayloadSize {
 		return nil, fmt.Errorf("price data is not the expected size: %d != expected(%d)",
 			len(priceData), PriceDataPayloadSize)

@@ -11,12 +11,10 @@ import (
 func TestMarket(t *testing.T) {
 	market := "^GSPC"
 	vwap := shared.VWAP{Value: 8}
+
 	// Ensure a market can be created.
 	cfg := &MarketConfig{
 		Market: market,
-		RequestVWAPData: func(request shared.VWAPDataRequest) {
-			request.Response <- []*shared.VWAP{&vwap}
-		},
 		RequestVWAP: func(request shared.VWAPRequest) {
 			request.Response <- &vwap
 		},
@@ -61,6 +59,12 @@ func TestMarket(t *testing.T) {
 	secondLevel := shared.NewLevel(market, resistancePrice, resistanceClose)
 	mkt.AddLevel(secondLevel)
 
+	// Ensure imbalances can be addeed to the market.
+	bullishImbalance := shared.Imbalance{High: float64(12), Low: float64(8), Sentiment: shared.Bullish}
+	mkt.AddImbalance(&bullishImbalance)
+	bearishImbalance := shared.Imbalance{High: float64(8), Low: float64(5), Sentiment: shared.Bearish}
+	mkt.AddImbalance(&bearishImbalance)
+
 	tagCandle := &shared.Candlestick{
 		Open:   float64(3),
 		Close:  float64(4),
@@ -86,7 +90,8 @@ func TestMarket(t *testing.T) {
 	taggedLevels := mkt.filterTaggedLevels(tagCandle)
 	assert.Equal(t, len(taggedLevels), 2)
 
-	// Ensure 3 updates after a level is tagged the market signals a price data request.
+	// Ensure 3 updates after a level,vwap or imbalance is tagged the market signals for the
+	// corresponding data request.
 	for idx := range 3 {
 		candle := &shared.Candlestick{
 			Open:   float64(4 + idx),
@@ -149,22 +154,60 @@ func TestMarket(t *testing.T) {
 	assert.Equal(t, mkt.taggedLevels.Load(), false)
 	assert.Equal(t, mkt.levelUpdateCounter.Load(), uint32(0))
 
-	// Ensure the market can check whether a candle tags vwap.
-	vwapTagged := mkt.vwapTagged(tagCandle, &vwap)
-	assert.True(t, vwapTagged)
+	assert.True(t, mkt.RequestingVWAPData())
 
-	// Ensure 3 updates after vwap is tagged the market signals a vwap data request.
-	for idx := range 3 {
-		candle := &shared.Candlestick{
-			Open:   float64(4 + idx),
-			Close:  float64(6 + idx),
-			High:   float64(8 + idx),
-			Low:    float64(4 + idx),
-			Volume: float64(2 + idx),
+	// Ensure the vwap data state of a market can be reset.
+	mkt.ResetVWAPDataState()
+	assert.Equal(t, mkt.taggedVWAP.Load(), false)
+	assert.Equal(t, mkt.vwapUpdateCounter.Load(), uint32(0))
+
+	assert.True(t, mkt.RequestingImbalanceData())
+
+	// Ensure imbalance reactions can be generated from a market.
+	imbData := []*shared.Candlestick{
+		{
+			Open:   float64(3),
+			Close:  float64(4),
+			High:   float64(10),
+			Low:    float64(1),
+			Volume: float64(1),
 			Status: make(chan shared.StatusCode, 1),
-		}
-		mkt.Update(candle)
+		},
+		{
+			Open:   float64(4),
+			Close:  float64(6),
+			High:   float64(7),
+			Low:    float64(3),
+			Volume: float64(2),
+			Status: make(chan shared.StatusCode, 1),
+		},
+		{
+			Open:   float64(6),
+			Close:  float64(7.5),
+			High:   float64(9),
+			Low:    float64(5),
+			Volume: float64(2),
+			Status: make(chan shared.StatusCode, 1),
+		},
+		{
+			Open:   float64(7.5),
+			Close:  float64(10),
+			High:   float64(11),
+			Low:    float64(7),
+			Volume: float64(2),
+			Status: make(chan shared.StatusCode, 1),
+		},
 	}
 
-	assert.True(t, mkt.RequestingVWAPData())
+	rctns, err := mkt.GenerateReactionsAtTaggedImbalances(imbData)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rctns), 1)
+	assert.Equal(t, rctns[0].Reaction, shared.Break)
+	assert.Equal(t, rctns[0].PriceMovement,
+		[]shared.PriceMovement{shared.Below, shared.Below, shared.Below, shared.Above})
+
+	// Ensure the imbalance data state of a market can be reset.
+	mkt.ResetImbalanceDataState()
+	assert.Equal(t, mkt.taggedImbalance.Load(), false)
+	assert.Equal(t, mkt.imbalanceUpdateCounter.Load(), uint32(0))
 }

@@ -92,7 +92,7 @@ func (m *Market) evaluateTaggedLevels(candle *shared.Candlestick) {
 // evaluateTaggedVWAP checks whether the current vwap is tagged by current price action. If confirmed
 // a vwap data request is signalled after a brief interval of updates.
 func (m *Market) evaluateTaggedVWAP(candle *shared.Candlestick, vwap *shared.VWAP) {
-	vwapTagged := m.vwapTagged(candle, vwap)
+	vwapTagged := m.vwapTagged(vwap, candle)
 	taggedVWAP := m.taggedVWAP.Load()
 	requestingPriceData := m.requestingPriceData.Load()
 	vwapUpdateCounter := m.vwapUpdateCounter.Load()
@@ -189,8 +189,13 @@ func (m *Market) AddLevel(level *shared.Level) {
 	m.levelSnapshot.Add(level)
 }
 
+// AddImbalance adds the provided level to the market's level snapshot.
+func (m *Market) AddImbalance(imb *shared.Imbalance) {
+	m.imbalanceSnapshot.Add(imb)
+}
+
 // vwaptagged checks whether the provided vwap was tagged by the provided candlestick.
-func (m *Market) vwapTagged(candle *shared.Candlestick, vwap *shared.VWAP) bool {
+func (m *Market) vwapTagged(vwap *shared.VWAP, candle *shared.Candlestick) bool {
 	var kind shared.LevelKind
 	switch {
 	case vwap.Value > candle.Close:
@@ -309,7 +314,7 @@ func (m *Market) GenerateReactionsAtTaggedImbalances(data []*shared.Candlestick)
 	reactions := make([]*shared.ReactionAtImbalance, len(taggedSet))
 	for idx := range taggedSet {
 		taggedImbalance := taggedSet[idx]
-		reaction, err := shared.NewReactionAtImbalanace(m.cfg.Market, taggedImbalance, data)
+		reaction, err := shared.NewReactionAtImbalance(m.cfg.Market, taggedImbalance, data)
 		if err != nil {
 			return nil, err
 		}

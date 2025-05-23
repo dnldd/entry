@@ -68,7 +68,6 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 		cfg := &MarketConfig{
 			Market:             market,
 			RequestVWAP:        cfg.RequestVWAP,
-			RequestVWAPData:    cfg.RequestVWAPData,
 			FetchCaughtUpState: cfg.FetchCaughtUpState,
 			Logger:             cfg.Logger,
 		}
@@ -299,7 +298,7 @@ func (m *Manager) handleLevelSignal(signal shared.LevelSignal) error {
 	}
 
 	level := shared.NewLevel(signal.Market, signal.Price, signal.Close)
-	mkt.levelSnapshot.Add(level)
+	mkt.AddLevel(level)
 	m.cfg.Logger.Info().Msgf("added new %s level @ %.2f for %s", level.Kind.String(), level.Price, level.Market)
 
 	return nil
@@ -317,7 +316,7 @@ func (m *Manager) handleImbalanceSignal(signal shared.ImbalanceSignal) error {
 	}
 
 	imb := &signal.Imbalance
-	mkt.imbalanceSnapshot.Add(imb)
+	mkt.AddImbalance(imb)
 	m.cfg.Logger.Info().Msgf("added new %s imbalance with gap ratio %.2f covering %.2f - %.2f for %s",
 		imb.Sentiment.String(), imb.GapRatio, imb.High, imb.Low, imb.Market)
 

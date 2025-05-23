@@ -586,7 +586,7 @@ func TestNewReactionAtImbalance(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		reaction, err := NewReactionAtImbalanace(market, test.imbalance, test.data)
+		reaction, err := NewReactionAtImbalance(market, test.imbalance, test.data)
 		if err == nil && test.wantErr {
 			t.Errorf("%s: expected an error, got none", test.name)
 		}
