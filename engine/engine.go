@@ -21,8 +21,12 @@ const (
 	minLevelBreakConfluence = 6
 	// minVWAPReversalConfluence is the minumum required confluence to confirm a vwap reversal.
 	minVWAPReversalConfluence = 6
-	// minBreakConfluence is the minumum required confluence to confirm a vwap break.
+	// minVWAPBreakConfluence is the minumum required confluence to confirm a vwap break.
 	minVWAPBreakConfluence = 6
+	// minImbalanceReversalConfluence is the minumum required confluence to confirm an imbalance reversal.
+	minImbalanceReversalConfluence = 6
+	// minImbalanceBreakConfluence is the minumum required confluence to confirm a imbalance break.
+	minImbalanceBreakConfluence = 6
 	// minAverageVolumePercent is the minimum percentage above average volume to be considered
 	// substantive.
 	minAverageVolumePercent = float64(0.3)
@@ -46,19 +50,21 @@ type EngineConfig struct {
 }
 
 type Engine struct {
-	cfg                    *EngineConfig
-	workers                chan struct{}
-	reactionAtLevelSignals chan shared.ReactionAtLevel
-	reactionAtVWAPSignals  chan shared.ReactionAtVWAP
+	cfg                        *EngineConfig
+	workers                    chan struct{}
+	reactionAtLevelSignals     chan shared.ReactionAtLevel
+	reactionAtVWAPSignals      chan shared.ReactionAtVWAP
+	reactionAtImbalanceSignals chan shared.ReactionAtImbalance
 }
 
 // NewEngine initializes a new market engine.
 func NewEngine(cfg *EngineConfig) *Engine {
 	return &Engine{
-		cfg:                    cfg,
-		workers:                make(chan struct{}, maxWorkers),
-		reactionAtLevelSignals: make(chan shared.ReactionAtLevel, bufferSize),
-		reactionAtVWAPSignals:  make(chan shared.ReactionAtVWAP, bufferSize),
+		cfg:                        cfg,
+		workers:                    make(chan struct{}, maxWorkers),
+		reactionAtLevelSignals:     make(chan shared.ReactionAtLevel, bufferSize),
+		reactionAtVWAPSignals:      make(chan shared.ReactionAtVWAP, bufferSize),
+		reactionAtImbalanceSignals: make(chan shared.ReactionAtImbalance, bufferSize),
 	}
 }
 
@@ -79,8 +85,19 @@ func (e *Engine) SignalReactionAtVWAP(reaction shared.ReactionAtVWAP) {
 	case e.reactionAtVWAPSignals <- reaction:
 		// do nothing.
 	default:
-		e.cfg.Logger.Error().Msgf("reaction a vwap signals channel at capacity: %d/%d",
+		e.cfg.Logger.Error().Msgf("reaction at vwap signals channel at capacity: %d/%d",
 			len(e.reactionAtVWAPSignals), bufferSize)
+	}
+}
+
+// SignalReactionAtImbalance relays the provided reaction at imbalance for processing.
+func (e *Engine) SignalReactionAtImbalance(reaction shared.ReactionAtImbalance) {
+	select {
+	case e.reactionAtImbalanceSignals <- reaction:
+		// do nothing.
+	default:
+		e.cfg.Logger.Error().Msgf("reaction at imbalance signals channel at capacity: %d/%d",
+			len(e.reactionAtImbalanceSignals), bufferSize)
 	}
 }
 
@@ -181,8 +198,8 @@ func extractReasons(reasons map[shared.Reason]struct{}) []shared.Reason {
 }
 
 // fetchAverageVolume fetches the average volume of the provided market.
-func (e *Engine) fetchAverageVolume(market string) (float64, error) {
-	req := shared.NewAverageVolumeRequest(market)
+func (e *Engine) fetchAverageVolume(market string, timeframe shared.Timeframe) (float64, error) {
+	req := shared.NewAverageVolumeRequest(market, timeframe)
 	e.cfg.RequestAverageVolume(*req)
 
 	select {
@@ -207,8 +224,8 @@ func (e *Engine) fetchMarketSkew(market string) (shared.MarketSkew, error) {
 }
 
 // fetchCandleMetadata fetches the candle metadata for the provided market.
-func (e *Engine) fetchCandleMetadata(market string) ([]*shared.CandleMetadata, error) {
-	req := shared.NewCandleMetadataRequest(market)
+func (e *Engine) fetchCandleMetadata(market string, timeframe shared.Timeframe) ([]*shared.CandleMetadata, error) {
+	req := shared.NewCandleMetadataRequest(market, timeframe)
 	e.cfg.RequestCandleMetadata(*req)
 
 	select {
@@ -241,7 +258,7 @@ func (e *Engine) evaluatePriceReversal(reaction *shared.ReactionAtFocus, meta []
 		return false, 0, nil, fmt.Errorf("evaluating high volume session: %v", err)
 	}
 
-	averageVolume, err := e.fetchAverageVolume(reaction.Market)
+	averageVolume, err := e.fetchAverageVolume(reaction.Market, reaction.Timeframe)
 	if err != nil {
 		return false, 0, nil, fmt.Errorf("fetching average volume: %v", err)
 	}
@@ -312,7 +329,7 @@ func (e *Engine) evaluateLevelBreak(reaction *shared.ReactionAtFocus, meta []*sh
 		return false, 0, nil, fmt.Errorf("evaluating high volume session: %v", err)
 	}
 
-	averageVolume, err := e.fetchAverageVolume(reaction.Market)
+	averageVolume, err := e.fetchAverageVolume(reaction.Market, reaction.Timeframe)
 	if err != nil {
 		return false, 0, nil, fmt.Errorf("fetching average volume: %v", err)
 	}
@@ -555,7 +572,7 @@ func (e *Engine) handleReactionAtLevel(reaction *shared.ReactionAtLevel) error {
 	e.cfg.Logger.Info().Msgf("%s level reaction detected @ %.2f",
 		reaction.Level.Kind.String(), reaction.Level.Price)
 
-	meta, err := e.fetchCandleMetadata(reaction.Market)
+	meta, err := e.fetchCandleMetadata(reaction.Market, reaction.Timeframe)
 	if err != nil {
 		return fmt.Errorf("fetching candle metadata: %v", err)
 	}
@@ -589,7 +606,7 @@ func (e *Engine) handleReactionAtVWAP(reaction *shared.ReactionAtVWAP) error {
 
 	e.cfg.Logger.Info().Msgf("vwap reaction detected @ %.2f", reaction.VWAPData[0].Value)
 
-	meta, err := e.fetchCandleMetadata(reaction.Market)
+	meta, err := e.fetchCandleMetadata(reaction.Market, reaction.Timeframe)
 	if err != nil {
 		return fmt.Errorf("fetching candle metadata: %v", err)
 	}
@@ -607,7 +624,41 @@ func (e *Engine) handleReactionAtVWAP(reaction *shared.ReactionAtVWAP) error {
 		}
 	case shared.Chop:
 		// Do nothing.
-		e.cfg.Logger.Info().Msgf("chop level reaction encountered for market %s", reaction.Market)
+		e.cfg.Logger.Info().Msgf("chop vwap reaction encountered for market %s", reaction.Market)
+	}
+
+	return nil
+}
+
+// handleReactionAtImbalance processes the provided reaction at imbalance signal.
+func (e *Engine) handleReactionAtImbalance(reaction *shared.ReactionAtImbalance) error {
+	defer func() {
+		reaction.Status <- shared.Processed
+	}()
+
+	e.cfg.Logger.Info().Msgf("%s imbalance @ [%.2f,%.2f] reaction detected on the %s timeframe",
+		reaction.Imbalance.Sentiment.String(), reaction.Imbalance.High,
+		reaction.Imbalance.Low, reaction.Imbalance.Timeframe.String())
+
+	meta, err := e.fetchCandleMetadata(reaction.Market, reaction.Timeframe)
+	if err != nil {
+		return fmt.Errorf("fetching candle metadata: %v", err)
+	}
+
+	switch reaction.Reaction {
+	case shared.Reversal:
+		err := e.evaluatePriceReversalStrength(&reaction.ReactionAtFocus, meta, minVWAPReversalConfluence)
+		if err != nil {
+			return fmt.Errorf("evaluating price reversal at imbalance strength: %v", err)
+		}
+	case shared.Break:
+		err := e.evaluateBreakStrength(&reaction.ReactionAtFocus, meta, minVWAPBreakConfluence)
+		if err != nil {
+			return fmt.Errorf("evaluating imbalance break strength: %v", err)
+		}
+	case shared.Chop:
+		// Do nothing.
+		e.cfg.Logger.Info().Msgf("chop imbalance reaction encountered for market %s", reaction.Market)
 	}
 
 	return nil
@@ -634,6 +685,16 @@ func (e *Engine) Run(ctx context.Context) {
 			e.workers <- struct{}{}
 			go func(signal shared.ReactionAtVWAP) {
 				err := e.handleReactionAtVWAP(&signal)
+				if err != nil {
+					e.cfg.Logger.Error().Err(err).Send()
+				}
+				<-e.workers
+			}(signal)
+		case signal := <-e.reactionAtImbalanceSignals:
+			// use workers to process reactions at imbalances concurrently.
+			e.workers <- struct{}{}
+			go func(signal shared.ReactionAtImbalance) {
+				err := e.handleReactionAtImbalance(&signal)
 				if err != nil {
 					e.cfg.Logger.Error().Err(err).Send()
 				}
