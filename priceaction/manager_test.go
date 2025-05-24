@@ -153,6 +153,20 @@ func TestManager(t *testing.T) {
 	mgr.SendCandleMetadataRequest(candleMetaReq)
 	<-candleMetaReq.Response
 
+	now, _, err := shared.NewYorkTime()
+	assert.NoError(t, err)
+
+	// Ensure the price action manage can process imbalance signals.
+	imbalanceSignal := shared.ImbalanceSignal{
+		Market: market,
+		Imbalance: *shared.NewImbalance(market, shared.FiveMinute, float64(15), float64(10),
+			float64(5), shared.Bullish, float64(0.5), now),
+		Status: make(chan shared.StatusCode, 1),
+	}
+
+	mgr.SendImbalanceSignal(imbalanceSignal)
+	<-imbalanceSignal.Status
+
 	// Ensure the price action manager can be gracefully shutdown.
 	cancel()
 	<-done
@@ -226,8 +240,9 @@ func TestManagerHandleUpdateSignal(t *testing.T) {
 	// Ensure price request flag is reset after the request is processed.
 	assert.False(t, mgr.markets[market].requestingPriceData.Load())
 
-	// Trigger a vwap request for the market.
+	// Trigger a vwap and imbalance request for the market.
 	mgr.markets[market].requestingVWAPData.Store(true)
+	mgr.markets[market].requestingImbalanceData.Store(true)
 
 	secondCandle.Status = make(chan shared.StatusCode, 1)
 	err = mgr.handleUpdateSignal(&secondCandle)
@@ -263,16 +278,28 @@ func TestFillManagerChannels(t *testing.T) {
 		Response: make(chan []*shared.CandleMetadata),
 	}
 
+	now, _, err := shared.NewYorkTime()
+	assert.NoError(t, err)
+
+	imbalanceSignal := shared.ImbalanceSignal{
+		Market: market,
+		Imbalance: *shared.NewImbalance(market, shared.FiveMinute, float64(15), float64(10),
+			float64(5), shared.Bullish, float64(0.5), now),
+		Status: make(chan shared.StatusCode, 1),
+	}
+
 	// Fill all the channels used by the manager.
 	for range bufferSize + 1 {
 		mgr.SendLevelSignal(levelSignal)
 		mgr.SendMarketUpdate(candle)
 		mgr.SendCandleMetadataRequest(metaRequest)
+		mgr.SendImbalanceSignal(imbalanceSignal)
 	}
 
 	assert.Equal(t, len(mgr.metaSignals), bufferSize)
 	assert.Equal(t, len(mgr.updateSignals), bufferSize)
 	assert.Equal(t, len(mgr.levelSignals), bufferSize)
+	assert.Equal(t, len(mgr.imbalanceSignals), bufferSize)
 }
 
 func TestManagerHandleLevelSignal(t *testing.T) {
@@ -359,5 +386,50 @@ func TestManagerHandleCandleMetadataSignal(t *testing.T) {
 	}()
 
 	err = mgr.handleCandleMetadataRequest(&req)
+	assert.NoError(t, err)
+}
+
+func TestManagerHandleImbalanceSignal(t *testing.T) {
+	// Ensure the price action manager can be created.
+	market := "^GSPC"
+	mgr := setupManager(t, market)
+
+	// Add some market data.
+	firstCandle := shared.Candlestick{
+		Open:   float64(5),
+		Close:  float64(8),
+		High:   float64(9),
+		Low:    float64(3),
+		Volume: float64(2),
+
+		Market:    market,
+		Timeframe: shared.FiveMinute,
+		Status:    make(chan shared.StatusCode, 1),
+	}
+
+	err := mgr.handleUpdateSignal(&firstCandle)
+	assert.NoError(t, err)
+
+	now, _, err := shared.NewYorkTime()
+	assert.NoError(t, err)
+
+	// Ensure handling level signals from an unknown market returns an error.
+	wrongMarketImbalanceSignal := shared.ImbalanceSignal{
+		Market: "^AAPL",
+		Imbalance: *shared.NewImbalance(market, shared.FiveMinute, float64(15), float64(10),
+			float64(5), shared.Bullish, float64(0.5), now),
+		Status: make(chan shared.StatusCode, 1),
+	}
+	err = mgr.handleImbalanceSignal(wrongMarketImbalanceSignal)
+	assert.Error(t, err)
+
+	// Ensure handling imbalance signals from a valid market is processed as expected.
+	imbalanceSignal := shared.ImbalanceSignal{
+		Market: market,
+		Imbalance: *shared.NewImbalance(market, shared.FiveMinute, float64(15), float64(10),
+			float64(5), shared.Bullish, float64(0.5), now),
+		Status: make(chan shared.StatusCode, 1),
+	}
+	err = mgr.handleImbalanceSignal(imbalanceSignal)
 	assert.NoError(t, err)
 }

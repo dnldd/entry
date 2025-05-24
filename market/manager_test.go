@@ -128,6 +128,29 @@ func TestManager(t *testing.T) {
 	avgVol := <-avgVolumeReq.Response
 	assert.Equal(t, avgVol, float64(2))
 
+	// Ensure the manager can process a vwap request.
+	vwapReq := shared.VWAPRequest{
+		Market:    market,
+		Timeframe: candle.Timeframe,
+		At:        now,
+		Response:  make(chan *shared.VWAP, 1),
+	}
+
+	mgr.SendVWAPRequest(vwapReq)
+	vwap := <-vwapReq.Response
+	assert.Equal(t, vwap.Value, 6.666666666666667)
+
+	// Ensure the manager can process a vwap data request.
+	vwapDataReq := shared.VWAPDataRequest{
+		Market:    market,
+		Timeframe: candle.Timeframe,
+		Response:  make(chan []*shared.VWAP, 1),
+	}
+
+	mgr.SendVWAPDataRequest(vwapDataReq)
+	data := <-vwapDataReq.Response
+	assert.GreaterThan(t, len(data), 0)
+
 	// Ensure the manager can be gracefully shutdown.
 	cancel()
 	<-done
