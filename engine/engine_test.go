@@ -8,6 +8,7 @@ import (
 	"github.com/dnldd/entry/shared"
 	"github.com/peterldowns/testy/assert"
 	"github.com/rs/zerolog/log"
+	"go.uber.org/atomic"
 )
 
 func setupEngine(avgVolume *float64, candleMeta []*shared.CandleMetadata, marketSkew *shared.MarketSkew) (*Engine, chan shared.EntrySignal, chan shared.ExitSignal) {
@@ -321,6 +322,212 @@ func TestHandleLevelReaction(t *testing.T) {
 	// Ensure the engine can handle a break chop level reaction signal.
 	eng.handleReactionAtLevel(chopLevelReaction)
 	<-chopLevelReaction.Status
+}
+
+func TestHandleVWAPReaction(t *testing.T) {
+	avgVolume := float64(10)
+	candleMeta := []*shared.CandleMetadata{}
+	marketSkew := shared.NeutralSkew
+	eng, _, _ := setupEngine(&avgVolume, candleMeta, &marketSkew)
+
+	asiaSessionTime, _ := generateSessionTimes(t)
+
+	market := "^GSPC"
+	reversalVWAPReaction := shared.ReactionAtVWAP{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asiaSessionTime,
+			Status:        make(chan shared.StatusCode, 1),
+		},
+		VWAPData: []*shared.VWAP{
+			{
+				Value: 2,
+				Date:  time.Time{},
+			},
+			{
+				Value: 2.1,
+				Date:  time.Time{},
+			},
+			{
+				Value: 2.2,
+				Date:  time.Time{},
+			},
+			{
+				Value: 2.3,
+				Date:  time.Time{},
+			},
+		},
+	}
+
+	// Ensure the engine can handle a reversal vwap reaction signal.
+	eng.handleReactionAtVWAP(&reversalVWAPReaction)
+	<-reversalVWAPReaction.Status
+
+	breakVWAPReaction := shared.ReactionAtVWAP{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Below, shared.Below, shared.Below},
+			Reaction:      shared.Break,
+			CreatedOn:     asiaSessionTime,
+			Status:        make(chan shared.StatusCode, 1),
+		},
+		VWAPData: []*shared.VWAP{
+			{
+				Value: 10,
+				Date:  time.Time{},
+			},
+			{
+				Value: 10.1,
+				Date:  time.Time{},
+			},
+			{
+				Value: 10.2,
+				Date:  time.Time{},
+			},
+			{
+				Value: 10.3,
+				Date:  time.Time{},
+			},
+		},
+	}
+
+	// Ensure the engine can handle a vwap break reaction signal.
+	eng.handleReactionAtVWAP(&breakVWAPReaction)
+	<-breakVWAPReaction.Status
+
+	chopVWAPReaction := shared.ReactionAtVWAP{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Below, shared.Above, shared.Below},
+			Reaction:      shared.Chop,
+			CreatedOn:     asiaSessionTime,
+			Status:        make(chan shared.StatusCode, 1),
+		},
+		VWAPData: []*shared.VWAP{
+			{
+				Value: 10,
+				Date:  time.Time{},
+			},
+			{
+				Value: 10.1,
+				Date:  time.Time{},
+			},
+			{
+				Value: 10.2,
+				Date:  time.Time{},
+			},
+			{
+				Value: 10.3,
+				Date:  time.Time{},
+			},
+		},
+	}
+
+	// Ensure the engine can handle a vwap chop reaction signal.
+	eng.handleReactionAtVWAP(&chopVWAPReaction)
+	<-chopVWAPReaction.Status
+}
+
+func TestHandleImbalanceReaction(t *testing.T) {
+	avgVolume := float64(10)
+	candleMeta := []*shared.CandleMetadata{}
+	marketSkew := shared.NeutralSkew
+	eng, _, _ := setupEngine(&avgVolume, candleMeta, &marketSkew)
+
+	asiaSessionTime, _ := generateSessionTimes(t)
+
+	market := "^GSPC"
+	reversalImbalanceReaction := shared.ReactionAtImbalance{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asiaSessionTime,
+			Status:        make(chan shared.StatusCode, 1),
+		},
+		Imbalance: &shared.Imbalance{
+			Market:      market,
+			High:        float64(10),
+			Low:         float64(4),
+			Midpoint:    float64(7),
+			Timeframe:   shared.FiveMinute,
+			Sentiment:   shared.Bullish,
+			GapRatio:    float64(0.8),
+			Purged:      *atomic.NewBool(false),
+			Invalidated: *atomic.NewBool(false),
+			Date:        asiaSessionTime,
+		},
+	}
+
+	// Ensure the engine can handle an imbalance reversal reaction signal.
+	eng.handleReactionAtImbalance(&reversalImbalanceReaction)
+	<-reversalImbalanceReaction.Status
+
+	breakImbalanceReaction := shared.ReactionAtImbalance{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Below, shared.Below, shared.Below},
+			Reaction:      shared.Break,
+			CreatedOn:     asiaSessionTime,
+			Status:        make(chan shared.StatusCode, 1),
+		},
+		Imbalance: &shared.Imbalance{
+			Market:      market,
+			High:        float64(10),
+			Low:         float64(4),
+			Midpoint:    float64(7),
+			Timeframe:   shared.FiveMinute,
+			Sentiment:   shared.Bullish,
+			GapRatio:    float64(0.8),
+			Purged:      *atomic.NewBool(false),
+			Invalidated: *atomic.NewBool(false),
+			Date:        asiaSessionTime,
+		},
+	}
+
+	// Ensure the engine can handle an imbalance break reaction signal.
+	eng.handleReactionAtImbalance(&breakImbalanceReaction)
+	<-breakImbalanceReaction.Status
+
+	chopImbalanceReaction := shared.ReactionAtImbalance{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Below, shared.Above, shared.Below},
+			Reaction:      shared.Chop,
+			CreatedOn:     asiaSessionTime,
+			Status:        make(chan shared.StatusCode, 1),
+		},
+		Imbalance: &shared.Imbalance{
+			Market:      market,
+			High:        float64(10),
+			Low:         float64(4),
+			Midpoint:    float64(7),
+			Timeframe:   shared.FiveMinute,
+			Sentiment:   shared.Bullish,
+			GapRatio:    float64(0.8),
+			Purged:      *atomic.NewBool(false),
+			Invalidated: *atomic.NewBool(false),
+			Date:        asiaSessionTime,
+		},
+	}
+
+	// Ensure the engine can handle an imbalance break reaction signal.
+	eng.handleReactionAtImbalance(&chopImbalanceReaction)
+	<-chopImbalanceReaction.Status
 }
 
 func generateSessionTimes(t *testing.T) (time.Time, time.Time) {
