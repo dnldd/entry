@@ -79,10 +79,10 @@ func setupEntry() (*Entry, chan shared.LevelSignal, chan shared.ReactionAtLevel,
 
 	jobScheduler := gocron.NewScheduler(loc)
 
-	fmp := fetch.NewFMPClient(&fetch.FMPConfig{
-		APIKey:  cfg.FMPAPIKey,
-		BaseURL: fetch.BaseURL,
-	})
+	fmp, err := fetch.NewFMPClient(&fetch.FMPConfig{APIKey: cfg.FMPAPIKey, BaseURL: fetch.BaseURL})
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("creating fmp client: %v", err)
+	}
 
 	fetchMgrLogger := logger.With().Str("component", "fetchmanager").Logger()
 	fetchMgr, err = fetch.NewManager(&fetch.ManagerConfig{

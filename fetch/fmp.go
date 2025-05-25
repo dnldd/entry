@@ -3,6 +3,7 @@ package fetch
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,6 +27,20 @@ type FMPConfig struct {
 	BaseURL string
 }
 
+// Validate asserts the config sane inputs.
+func (cfg *FMPConfig) Validate() error {
+	var errs error
+
+	if cfg.APIKey == "" {
+		errs = errors.Join(errs, fmt.Errorf("the api key cannot be an empty string"))
+	}
+	if cfg.BaseURL == "" {
+		errs = errors.Join(errs, fmt.Errorf("the base url cannot be an empty string"))
+	}
+
+	return errs
+}
+
 // FMPClient represents the Financial Modeling Preparation (FMP) API client.
 type FMPClient struct {
 	cfg   *FMPConfig
@@ -37,12 +52,19 @@ type FMPClient struct {
 var _ shared.MarketFetcher = (*FMPClient)(nil)
 
 // NewFMPClient instantiates a new FMP client.
-func NewFMPClient(cfg *FMPConfig) *FMPClient {
-	return &FMPClient{
+func NewFMPClient(cfg *FMPConfig) (*FMPClient, error) {
+	err := cfg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating fmp client config:%v", err)
+	}
+
+	fmpc := &FMPClient{
 		cfg:   cfg,
 		httpc: http.Client{Timeout: time.Second * 5},
 		buf:   bytes.NewBuffer(make([]byte, 0, 512)),
 	}
+
+	return fmpc, nil
 }
 
 // formURL creates full urls including paramters for the api.

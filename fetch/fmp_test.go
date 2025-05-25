@@ -19,7 +19,8 @@ func TestFMPClient(t *testing.T) {
 		BaseURL: "http://base",
 	}
 
-	fc := NewFMPClient(cfg)
+	fc, err := NewFMPClient(cfg)
+	assert.NoError(t, err)
 
 	// Ensure urls can be formed accurately.
 	params := url.Values{}
@@ -40,4 +41,43 @@ func TestFMPClient(t *testing.T) {
 	threeMonthsAgo := now.AddDate(0, -3, 0)
 	_, err = fc.FetchIndexIntradayHistorical(context.Background(), market, timeframe, threeMonthsAgo, time.Time{})
 	assert.Error(t, err)
+}
+func TestValidateFMPConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     FMPConfig
+		wantErr bool
+	}{
+		{
+			name:    "valid config",
+			cfg:     FMPConfig{APIKey: "key", BaseURL: "http://base"},
+			wantErr: false,
+		},
+		{
+			name:    "missing APIKey",
+			cfg:     FMPConfig{APIKey: "", BaseURL: "http://base"},
+			wantErr: true,
+		},
+		{
+			name:    "missing BaseURL",
+			cfg:     FMPConfig{APIKey: "key", BaseURL: ""},
+			wantErr: true,
+		},
+		{
+			name:    "missing both APIKey and BaseURL",
+			cfg:     FMPConfig{APIKey: "", BaseURL: ""},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
