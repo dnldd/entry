@@ -562,7 +562,7 @@ func TestBacktestLevelGeneration(t *testing.T) {
 	defer cancel()
 
 	expectedLevelPrices := []float64{36, 18}
-	runDone := make(chan struct{}, 1)
+	runDone := make(chan struct{})
 	go func() {
 		for {
 			select {

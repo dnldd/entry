@@ -89,6 +89,68 @@ func TestEngine(t *testing.T) {
 	eng.SignalReactionAtLevel(levelReaction)
 	<-levelReaction.Status
 
+	// Ensure the engine candle handle a vwap reaction.
+	vwapReaction := shared.ReactionAtVWAP{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asiaSessionTime,
+			Status:        make(chan shared.StatusCode, 1),
+		},
+		VWAPData: []*shared.VWAP{
+			{
+				Value: 2,
+				Date:  time.Time{},
+			},
+			{
+				Value: 2.1,
+				Date:  time.Time{},
+			},
+			{
+				Value: 2.2,
+				Date:  time.Time{},
+			},
+			{
+				Value: 2.3,
+				Date:  time.Time{},
+			},
+		},
+	}
+
+	eng.SignalReactionAtVWAP(vwapReaction)
+	<-vwapReaction.Status
+
+	// Ensure the engine candle handle an imbalance reaction.
+	imbalanceReaction := shared.ReactionAtImbalance{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Reversal,
+			CreatedOn:     asiaSessionTime,
+			Status:        make(chan shared.StatusCode, 1),
+		},
+		Imbalance: &shared.Imbalance{
+			Market:      market,
+			High:        float64(10),
+			Low:         float64(4),
+			Midpoint:    float64(7),
+			Timeframe:   shared.FiveMinute,
+			Sentiment:   shared.Bullish,
+			GapRatio:    float64(0.8),
+			Purged:      *atomic.NewBool(false),
+			Invalidated: *atomic.NewBool(false),
+			Date:        time.Time{},
+		},
+	}
+
+	eng.SignalReactionAtImbalance(imbalanceReaction)
+	<-imbalanceReaction.Status
+
 	time.Sleep(time.Millisecond * 400)
 
 	cancel()
@@ -105,19 +167,10 @@ func TestFillManagerChannels(t *testing.T) {
 	assert.NoError(t, err)
 
 	market := "^GSPC"
-	candle := shared.Candlestick{
-		Open:      12,
-		High:      15,
-		Low:       9,
-		Close:     11,
-		Volume:    2,
-		Date:      now,
-		Market:    market,
-		Timeframe: shared.FiveMinute,
-	}
+	close := float64(11)
 
 	levelPrice := float64(8)
-	level := shared.NewLevel(market, levelPrice, &candle)
+	level := shared.NewLevel(market, levelPrice, close)
 	levelReaction := shared.ReactionAtLevel{
 		ReactionAtFocus: shared.ReactionAtFocus{
 			Market:        market,
@@ -132,12 +185,69 @@ func TestFillManagerChannels(t *testing.T) {
 		Level: level,
 	}
 
+	vwapReaction := shared.ReactionAtVWAP{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Reversal,
+			Status:        make(chan shared.StatusCode, 1),
+		},
+		VWAPData: []*shared.VWAP{
+			{
+				Value: 2,
+				Date:  time.Time{},
+			},
+			{
+				Value: 2.1,
+				Date:  time.Time{},
+			},
+			{
+				Value: 2.2,
+				Date:  time.Time{},
+			},
+			{
+				Value: 2.3,
+				Date:  time.Time{},
+			},
+		},
+	}
+
+	// Ensure the engine candle handle an imbalance reaction.
+	imbalanceReaction := shared.ReactionAtImbalance{
+		ReactionAtFocus: shared.ReactionAtFocus{
+			Market:        market,
+			Timeframe:     shared.FiveMinute,
+			LevelKind:     shared.Support,
+			PriceMovement: []shared.PriceMovement{shared.Above, shared.Above, shared.Above, shared.Above},
+			Reaction:      shared.Reversal,
+			Status:        make(chan shared.StatusCode, 1),
+		},
+		Imbalance: &shared.Imbalance{
+			Market:      market,
+			High:        float64(10),
+			Low:         float64(4),
+			Midpoint:    float64(7),
+			Timeframe:   shared.FiveMinute,
+			Sentiment:   shared.Bullish,
+			GapRatio:    float64(0.8),
+			Purged:      *atomic.NewBool(false),
+			Invalidated: *atomic.NewBool(false),
+			Date:        time.Time{},
+		},
+	}
+
 	// Fill all the channels used by the manager.
 	for range bufferSize + 1 {
 		eng.SignalReactionAtLevel(levelReaction)
+		eng.SignalReactionAtVWAP(vwapReaction)
+		eng.SignalReactionAtImbalance(imbalanceReaction)
 	}
 
 	assert.Equal(t, len(eng.reactionAtLevelSignals), bufferSize)
+	assert.Equal(t, len(eng.reactionAtVWAPSignals), bufferSize)
+	assert.Equal(t, len(eng.reactionAtImbalanceSignals), bufferSize)
 }
 
 func TestHandleLevelReaction(t *testing.T) {
@@ -726,17 +836,19 @@ func TestFetchAverageVolume(t *testing.T) {
 	avgVolume := float64(10)
 	candleMeta := []*shared.CandleMetadata{}
 	marketSkew := shared.NeutralSkew
+	timeframe := shared.FiveMinute
 	eng, _, _ := setupEngine(&avgVolume, candleMeta, &marketSkew)
 
 	// Ensure average volume requests can be processed.
 	market := "^GSPC"
-	avgVol, err := eng.fetchAverageVolume(market)
+	avgVol, err := eng.fetchAverageVolume(market, timeframe)
 	assert.NoError(t, err)
 	assert.Equal(t, avgVol, float64(10))
 }
 
 func TestFetchCandleMetadata(t *testing.T) {
 	avgVolume := float64(10)
+	timeframe := shared.FiveMinute
 	asiaSessionTime, _ := generateSessionTimes(t)
 	candleMeta := []*shared.CandleMetadata{
 		{
@@ -785,7 +897,7 @@ func TestFetchCandleMetadata(t *testing.T) {
 
 	// Ensure average volume requests can be processed.
 	market := "^GSPC"
-	meta, err := eng.fetchCandleMetadata(market)
+	meta, err := eng.fetchCandleMetadata(market, timeframe)
 	assert.NoError(t, err)
 	assert.Equal(t, len(meta), 4)
 }
