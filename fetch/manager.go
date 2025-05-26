@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -36,6 +37,29 @@ type ManagerConfig struct {
 	Logger *zerolog.Logger
 }
 
+// Validate asserts the config sane inputs.
+func (cfg *ManagerConfig) Validate() error {
+	var errs error
+
+	if len(cfg.Markets) == 0 {
+		errs = errors.Join(errs, fmt.Errorf("no markets provided for fetch manager"))
+	}
+	if cfg.ExchangeClient == nil {
+		errs = errors.Join(errs, fmt.Errorf("exchange client cannot be nil"))
+	}
+	if cfg.SignalCaughtUp == nil {
+		errs = errors.Join(errs, fmt.Errorf("signal caught up function cannot be nil"))
+	}
+	if cfg.JobScheduler == nil {
+		errs = errors.Join(errs, fmt.Errorf("job scheduler cannot be nil"))
+	}
+	if cfg.Logger == nil {
+		errs = errors.Join(errs, fmt.Errorf("logger cannot be nil"))
+	}
+
+	return errs
+}
+
 // Manager represents the market query manager.
 type Manager struct {
 	cfg                 *ManagerConfig
@@ -51,6 +75,11 @@ type Manager struct {
 
 // NewManager initializes the fetch manager.
 func NewManager(cfg *ManagerConfig) (*Manager, error) {
+	err := cfg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating fetch manager config: %v", err)
+	}
+
 	loc, err := time.LoadLocation(shared.NewYorkLocation)
 	if err != nil {
 		return nil, fmt.Errorf("loading new york location: %v", err)

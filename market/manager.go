@@ -2,6 +2,7 @@ package market
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -51,6 +52,41 @@ type ManagerConfig struct {
 	Logger *zerolog.Logger
 }
 
+// Validate asserts the config sane inputs.
+func (cfg *ManagerConfig) Validate() error {
+	var errs error
+
+	if len(cfg.Markets) == 0 {
+		errs = errors.Join(errs, fmt.Errorf("no markets provided for market manager"))
+	}
+	if len(cfg.Timeframes) == 0 {
+		errs = errors.Join(errs, fmt.Errorf("no timeframes provided for market manager"))
+	}
+	if cfg.Subscribe == nil {
+		errs = errors.Join(errs, fmt.Errorf("subscribe function cannot be nil"))
+	}
+	if cfg.RelayMarketUpdate == nil {
+		errs = errors.Join(errs, fmt.Errorf("relay market update function cannot be nil"))
+	}
+	if cfg.CatchUp == nil {
+		errs = errors.Join(errs, fmt.Errorf("catch up function cannot be nil"))
+	}
+	if cfg.SignalLevel == nil {
+		errs = errors.Join(errs, fmt.Errorf("signal level function cannot be nil"))
+	}
+	if cfg.SignalImbalance == nil {
+		errs = errors.Join(errs, fmt.Errorf("signal imbalance function cannot be nil"))
+	}
+	if cfg.JobScheduler == nil {
+		errs = errors.Join(errs, fmt.Errorf("job scheduler cannot be nil"))
+	}
+	if cfg.Logger == nil {
+		errs = errors.Join(errs, fmt.Errorf("logger function cannot be nil"))
+	}
+
+	return errs
+}
+
 // Manager manages the lifecycle processes of all tracked markets.
 type Manager struct {
 	cfg                   *ManagerConfig
@@ -68,6 +104,11 @@ type Manager struct {
 
 // NewManager initializes a new market manager.
 func NewManager(cfg *ManagerConfig, now time.Time) (*Manager, error) {
+	err := cfg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating market manager config: %v", err)
+	}
+
 	// initialize managed markets.
 	markets := make(map[string]*Market, 0)
 	workers := make(map[string]chan struct{})
@@ -81,6 +122,7 @@ func NewManager(cfg *ManagerConfig, now time.Time) (*Manager, error) {
 			SignalImbalance:   cfg.SignalImbalance,
 			RelayMarketUpdate: cfg.RelayMarketUpdate,
 			JobScheduler:      cfg.JobScheduler,
+			Logger:            cfg.Logger,
 		}
 		market, err := NewMarket(mCfg, now)
 		if err != nil {

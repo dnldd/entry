@@ -1,6 +1,7 @@
 package market
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -34,6 +35,35 @@ type MarketConfig struct {
 	Logger *zerolog.Logger
 }
 
+// Validate asserts the config sane inputs.
+func (cfg *MarketConfig) Validate() error {
+	var errs error
+
+	if cfg.Market == "" {
+		errs = errors.Join(errs, fmt.Errorf("market cannot be an empty string"))
+	}
+	if len(cfg.Timeframes) == 0 {
+		errs = errors.Join(errs, fmt.Errorf("no timeframes provided for market"))
+	}
+	if cfg.SignalLevel == nil {
+		errs = errors.Join(errs, fmt.Errorf("signal level function cannot be nil"))
+	}
+	if cfg.SignalImbalance == nil {
+		errs = errors.Join(errs, fmt.Errorf("signal imbalance function cannot be nil"))
+	}
+	if cfg.RelayMarketUpdate == nil {
+		errs = errors.Join(errs, fmt.Errorf("relay market update function cannot be nil"))
+	}
+	if cfg.JobScheduler == nil {
+		errs = errors.Join(errs, fmt.Errorf("job scheduler cannot be nil"))
+	}
+	if cfg.Logger == nil {
+		errs = errors.Join(errs, fmt.Errorf("logger cannot be nil"))
+	}
+
+	return errs
+}
+
 // Market tracks the metadata of a market.
 //
 // The market tracks candlestick data spanning multiple timeframes – 1m, 5m & 1H,
@@ -49,6 +79,11 @@ type Market struct {
 
 // NewMarket initializes a new market.
 func NewMarket(cfg *MarketConfig, now time.Time) (*Market, error) {
+	err := cfg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating market config: %v", err)
+	}
+
 	sessionsSnapshot, err := shared.NewSessionSnapshot(shared.SessionSnapshotSize, now)
 	if err != nil {
 		return nil, err
