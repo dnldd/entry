@@ -68,6 +68,11 @@ type Manager struct {
 
 // NewPositionManager initializes a new position manager.
 func NewPositionManager(cfg *ManagerConfig) (*Manager, error) {
+	err := cfg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating position manager config: %v", err)
+	}
+
 	// Create markets for position tracking.
 	markets := make(map[string]*Market)
 	for idx := range cfg.Markets {
@@ -200,6 +205,21 @@ func (m *Manager) handleMarketSkewRequest(req *shared.MarketSkewRequest) error {
 	}
 
 	req.Response <- shared.MarketSkew(mkt.skew.Load())
+
+	return nil
+}
+
+// PersistPositionsCSV persists positions of all tracked markets to a csv file.
+func (m *Manager) PersistPositionsCSV() error {
+	for k := range m.markets {
+		mkt := m.markets[k]
+
+		// Persist positions for each tracked market.
+		_, err := mkt.PersistPositionsCSV()
+		if err != nil {
+			return fmt.Errorf("persisting %s positions: %v", err)
+		}
+	}
 
 	return nil
 }

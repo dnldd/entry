@@ -240,6 +240,11 @@ func (m *Market) PurgeClosedPositionsJob() error {
 
 // PersistPositionsCSV writes the tracked positions of the provided market to file as csv.
 func (m *Market) PersistPositionsCSV() (string, error) {
+	if len(m.positions) == 0 {
+		// Do nothing.
+		return "", nil
+	}
+
 	now, _, err := shared.NewYorkTime()
 	if err != nil {
 		return "", fmt.Errorf("fetching new york time: %v", err)
