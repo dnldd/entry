@@ -1,6 +1,7 @@
 package priceaction
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,6 +28,29 @@ type MarketConfig struct {
 	Logger *zerolog.Logger
 }
 
+// Validate asserts the config sane inputs.
+func (cfg *MarketConfig) Validate() error {
+	var errs error
+
+	if cfg.Market == "" {
+		errs = errors.Join(errs, fmt.Errorf("no markets provided for price action market"))
+	}
+	if cfg.RequestVWAPData == nil {
+		errs = errors.Join(errs, fmt.Errorf("request vwap data function cannot be nil"))
+	}
+	if cfg.RequestVWAP == nil {
+		errs = errors.Join(errs, fmt.Errorf("request vwap function cannot be nil"))
+	}
+	if cfg.FetchCaughtUpState == nil {
+		errs = errors.Join(errs, fmt.Errorf("fetch caught up state function cannot be nil"))
+	}
+	if cfg.Logger == nil {
+		errs = errors.Join(errs, fmt.Errorf("logger cannot be nil"))
+	}
+
+	return errs
+}
+
 // Market represents all the the price action data related to a market.
 type Market struct {
 	cfg                     *MarketConfig
@@ -45,6 +69,11 @@ type Market struct {
 
 // NewMarket initializes a new market.
 func NewMarket(cfg *MarketConfig) (*Market, error) {
+	err := cfg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating price action market config: %v", err)
+	}
+
 	levelSnapshot, err := shared.NewLevelSnapshot(shared.LevelSnapshotSize)
 	if err != nil {
 		return nil, fmt.Errorf("creating level snapshot: %v", err)

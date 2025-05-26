@@ -2,6 +2,7 @@ package priceaction
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -44,6 +45,41 @@ type ManagerConfig struct {
 	Logger *zerolog.Logger
 }
 
+// Validate asserts the config sane inputs.
+func (cfg *ManagerConfig) Validate() error {
+	var errs error
+
+	if len(cfg.Markets) == 0 {
+		errs = errors.Join(errs, fmt.Errorf("no markets provided for position manager"))
+	}
+	if cfg.Subscribe == nil {
+		errs = errors.Join(errs, fmt.Errorf("subscribe function cannot be nil"))
+	}
+	if cfg.RequestPriceData == nil {
+		errs = errors.Join(errs, fmt.Errorf("request price data function cannot be nil"))
+	}
+	if cfg.RequestVWAPData == nil {
+		errs = errors.Join(errs, fmt.Errorf("request vwap data function cannot be nil"))
+	}
+	if cfg.SignalReactionAtLevel == nil {
+		errs = errors.Join(errs, fmt.Errorf("signal reaction at level function cannot be nil"))
+	}
+	if cfg.SignalReactionAtVWAP == nil {
+		errs = errors.Join(errs, fmt.Errorf("signal reaction at vwap function cannot be nil"))
+	}
+	if cfg.SignalReactionAtImbalance == nil {
+		errs = errors.Join(errs, fmt.Errorf("signal reaction at imbalance function cannot be nil"))
+	}
+	if cfg.FetchCaughtUpState == nil {
+		errs = errors.Join(errs, fmt.Errorf("fetch caught up state function cannot be nil"))
+	}
+	if cfg.Logger == nil {
+		errs = errors.Join(errs, fmt.Errorf("logger cannot be nil"))
+	}
+
+	return errs
+}
+
 // Manager represents the price action manager.
 type Manager struct {
 	cfg              *ManagerConfig
@@ -58,6 +94,11 @@ type Manager struct {
 
 // NewManager initializes a new price action manager.
 func NewManager(cfg *ManagerConfig) (*Manager, error) {
+	err := cfg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating price action manager config: %v", err)
+	}
+
 	markets := make(map[string]*Market)
 	workers := make(map[string]chan struct{})
 	for idx := range cfg.Markets {
@@ -67,6 +108,7 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 
 		cfg := &MarketConfig{
 			Market:             market,
+			RequestVWAPData:    cfg.RequestVWAPData,
 			RequestVWAP:        cfg.RequestVWAP,
 			FetchCaughtUpState: cfg.FetchCaughtUpState,
 			Logger:             cfg.Logger,

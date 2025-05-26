@@ -1,12 +1,138 @@
 package priceaction
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/dnldd/entry/shared"
 	"github.com/peterldowns/testy/assert"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+func TestMarketConfigValidate(t *testing.T) {
+	logger := log.Logger
+
+	type fields struct {
+		Market             string
+		RequestVWAPData    func(request shared.VWAPDataRequest)
+		RequestVWAP        func(request shared.VWAPRequest)
+		FetchCaughtUpState func(market string) (bool, error)
+		Logger             *zerolog.Logger
+	}
+
+	tests := []struct {
+		name        string
+		fields      fields
+		wantErr     bool
+		errContains []string
+	}{
+		{
+			name: "valid config returns nil",
+			fields: fields{
+				Market:             "TEST",
+				RequestVWAPData:    func(request shared.VWAPDataRequest) {},
+				RequestVWAP:        func(request shared.VWAPRequest) {},
+				FetchCaughtUpState: func(market string) (bool, error) { return true, nil },
+				Logger:             &logger,
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing Market",
+			fields: fields{
+				Market:             "",
+				RequestVWAPData:    func(request shared.VWAPDataRequest) {},
+				RequestVWAP:        func(request shared.VWAPRequest) {},
+				FetchCaughtUpState: func(market string) (bool, error) { return true, nil },
+				Logger:             &logger,
+			},
+			wantErr:     true,
+			errContains: []string{"no markets provided"},
+		},
+		{
+			name: "missing RequestVWAPData",
+			fields: fields{
+				Market:             "TEST",
+				RequestVWAPData:    nil,
+				RequestVWAP:        func(request shared.VWAPRequest) {},
+				FetchCaughtUpState: func(market string) (bool, error) { return true, nil },
+				Logger:             &logger,
+			},
+			wantErr:     true,
+			errContains: []string{"request vwap data function cannot be nil"},
+		},
+		{
+			name: "missing RequestVWAP",
+			fields: fields{
+				Market:             "TEST",
+				RequestVWAPData:    func(request shared.VWAPDataRequest) {},
+				RequestVWAP:        nil,
+				FetchCaughtUpState: func(market string) (bool, error) { return true, nil },
+				Logger:             &logger,
+			},
+			wantErr:     true,
+			errContains: []string{"request vwap function cannot be nil"},
+		},
+		{
+			name: "missing FetchCaughtUpState",
+			fields: fields{
+				Market:             "TEST",
+				RequestVWAPData:    func(request shared.VWAPDataRequest) {},
+				RequestVWAP:        func(request shared.VWAPRequest) {},
+				FetchCaughtUpState: nil,
+				Logger:             &logger,
+			},
+			wantErr:     true,
+			errContains: []string{"fetch caught up state function cannot be nil"},
+		},
+		{
+			name: "missing Logger",
+			fields: fields{
+				Market:             "TEST",
+				RequestVWAPData:    func(request shared.VWAPDataRequest) {},
+				RequestVWAP:        func(request shared.VWAPRequest) {},
+				FetchCaughtUpState: func(market string) (bool, error) { return true, nil },
+				Logger:             nil,
+			},
+			wantErr:     true,
+			errContains: []string{"logger cannot be nil"},
+		},
+		{
+			name:    "multiple missing fields",
+			fields:  fields{},
+			wantErr: true,
+			errContains: []string{
+				"no markets provided",
+				"request vwap data function cannot be nil",
+				"request vwap function cannot be nil",
+				"fetch caught up state function cannot be nil",
+				"logger cannot be nil",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := MarketConfig{
+				Market:             tt.fields.Market,
+				RequestVWAPData:    tt.fields.RequestVWAPData,
+				RequestVWAP:        tt.fields.RequestVWAP,
+				FetchCaughtUpState: tt.fields.FetchCaughtUpState,
+				Logger:             tt.fields.Logger,
+			}
+			err := cfg.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				for _, substr := range tt.errContains {
+					assert.True(t, strings.Contains(err.Error(), substr))
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
 
 func TestMarket(t *testing.T) {
 	market := "^GSPC"
@@ -17,6 +143,9 @@ func TestMarket(t *testing.T) {
 		Market: market,
 		RequestVWAP: func(request shared.VWAPRequest) {
 			request.Response <- &vwap
+		},
+		RequestVWAPData: func(request shared.VWAPDataRequest) {
+			request.Response <- []*shared.VWAP{&vwap, &vwap, &vwap}
 		},
 		FetchCaughtUpState: func(market string) (bool, error) {
 			return true, nil

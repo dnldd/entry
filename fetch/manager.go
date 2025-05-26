@@ -202,7 +202,8 @@ func (m *Manager) fetchMarketDataJob(marketName string, timeframe shared.Timefra
 
 	if !open {
 		// do nothing.
-		return fmt.Errorf("%s not open, skipping periodic update", marketName)
+		m.cfg.Logger.Error().Msgf("%s not open, skipping periodic update", marketName)
+		return nil
 	}
 
 	m.fetchMarketData(marketName, timeframe, lastUpdatedTime)

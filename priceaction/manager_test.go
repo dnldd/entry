@@ -2,11 +2,13 @@ package priceaction
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/dnldd/entry/shared"
 	"github.com/peterldowns/testy/assert"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -103,6 +105,133 @@ func setupManager(t *testing.T, market string) *Manager {
 	assert.NoError(t, err)
 
 	return mgr
+}
+
+func TestPriceActionManagerConfigValidate(t *testing.T) {
+	// Dummy functions for required fields
+	dummySubscribe := func(name string, sub chan shared.Candlestick) {}
+	dummyRequestPriceData := func(request shared.PriceDataRequest) {}
+	dummyRequestVWAPData := func(request shared.VWAPDataRequest) {}
+	dummyRequestVWAP := func(request shared.VWAPRequest) {}
+	dummySignalReactionAtLevel := func(signal shared.ReactionAtLevel) {}
+	dummySignalReactionAtVWAP := func(signal shared.ReactionAtVWAP) {}
+	dummySignalReactionAtImbalance := func(signal shared.ReactionAtImbalance) {}
+	dummyFetchCaughtUpState := func(market string) (bool, error) { return true, nil }
+	logger := zerolog.New(nil)
+
+	baseCfg := &ManagerConfig{
+		Markets:                   []string{"AAPL"},
+		Subscribe:                 dummySubscribe,
+		RequestPriceData:          dummyRequestPriceData,
+		RequestVWAPData:           dummyRequestVWAPData,
+		RequestVWAP:               dummyRequestVWAP,
+		SignalReactionAtLevel:     dummySignalReactionAtLevel,
+		SignalReactionAtVWAP:      dummySignalReactionAtVWAP,
+		SignalReactionAtImbalance: dummySignalReactionAtImbalance,
+		FetchCaughtUpState:        dummyFetchCaughtUpState,
+		Logger:                    &logger,
+	}
+
+	tests := []struct {
+		name        string
+		modify      func(cfg *ManagerConfig)
+		wantErr     bool
+		errContains []string
+	}{
+		{
+			name:    "valid config returns nil",
+			modify:  func(cfg *ManagerConfig) { cfg.Logger = &logger },
+			wantErr: false,
+		},
+		{
+			name:        "missing Markets",
+			modify:      func(cfg *ManagerConfig) { cfg.Markets = nil; cfg.Logger = &logger },
+			wantErr:     true,
+			errContains: []string{"no markets provided"},
+		},
+		{
+			name:        "missing Subscribe",
+			modify:      func(cfg *ManagerConfig) { cfg.Subscribe = nil; cfg.Logger = &logger },
+			wantErr:     true,
+			errContains: []string{"subscribe function cannot be nil"},
+		},
+		{
+			name:        "missing RequestPriceData",
+			modify:      func(cfg *ManagerConfig) { cfg.RequestPriceData = nil; cfg.Logger = &logger },
+			wantErr:     true,
+			errContains: []string{"request price data function cannot be nil"},
+		},
+		{
+			name:        "missing RequestVWAPData",
+			modify:      func(cfg *ManagerConfig) { cfg.RequestVWAPData = nil; cfg.Logger = &logger },
+			wantErr:     true,
+			errContains: []string{"request vwap data function cannot be nil"},
+		},
+		{
+			name:        "missing SignalReactionAtLevel",
+			modify:      func(cfg *ManagerConfig) { cfg.SignalReactionAtLevel = nil; cfg.Logger = &logger },
+			wantErr:     true,
+			errContains: []string{"signal reaction at level function cannot be nil"},
+		},
+		{
+			name:        "missing SignalReactionAtVWAP",
+			modify:      func(cfg *ManagerConfig) { cfg.SignalReactionAtVWAP = nil; cfg.Logger = &logger },
+			wantErr:     true,
+			errContains: []string{"signal reaction at vwap function cannot be nil"},
+		},
+		{
+			name:        "missing SignalReactionAtImbalance",
+			modify:      func(cfg *ManagerConfig) { cfg.SignalReactionAtImbalance = nil; cfg.Logger = &logger },
+			wantErr:     true,
+			errContains: []string{"signal reaction at imbalance function cannot be nil"},
+		},
+		{
+			name:        "missing FetchCaughtUpState",
+			modify:      func(cfg *ManagerConfig) { cfg.FetchCaughtUpState = nil; cfg.Logger = &logger },
+			wantErr:     true,
+			errContains: []string{"fetch caught up state function cannot be nil"},
+		},
+		{
+			name:        "missing Logger",
+			modify:      func(cfg *ManagerConfig) { cfg.Logger = nil },
+			wantErr:     true,
+			errContains: []string{"logger cannot be nil"},
+		},
+		{
+			name: "multiple missing fields",
+			modify: func(cfg *ManagerConfig) {
+				*cfg = ManagerConfig{}
+			},
+			wantErr: true,
+			errContains: []string{
+				"no markets provided",
+				"subscribe function cannot be nil",
+				"request price data function cannot be nil",
+				"request vwap data function cannot be nil",
+				"signal reaction at level function cannot be nil",
+				"signal reaction at vwap function cannot be nil",
+				"signal reaction at imbalance function cannot be nil",
+				"fetch caught up state function cannot be nil",
+				"logger cannot be nil",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := *baseCfg
+			tt.modify(&cfg)
+			err := cfg.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				for _, substr := range tt.errContains {
+					assert.True(t, strings.Contains(err.Error(), substr))
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestManager(t *testing.T) {
