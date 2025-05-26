@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -30,6 +31,33 @@ type EntryConfig struct {
 	BacktestMarket string
 	// BacktestDataFilepath is the filepath to the backtest data.
 	BacktestDataFilepath string
+	// Cancel is the context cancellation function.
+	Cancel context.CancelFunc
+}
+
+// Validate asserts the config sane inputs.
+func (cfg *EntryConfig) Validate() error {
+	var errs error
+
+	if len(cfg.Markets) == 0 {
+		errs = errors.Join(errs, fmt.Errorf("no markets provided for entry service"))
+	}
+	if cfg.FMPAPIKey == "" {
+		errs = errors.Join(errs, fmt.Errorf("fmp api key cannot be an empty string"))
+	}
+	if cfg.Cancel == nil {
+		errs = errors.Join(errs, fmt.Errorf("context cancellation function cannot be nil"))
+	}
+	if cfg.Backtest {
+		if cfg.BacktestMarket == "" {
+			errs = errors.Join(errs, fmt.Errorf("backtest market cannot be an empty string"))
+		}
+		if cfg.BacktestDataFilepath == "" {
+			errs = errors.Join(errs, fmt.Errorf("backtest data filepath cannot be an empty string"))
+		}
+	}
+
+	return errs
 }
 
 // Entry represents a market entry finding service.
@@ -41,6 +69,7 @@ type Entry struct {
 	priceActionManager *priceaction.Manager
 	historicData       *shared.HistoricData
 	entryEngine        *engine.Engine
+	logger             *zerolog.Logger
 	wg                 sync.WaitGroup
 }
 
@@ -120,13 +149,29 @@ func NewEntry(cfg *EntryConfig) (*Entry, error) {
 		}
 	}
 
+	signalImbalanceFunc := func(signal shared.ImbalanceSignal) {
+		if signalLevelFunc != nil {
+			priceActionMgr.SendImbalanceSignal(signal)
+		}
+	}
+
+	relayMarketUpdateFunc := func(candle shared.Candlestick) {
+		if priceActionMgr != nil {
+			priceActionMgr.SendMarketUpdate(candle)
+		}
+	}
+
 	marketMgrLogger := logger.With().Str("component", "marketmanager").Logger()
 	marketMgr, err = market.NewManager(&market.ManagerConfig{
-		Markets:      cfg.Markets,
-		Backtest:     cfg.Backtest,
-		Subscribe:    fetchMgr.Subscribe,
-		CatchUp:      fetchMgr.SendCatchUpSignal,
-		SignalLevel:  signalLevelFunc,
+		Markets:           cfg.Markets,
+		Timeframes:        []shared.Timeframe{shared.FiveMinute, shared.OneHour},
+		Backtest:          cfg.Backtest,
+		Subscribe:         fetchMgr.Subscribe,
+		RelayMarketUpdate: relayMarketUpdateFunc,
+		CatchUp:           fetchMgr.SendCatchUpSignal,
+		SignalLevel:       signalLevelFunc,
+		SignalImbalance:   signalImbalanceFunc,
+
 		JobScheduler: jobScheduler,
 		Logger:       &marketMgrLogger,
 	}, now)
@@ -160,14 +205,24 @@ func NewEntry(cfg *EntryConfig) (*Entry, error) {
 		}
 	}
 
+	imbalanceReactionFunc := func(signal shared.ReactionAtImbalance) {
+		if entryEngine != nil {
+			entryEngine.SignalReactionAtImbalance(signal)
+		}
+	}
+
 	priceActionMgrLogger := logger.With().Str("component", "priceactionmanager").Logger()
 	priceActionMgr, err = priceaction.NewManager(&priceaction.ManagerConfig{
-		Markets:               cfg.Markets,
-		Subscribe:             fetchMgr.Subscribe,
-		RequestPriceData:      marketMgr.SendPriceDataRequest,
-		SignalReactionAtLevel: levelReactionFunc,
-		SignalReactionAtVWAP:  vwapReactionFunc,
-		Logger:                &priceActionMgrLogger,
+		Markets:                   cfg.Markets,
+		Subscribe:                 fetchMgr.Subscribe,
+		RequestPriceData:          marketMgr.SendPriceDataRequest,
+		RequestVWAPData:           marketMgr.SendVWAPDataRequest,
+		RequestVWAP:               marketMgr.SendVWAPRequest,
+		SignalReactionAtLevel:     levelReactionFunc,
+		SignalReactionAtVWAP:      vwapReactionFunc,
+		SignalReactionAtImbalance: imbalanceReactionFunc,
+		FetchCaughtUpState:        marketMgr.FetchCaughtUpState,
+		Logger:                    &priceActionMgrLogger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating price action manager: %v", err)
@@ -191,6 +246,7 @@ func NewEntry(cfg *EntryConfig) (*Entry, error) {
 		priceActionManager: priceActionMgr,
 		historicData:       historicData,
 		entryEngine:        entryEngine,
+		logger:             &logger,
 	}
 
 	return service, nil
@@ -227,9 +283,16 @@ func (e *Entry) Run(ctx context.Context) {
 
 	if e.cfg.Backtest {
 		go func() {
-			// wait briefly.
+			// wait briefly for initialization.
 			time.Sleep(time.Second * 1)
 			e.historicData.ProcessHistoricalData()
+			err := e.positionManager.PersistPositionsCSV()
+			if err != nil {
+				e.logger.Error().Msgf("persisting positions: %v", err)
+			}
+
+			e.logger.Info().Msgf("backtest for %s done, review positions csv for performance", e.cfg.BacktestMarket)
+			e.cfg.Cancel()
 		}()
 	}
 
