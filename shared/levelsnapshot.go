@@ -1,21 +1,20 @@
-package priceaction
+package shared
 
 import (
 	"errors"
 	"sync"
 
-	"github.com/dnldd/entry/shared"
 	"go.uber.org/atomic"
 )
 
 const (
-	// levelSnapshotSize is the maximum number of elements for a level snapshot.
-	levelSnapshotSize = 80
+	// LevelSnapshotSize is the maximum number of elements for a level snapshot.
+	LevelSnapshotSize = 80
 )
 
 // LevelSnapshot represents a snapshot of level data.
 type LevelSnapshot struct {
-	data    []*shared.Level
+	data    []*Level
 	dataMtx sync.RWMutex
 	start   atomic.Int32
 	count   atomic.Int32
@@ -32,7 +31,7 @@ func NewLevelSnapshot(size int32) (*LevelSnapshot, error) {
 	}
 
 	snapshot := &LevelSnapshot{
-		data: make([]*shared.Level, size),
+		data: make([]*Level, size),
 	}
 
 	snapshot.size.Store(size)
@@ -41,7 +40,7 @@ func NewLevelSnapshot(size int32) (*LevelSnapshot, error) {
 }
 
 // Adds adds the provided session to the snapshot.
-func (s *LevelSnapshot) Add(level *shared.Level) {
+func (s *LevelSnapshot) Add(level *Level) {
 	s.dataMtx.Lock()
 	defer s.dataMtx.Unlock()
 
@@ -60,7 +59,7 @@ func (s *LevelSnapshot) Add(level *shared.Level) {
 }
 
 // Update applies the provided market update to all tracked levels.
-func (s *LevelSnapshot) Update(candle *shared.Candlestick) {
+func (s *LevelSnapshot) Update(candle *Candlestick) {
 	start := s.start.Load()
 	count := s.count.Load()
 	size := s.size.Load()
@@ -71,14 +70,14 @@ func (s *LevelSnapshot) Update(candle *shared.Candlestick) {
 }
 
 // Filter applies the provided function to the snapshot and returns the filtered subset.
-func (s *LevelSnapshot) Filter(candle *shared.Candlestick, fn func(*shared.Level, *shared.Candlestick) bool) []*shared.Level {
+func (s *LevelSnapshot) Filter(candle *Candlestick, fn func(*Level, *Candlestick) bool) []*Level {
 	s.dataMtx.RLock()
 	defer s.dataMtx.RUnlock()
 
 	start := s.start.Load()
 	count := s.count.Load()
 	size := s.size.Load()
-	levels := make([]*shared.Level, 0)
+	levels := make([]*Level, 0)
 	for i := range count {
 		level := s.data[(start+i)%size]
 		ok := fn(level, candle)

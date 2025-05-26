@@ -30,7 +30,7 @@ type MarketConfig struct {
 // Market represents all the the price action data related to a market.
 type Market struct {
 	cfg                     *MarketConfig
-	levelSnapshot           *LevelSnapshot
+	levelSnapshot           *shared.LevelSnapshot
 	imbalanceSnapshot       *shared.ImbalanceSnapshot
 	taggedLevels            atomic.Bool
 	taggedVWAP              atomic.Bool
@@ -45,7 +45,7 @@ type Market struct {
 
 // NewMarket initializes a new market.
 func NewMarket(cfg *MarketConfig) (*Market, error) {
-	levelSnapshot, err := NewLevelSnapshot(levelSnapshotSize)
+	levelSnapshot, err := shared.NewLevelSnapshot(shared.LevelSnapshotSize)
 	if err != nil {
 		return nil, fmt.Errorf("creating level snapshot: %v", err)
 	}

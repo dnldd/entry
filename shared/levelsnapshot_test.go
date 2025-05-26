@@ -1,9 +1,8 @@
-package priceaction
+package shared
 
 import (
 	"testing"
 
-	"github.com/dnldd/entry/shared"
 	"github.com/peterldowns/testy/assert"
 )
 
@@ -23,22 +22,22 @@ func TestLevelSnapshot(t *testing.T) {
 	// Ensure the snapshot can be updated with levels.
 	price := float64(12)
 	market := "^GSPC"
-	resistanceCandle := &shared.Candlestick{
+	resistanceCandle := &Candlestick{
 		Open:   10,
 		High:   15,
 		Low:    9,
 		Close:  5,
-		Status: make(chan shared.StatusCode, 1),
+		Status: make(chan StatusCode, 1),
 	}
 
 	supportClose := float64(17)
 
 	for idx := range size {
-		var level *shared.Level
+		var level *Level
 		if idx%2 == 0 {
-			level = shared.NewLevel(market, price, resistanceCandle.Close)
+			level = NewLevel(market, price, resistanceCandle.Close)
 		} else {
-			level = shared.NewLevel(market, price, supportClose)
+			level = NewLevel(market, price, supportClose)
 		}
 
 		levelSnapshot.Add(level)
@@ -50,7 +49,7 @@ func TestLevelSnapshot(t *testing.T) {
 	assert.Equal(t, len(levelSnapshot.data), int(size))
 
 	// Ensure level updates at capacity overwrite existing slots.
-	level := shared.NewLevel(market, price, resistanceCandle.Close)
+	level := NewLevel(market, price, resistanceCandle.Close)
 	levelSnapshot.Add(level)
 
 	assert.Equal(t, levelSnapshot.count.Load(), size)
@@ -59,7 +58,7 @@ func TestLevelSnapshot(t *testing.T) {
 	assert.Equal(t, len(levelSnapshot.data), int(size))
 
 	// Ensure the snapshot can be filtered.
-	filter := func(level *shared.Level, candle *shared.Candlestick) bool {
+	filter := func(level *Level, candle *Candlestick) bool {
 		return level.Price > candle.Close
 	}
 
