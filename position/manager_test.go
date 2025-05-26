@@ -9,8 +9,101 @@ import (
 	"github.com/dnldd/entry/shared"
 	"github.com/go-co-op/gocron"
 	"github.com/peterldowns/testy/assert"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+func TestPositionManagerConfigValidate(t *testing.T) {
+	// Dummy functions for required fields
+	dummyNotify := func(message string) {}
+	dummyPersistClosedPosition := func(position *Position) error { return nil }
+
+	// Use a real zerolog.Logger and gocron.Scheduler for testing
+	logger := zerolog.New(nil)
+	scheduler := gocron.NewScheduler(time.UTC)
+
+	baseCfg := &ManagerConfig{
+		Markets:               []string{"AAPL"},
+		Notify:                dummyNotify,
+		Backtest:              false,
+		PersistClosedPosition: dummyPersistClosedPosition,
+		JobScheduler:          scheduler,
+		Logger:                &logger,
+	}
+
+	tests := []struct {
+		name        string
+		modify      func(cfg *ManagerConfig)
+		wantErr     bool
+		errContains []string
+	}{
+		{
+			name:    "valid config returns nil",
+			modify:  func(cfg *ManagerConfig) {},
+			wantErr: false,
+		},
+		{
+			name:        "missing Markets",
+			modify:      func(cfg *ManagerConfig) { cfg.Markets = nil },
+			wantErr:     true,
+			errContains: []string{"no markets provided"},
+		},
+		{
+			name:        "missing Notify",
+			modify:      func(cfg *ManagerConfig) { cfg.Notify = nil },
+			wantErr:     true,
+			errContains: []string{"notify function cannot be nil"},
+		},
+		{
+			name:        "missing PersistClosedPosition",
+			modify:      func(cfg *ManagerConfig) { cfg.PersistClosedPosition = nil },
+			wantErr:     true,
+			errContains: []string{"persist closed position function cannot be nil"},
+		},
+		{
+			name:        "missing JobScheduler",
+			modify:      func(cfg *ManagerConfig) { cfg.JobScheduler = nil },
+			wantErr:     true,
+			errContains: []string{"job scheduler cannot be nil"},
+		},
+		{
+			name:        "missing Logger",
+			modify:      func(cfg *ManagerConfig) { cfg.Logger = nil },
+			wantErr:     true,
+			errContains: []string{"logger cannot be nil"},
+		},
+		{
+			name: "multiple missing fields",
+			modify: func(cfg *ManagerConfig) {
+				*cfg = ManagerConfig{}
+			},
+			wantErr: true,
+			errContains: []string{
+				"no markets provided",
+				"notify function cannot be nil",
+				"persist closed position function cannot be nil",
+				"job scheduler cannot be nil",
+				"logger cannot be nil",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := *baseCfg
+			tt.modify(&cfg)
+			err := cfg.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				for _, substr := range tt.errContains {
+					assert.True(t, strings.Contains(err.Error(), substr))
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
 
 func setupManager(t *testing.T, market string) (*Manager, chan string, *error) {
 	notifyMsgs := make(chan string, 10)
@@ -175,7 +268,7 @@ func TestHandleExitSignals(t *testing.T) {
 	market := "^GSPC"
 	mgr, notifyMsgs, _ := setupManager(t, market)
 
-	// Create a valid position.
+	// Create a valid
 	entrySignal := shared.EntrySignal{
 		Market:    market,
 		Timeframe: shared.FiveMinute,

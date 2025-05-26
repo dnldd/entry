@@ -2,6 +2,7 @@ package position
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -35,6 +36,23 @@ type MarketConfig struct {
 	Logger *zerolog.Logger
 }
 
+// Validate asserts the config sane inputs.
+func (cfg *MarketConfig) Validate() error {
+	var errs error
+
+	if cfg.Market == "" {
+		errs = errors.Join(errs, fmt.Errorf("markets cannot be an empty string"))
+	}
+	if cfg.JobScheduler == nil {
+		errs = errors.Join(errs, fmt.Errorf("job scheduler cannot be nil"))
+	}
+	if cfg.Logger == nil {
+		errs = errors.Join(errs, fmt.Errorf("logger cannot be nil"))
+	}
+
+	return errs
+}
+
 // Market tracks positions for the provided market.
 type Market struct {
 	cfg         *MarketConfig
@@ -45,13 +63,18 @@ type Market struct {
 
 // NewMarket initializes a new market.
 func NewMarket(cfg *MarketConfig) (*Market, error) {
+	err := cfg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating position market config: %v", err)
+	}
+
 	mkt := &Market{
 		cfg:       cfg,
 		positions: make(map[string]*Position),
 	}
 
 	// Schedule closed positions purge job.
-	_, err := cfg.JobScheduler.Every(6).Hours().
+	_, err = cfg.JobScheduler.Every(6).Hours().
 		Do(func() {
 			err := mkt.PurgeClosedPositionsJob()
 			if err != nil {

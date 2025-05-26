@@ -2,6 +2,7 @@ package position
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/dnldd/entry/shared"
@@ -30,6 +31,29 @@ type ManagerConfig struct {
 	JobScheduler *gocron.Scheduler
 	// Logger represents the application logger.
 	Logger *zerolog.Logger
+}
+
+// Validate asserts the config sane inputs.
+func (cfg *ManagerConfig) Validate() error {
+	var errs error
+
+	if len(cfg.Markets) == 0 {
+		errs = errors.Join(errs, fmt.Errorf("no markets provided for position manager"))
+	}
+	if cfg.Notify == nil {
+		errs = errors.Join(errs, fmt.Errorf("notify function cannot be nil"))
+	}
+	if cfg.PersistClosedPosition == nil {
+		errs = errors.Join(errs, fmt.Errorf("persist closed position function cannot be nil"))
+	}
+	if cfg.JobScheduler == nil {
+		errs = errors.Join(errs, fmt.Errorf("job scheduler cannot be nil"))
+	}
+	if cfg.Logger == nil {
+		errs = errors.Join(errs, fmt.Errorf("logger cannot be nil"))
+	}
+
+	return errs
 }
 
 // Manager manages positions through their lifecycles.

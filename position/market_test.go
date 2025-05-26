@@ -11,6 +11,55 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func TestMarketConfigValidate(t *testing.T) {
+	loc, _ := time.LoadLocation(shared.NewYorkLocation)
+	scheduler := gocron.NewScheduler(loc)
+	logger := &log.Logger
+
+	tests := []struct {
+		name    string
+		cfg     MarketConfig
+		wantErr bool
+	}{
+		{
+			name:    "valid config",
+			cfg:     MarketConfig{Market: "SPY", JobScheduler: scheduler, Logger: logger},
+			wantErr: false,
+		},
+		{
+			name:    "empty market",
+			cfg:     MarketConfig{Market: "", JobScheduler: scheduler, Logger: logger},
+			wantErr: true,
+		},
+		{
+			name:    "nil scheduler",
+			cfg:     MarketConfig{Market: "SPY", JobScheduler: nil, Logger: logger},
+			wantErr: true,
+		},
+		{
+			name:    "nil logger",
+			cfg:     MarketConfig{Market: "SPY", JobScheduler: scheduler, Logger: nil},
+			wantErr: true,
+		},
+		{
+			name:    "all invalid",
+			cfg:     MarketConfig{Market: "", JobScheduler: nil, Logger: nil},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestMarket(t *testing.T) {
 	// Ensure a market can be created.
 	market := "^GSPC"
