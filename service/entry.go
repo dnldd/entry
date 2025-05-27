@@ -27,8 +27,6 @@ type EntryConfig struct {
 	FMPAPIKey string
 	// Backtest is the backtesting flag.
 	Backtest bool
-	// BacktestMaret is the market being backtested.
-	BacktestMarket string
 	// BacktestDataFilepath is the filepath to the backtest data.
 	BacktestDataFilepath string
 	// Cancel is the context cancellation function.
@@ -39,21 +37,21 @@ type EntryConfig struct {
 func (cfg *EntryConfig) Validate() error {
 	var errs error
 
-	if len(cfg.Markets) == 0 {
-		errs = errors.Join(errs, fmt.Errorf("no markets provided for entry service"))
-	}
-	if cfg.FMPAPIKey == "" {
-		errs = errors.Join(errs, fmt.Errorf("fmp api key cannot be an empty string"))
-	}
 	if cfg.Cancel == nil {
 		errs = errors.Join(errs, fmt.Errorf("context cancellation function cannot be nil"))
 	}
-	if cfg.Backtest {
-		if cfg.BacktestMarket == "" {
-			errs = errors.Join(errs, fmt.Errorf("backtest market cannot be an empty string"))
-		}
+
+	switch cfg.Backtest {
+	case true:
 		if cfg.BacktestDataFilepath == "" {
 			errs = errors.Join(errs, fmt.Errorf("backtest data filepath cannot be an empty string"))
+		}
+	case false:
+		if len(cfg.Markets) == 0 {
+			errs = errors.Join(errs, fmt.Errorf("no markets provided for entry service"))
+		}
+		if cfg.FMPAPIKey == "" {
+			errs = errors.Join(errs, fmt.Errorf("fmp api key cannot be an empty string"))
 		}
 	}
 
@@ -75,7 +73,11 @@ type Entry struct {
 
 // NewEntry initializes a new entry service.
 func NewEntry(cfg *EntryConfig) (*Entry, error) {
-	var err error
+	err := cfg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating entry service config: %v", err)
+	}
+
 	var marketMgr *market.Manager
 	var fetchMgr *fetch.Manager
 	var positionMgr *position.Manager
@@ -111,7 +113,6 @@ func NewEntry(cfg *EntryConfig) (*Entry, error) {
 		// supplied for backtests.
 		historicDataLogger := logger.With().Str("component", "historicdata").Logger()
 		historicData, err = shared.NewHistoricData(&shared.HistoricDataConfig{
-			Market:            cfg.BacktestMarket,
 			FilePath:          cfg.BacktestDataFilepath,
 			SignalCaughtUp:    caughtUpFunc,
 			NotifySubscribers: notifySubcribersFunc,
@@ -291,7 +292,8 @@ func (e *Entry) Run(ctx context.Context) {
 				e.logger.Error().Msgf("persisting positions: %v", err)
 			}
 
-			e.logger.Info().Msgf("backtest for %s done, review positions csv for performance", e.cfg.BacktestMarket)
+			e.logger.Info().Msgf("backtest for %s done, review positions csv for performance",
+				e.historicData.FetchMarket())
 			e.cfg.Cancel()
 		}()
 	}

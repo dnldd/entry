@@ -679,7 +679,6 @@ func TestBacktestLevelGeneration(t *testing.T) {
 	}
 
 	hCfg := &shared.HistoricDataConfig{
-		Market:            market,
 		FilePath:          "../testdata/historicdata.json",
 		SignalCaughtUp:    mgr.SendCaughtUpSignal,
 		NotifySubscribers: notifySubscribersFunc,

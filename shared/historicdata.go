@@ -14,8 +14,6 @@ import (
 
 // HistoricDataConfig represents the historic data source configuration.
 type HistoricDataConfig struct {
-	// Market represents the historic data market.
-	Market string
 	// FilePath is the filepath to the historic market data.
 	FilePath string
 	// SignalCaughtUp signals a market is caught up on market data.
@@ -29,6 +27,7 @@ type HistoricDataConfig struct {
 // HistoricData represents historic market data.
 type HistoricData struct {
 	cfg        *HistoricDataConfig
+	market     string
 	location   *time.Location
 	candles    []Candlestick
 	candlesMtx sync.RWMutex
@@ -56,12 +55,15 @@ func NewHistoricData(cfg *HistoricDataConfig) (*HistoricData, error) {
 		return nil, fmt.Errorf("loading historic data: %v", err)
 	}
 
+	market := b.Get("market").String()
+
 	loc, err := time.LoadLocation(NewYorkLocation)
 	if err != nil {
 		return nil, fmt.Errorf("loading new york location: %v", err)
 	}
 
 	historicData := HistoricData{
+		market:   market,
 		cfg:      cfg,
 		location: loc,
 	}
@@ -75,7 +77,7 @@ func NewHistoricData(cfg *HistoricDataConfig) (*HistoricData, error) {
 			continue
 		}
 
-		candles, err := ParseCandlesticks(data, cfg.Market, timeframe, loc)
+		candles, err := ParseCandlesticks(data, market, timeframe, loc)
 		if err != nil {
 			return nil, fmt.Errorf("parsing candlesticks: %v", err)
 		}
@@ -139,11 +141,11 @@ func (h *HistoricData) ProcessHistoricalData() error {
 		candle := h.candles[idx]
 		if candle.Date.After(currentSession.Close) && !caughtUp {
 			// Send a caught up signal immediately the current session closes.
-			sig := NewCaughtUpSignal(h.cfg.Market)
+			sig := NewCaughtUpSignal(h.market)
 			h.cfg.SignalCaughtUp(sig)
 			<-sig.Status
 			caughtUp = true
-			h.cfg.Logger.Info().Msgf("caught up signal sent for %s historic data", h.cfg.Market)
+			h.cfg.Logger.Info().Msgf("caught up signal sent for %s historic data", h.market)
 		}
 
 		// Process historical data synchroniously.
@@ -164,4 +166,9 @@ func (h *HistoricData) FetchStartTime() time.Time {
 // FetchEndTime returns the end time of the loaded historical data.
 func (h *HistoricData) FetchEndTime() time.Time {
 	return h.endTime
+}
+
+// FetchMarket returns the backtest market.
+func (h *HistoricData) FetchMarket() string {
+	return h.market
 }

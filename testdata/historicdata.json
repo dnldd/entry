@@ -1,4 +1,5 @@
 {
+    "market": "^GSPC",
     "1m": [
         {
             "open": 30,

@@ -217,7 +217,7 @@ func (m *Manager) PersistPositionsCSV() error {
 		// Persist positions for each tracked market.
 		_, err := mkt.PersistPositionsCSV()
 		if err != nil {
-			return fmt.Errorf("persisting %s positions: %v", err)
+			return fmt.Errorf("persisting %s positions: %v", k, err)
 		}
 	}
 

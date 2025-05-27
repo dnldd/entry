@@ -10,7 +10,6 @@ import (
 )
 
 func TestHistoricalData(t *testing.T) {
-	market := "^GSPC"
 	caughtUpSignals := make(chan CaughtUpSignal, 1)
 	signalCaughtUp := func(signal CaughtUpSignal) {
 		caughtUpSignals <- signal
@@ -23,7 +22,6 @@ func TestHistoricalData(t *testing.T) {
 	}
 
 	cfg := &HistoricDataConfig{
-		Market:            market,
 		FilePath:          "../testdata/historicdata.json",
 		SignalCaughtUp:    signalCaughtUp,
 		NotifySubscribers: notifySubscribers,

@@ -40,7 +40,6 @@ func TestEntryBacktest(t *testing.T) {
 		Markets:              []string{market},
 		FMPAPIKey:            "key",
 		Backtest:             true,
-		BacktestMarket:       market,
 		BacktestDataFilepath: "../testdata/historicdata.json",
 		Cancel:               cancel,
 	}
