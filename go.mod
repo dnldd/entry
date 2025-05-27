@@ -9,6 +9,7 @@ require (
 	github.com/go-co-op/gocron v1.37.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
+	github.com/joho/godotenv v1.5.1
 	github.com/peterldowns/testy v0.0.6
 	github.com/rqlite/rqlite-go-http v0.0.0-20250325125624-6b0921b677c1
 	github.com/rs/zerolog v1.34.0
